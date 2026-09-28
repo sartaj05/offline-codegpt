@@ -304,6 +304,33 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(saved.json()["settings"]["temperature"], 0.7)
         self.assertIn("deepseek-coder:latest", saved.json()["models"])
 
+    def test_test_workspace_generates_and_runs_python_tests(self):
+        generated = self.client.post(
+            "/api/tests/generate/",
+            {"code": "def add(a, b):\n    return a + b", "language": "python"},
+        )
+        self.assertTrue(generated.json()["success"])
+        self.assertIn("test_add_happy_path", generated.json()["test_code"])
+
+        executed = self.client.post(
+            "/api/tests/run/",
+            {
+                "code": "def add(a, b):\n    return a + b",
+                "test_code": (
+                    "def test_add():\n"
+                    "    assert add(2, 3) == 5\n"
+                    "\n"
+                    "if __name__ == '__main__':\n"
+                    "    test_add()\n"
+                    "    print('PASS')\n"
+                ),
+                "language": "python",
+            },
+        )
+        self.assertTrue(executed.json()["success"])
+        self.assertEqual(executed.json()["summary"], "Tests passed.")
+        self.assertIn("PASS", executed.json()["result"]["stdout"])
+
     def test_rag_results_include_source_line_ranges(self):
         source = "first" + chr(10) + "needle = True" + chr(10) + "last"
         document = KnowledgeDocument.objects.create(

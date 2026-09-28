@@ -199,6 +199,20 @@
                         <button type="button" onclick="analyzeQuality()">Analyze code</button>
                     </div>
                     <div id="qualityOutput" class="quality-output">Quality findings will appear here.</div>
+                    <div class="test-workspace">
+                        <div class="test-heading">
+                            <div>
+                                <strong>Test workspace</strong>
+                                <span>Generate, edit, and run tests in the guarded sandbox.</span>
+                            </div>
+                            <div class="test-actions">
+                                <button type="button" onclick="generateTests()">Generate tests</button>
+                                <button type="button" onclick="runTests()">Run tests</button>
+                            </div>
+                        </div>
+                        <textarea id="testInput" class="test-input" placeholder="Generated tests will appear here..."></textarea>
+                        <pre id="testOutput" class="test-output">Test results will appear here.</pre>
+                    </div>
                     <div id="patchPanel" class="patch-panel" hidden>
                         <div class="patch-heading">
                             <strong>Review AI patch</strong>

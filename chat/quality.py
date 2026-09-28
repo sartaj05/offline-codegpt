@@ -66,14 +66,32 @@ def _text_findings(code, language):
 
 def _test_template(code, language):
     if language in {"python", "py", "auto"}:
-        names = re.findall(r"(?:def|class)\\s+([A-Za-z_]\\w*)", code)
+        names = re.findall(r"(?:def|class)\s+([A-Za-z_]\w*)", code)
         target = names[0] if names else "your_function"
-        return f"from {target} import {target}\\n\\n\\ndef test_{target}_happy_path():\\n    # Arrange\\n    # Act\\n    result = {target}(...)\\n    # Assert\\n    assert result is not None\\n"
+        return (
+            f"def test_{target}_happy_path():\n"
+            "    # Arrange\n"
+            "    # Act\n"
+            f"    result = {target}(...)\n"
+            "    # Assert\n"
+            "    assert result is not None\n"
+            "\n"
+            "if __name__ == '__main__':\n"
+            f"    test_{target}_happy_path()\n"
+            f"    print('PASS: test_{target}_happy_path')\n"
+        )
     if language in {"javascript", "js", "typescript", "ts"}:
-        return "describe('module behavior', () => {\\n  test('handles the happy path', () => {\\n    // Arrange\\n    // Act\\n    // Assert\\n  });\\n});\\n"
+        return (
+            "function assert(condition, message) {\n"
+            "  if (!condition) throw new Error(message);\n"
+            "}\n"
+            "console.log('Add Arrange / Act / Assert statements to this test scaffold.');\n"
+            "assert(true, 'Replace this placeholder with a real assertion.');\n"
+            "console.log('PASS: JavaScript test scaffold');\n"
+        )
     if language == "sql":
-        return "-- Add a fixture, run the query, and assert expected rows.\\n"
-    return "# Add Arrange / Act / Assert cases for the main behavior.\\n"
+        return "-- Add a fixture, run the query, and assert expected rows.\n"
+    return "# Add Arrange / Act / Assert cases for the main behavior.\n"
 
 
 def analyze_code_quality(code, language="auto", mode="all"):

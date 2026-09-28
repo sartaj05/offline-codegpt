@@ -315,6 +315,16 @@ select { padding: 0 10px; }
 .quality-row select, .quality-row button, #runBtn { height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: #e7edf6; font-size: 11px; }
 .quality-row button, #runBtn { border-color: #2d997b; background: #176a56; }
 .quality-row button:hover, #runBtn:hover { background: #21886d; }
+.test-workspace { margin-top: 10px; padding: 11px; border: 1px solid var(--border); border-radius: 9px; background: rgba(17,20,27,.55); }
+.test-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.test-heading strong, .test-heading span { display: block; }
+.test-heading strong { color: var(--text); font-size: 11px; }
+.test-heading span { margin-top: 3px; color: var(--muted); font-size: 10px; }
+.test-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.test-actions button { padding: 6px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); color: var(--text); font-size: 10px; }
+.test-actions button:last-child { border-color: #2d997b; background: #176a56; color: #e7fff7; }
+.test-input { width: 100%; min-height: 120px; margin-top: 9px; resize: vertical; padding: 10px; border: 1px solid var(--border); border-radius: 8px; outline: 0; background: #11141b; color: #dce6f2; font-family: Consolas, monospace; font-size: 11px; line-height: 1.5; }
+.test-output { max-height: 130px; overflow: auto; margin: 8px 0 0; padding: 9px; border: 1px solid var(--border); border-radius: 8px; background: #0d1016; color: var(--muted); font-family: Consolas, monospace; font-size: 10px; white-space: pre-wrap; }
 .patch-panel { margin-top: 10px; padding: 11px; border: 1px solid rgba(99,230,190,.25); border-radius: 9px; background: rgba(27,49,48,.35); }
 .patch-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #dcebe7; font-size: 11px; }
 .patch-heading span { color: var(--muted); font-size: 10px; }

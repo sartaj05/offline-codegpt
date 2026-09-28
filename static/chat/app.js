@@ -660,6 +660,65 @@ async function analyzeQuality() {
     }
 }
 
+async function generateTests() {
+    const code = codeInput.value.trim();
+    const output = document.getElementById("testOutput");
+    const input = document.getElementById("testInput");
+    if (!code) {
+        alert("Paste code before generating tests.");
+        return;
+    }
+    output.innerText = "Generating test scaffold...";
+    try {
+        const response = await fetch("/api/tests/generate/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({ code, language: languageInput.value }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Test generation failed.");
+        input.value = data.test_code;
+        output.innerText = data.summary + " Edit the scaffold, then run it.";
+    } catch (error) {
+        output.innerText = "Test generation error: " + error;
+    }
+}
+
+async function runTests() {
+    const code = codeInput.value.trim();
+    const testCode = document.getElementById("testInput").value.trim();
+    const output = document.getElementById("testOutput");
+    if (!code || !testCode) {
+        alert("Provide source code and test code.");
+        return;
+    }
+    output.innerText = "Running tests in the guarded sandbox...";
+    try {
+        const response = await fetch("/api/tests/run/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({
+                code,
+                test_code: testCode,
+                language: languageInput.value,
+            }),
+        });
+        const data = await response.json();
+        if (!data.result) throw new Error(data.error || "Test execution failed.");
+        const result = data.result;
+        const detail = result.success ? (result.stdout || "Completed without output.") : (result.stderr || result.error || "No output.");
+        output.innerText = data.summary + "\n\n" + detail + "\n\nDuration: " + result.duration_ms + " ms";
+    } catch (error) {
+        output.innerText = "Test execution error: " + error;
+    }
+}
+
 async function loadSession(sessionId) {
     try {
         const response = await fetch(`/api/session/${sessionId}/`);

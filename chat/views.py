@@ -44,6 +44,7 @@ MAX_FILE_BYTES = 1_000_000
 MAX_IMAGE_BYTES = 5_000_000
 CHUNK_SIZE = 2_000
 MAX_EXECUTION_CHARS = 20_000
+MAX_TEST_CHARS = 20_000
 MAX_GIT_OUTPUT_CHARS = 50_000
 
 
@@ -763,6 +764,37 @@ def quality_analyze(request):
     if len(code) > MAX_EXECUTION_CHARS:
         return JsonResponse({"success": False, "error": "Analysis input is too large."}, status=400)
     return JsonResponse({"success": True, **analyze_code_quality(code, language, mode)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def generate_tests(request):
+    code = request.POST.get("code", "")
+    language = request.POST.get("language", "auto").strip().lower()
+    if not code.strip():
+        return JsonResponse({"success": False, "error": "Enter code before generating tests."}, status=400)
+    if len(code) > MAX_TEST_CHARS:
+        return JsonResponse({"success": False, "error": "Test generation input is too large."}, status=400)
+    result = analyze_code_quality(code, language, "tests")
+    return JsonResponse({"success": True, "test_code": result["test_template"], "summary": "Editable test scaffold generated."})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def run_tests(request):
+    code = request.POST.get("code", "")
+    test_code = request.POST.get("test_code", "")
+    language = request.POST.get("language", "python").strip().lower()
+    if not code.strip() or not test_code.strip():
+        return JsonResponse({"success": False, "error": "Provide source code and test code."}, status=400)
+    if len(code) + len(test_code) > MAX_TEST_CHARS:
+        return JsonResponse({"success": False, "error": "Combined test input is too large."}, status=400)
+    result = run_sandboxed_code(language, code.rstrip() + "\n\n" + test_code.lstrip())
+    return JsonResponse({
+        "success": result["success"],
+        "result": result,
+        "summary": "Tests passed." if result["success"] else "Tests failed.",
+    })
 
 
 @login_required(login_url="/login/")
