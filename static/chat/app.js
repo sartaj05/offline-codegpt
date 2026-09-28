@@ -30,8 +30,13 @@ const editorTabs = document.getElementById("editorTabs");
 const editorPreview = document.getElementById("editorPreview");
 const saveFileBtn = document.getElementById("saveFileBtn");
 const csrfToken = document.getElementById("csrfToken").value;
+const patchPanel = document.getElementById("patchPanel");
+const patchStatus = document.getElementById("patchStatus");
+const patchDiff = document.getElementById("patchDiff");
 let editorTabsState = [];
 let activeEditorDocumentId = null;
+let pendingPatch = null;
+let codeBeforePatch = "";
 
 function updateActiveModel() {
     const activeModel = document.getElementById("activeModel");
@@ -95,6 +100,12 @@ function renderMessageContent(element, content) {
         const codeActions = document.createElement("div");
         codeActions.className = "code-actions";
         codeActions.appendChild(copyCodeButton);
+        const reviewPatchButton = document.createElement("button");
+        reviewPatchButton.type = "button";
+        reviewPatchButton.className = "code-copy-button";
+        reviewPatchButton.innerText = "Review patch";
+        reviewPatchButton.onclick = () => openPatchReview(match[2].trimEnd(), match[1] || languageInput.value);
+        codeActions.appendChild(reviewPatchButton);
         pre.appendChild(codeActions);
         element.appendChild(pre);
         cursor = fence.lastIndex;
@@ -821,6 +832,62 @@ async function saveProjectFile() {
     } catch (error) {
         alert("Unable to save file: " + error);
     }
+}
+
+async function openPatchReview(updated, language) {
+    if (!patchPanel) {
+        alert("Sign in to review and apply AI patches.");
+        return;
+    }
+    try {
+        const response = await fetch("/api/patch/preview/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({
+                original: codeInput.value,
+                updated,
+                filename: editorFileName ? editorFileName.innerText : "editor-buffer",
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to create patch.");
+        pendingPatch = { updated, language };
+        codeBeforePatch = codeInput.value;
+        patchDiff.innerText = data.diff;
+        patchStatus.innerText = data.changed ? "Review the changes before applying." : "No changes detected.";
+        patchPanel.hidden = false;
+        patchPanel.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (error) {
+        alert("Unable to review patch: " + error);
+    }
+}
+
+function applyPatch() {
+    if (!pendingPatch) return;
+    codeInput.value = pendingPatch.updated;
+    if (pendingPatch.language && [...languageInput.options].some(option => option.value === pendingPatch.language)) {
+        languageInput.value = pendingPatch.language;
+    }
+    syncActiveEditorTab();
+    syncEditorPreview();
+    if (patchStatus) patchStatus.innerText = "Patch applied. Save the file when ready.";
+}
+
+function restorePatch() {
+    if (!pendingPatch) return;
+    codeInput.value = codeBeforePatch;
+    syncActiveEditorTab();
+    syncEditorPreview();
+    if (patchStatus) patchStatus.innerText = "Previous code restored.";
+}
+
+function rejectPatch() {
+    pendingPatch = null;
+    codeBeforePatch = "";
+    if (patchPanel) patchPanel.hidden = true;
 }
 
 async function loadProjectWorkspace() {

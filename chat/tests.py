@@ -235,6 +235,21 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(document.original_text, "print('new')")
         self.assertTrue(document.chunks.exists())
 
+    def test_patch_preview_returns_unified_diff(self):
+        response = self.client.post(
+            "/api/patch/preview/",
+            {
+                "filename": "editor.py",
+                "original": "print('old')",
+                "updated": "print('new')",
+            },
+        )
+        payload = response.json()
+        self.assertTrue(payload["success"])
+        self.assertTrue(payload["changed"])
+        self.assertIn("--- editor.py (current)", payload["diff"])
+        self.assertIn("+print('new')", payload["diff"])
+
     def test_rag_results_include_source_line_ranges(self):
         source = "first" + chr(10) + "needle = True" + chr(10) + "last"
         document = KnowledgeDocument.objects.create(

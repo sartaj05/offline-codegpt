@@ -289,6 +289,13 @@ select { padding: 0 10px; }
 .quality-row select, .quality-row button, #runBtn { height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: #e7edf6; font-size: 11px; }
 .quality-row button, #runBtn { border-color: #2d997b; background: #176a56; }
 .quality-row button:hover, #runBtn:hover { background: #21886d; }
+.patch-panel { margin-top: 10px; padding: 11px; border: 1px solid rgba(99,230,190,.25); border-radius: 9px; background: rgba(27,49,48,.35); }
+.patch-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #dcebe7; font-size: 11px; }
+.patch-heading span { color: var(--muted); font-size: 10px; }
+.patch-diff { max-height: 240px; overflow: auto; margin: 9px 0; padding: 10px; border: 1px solid var(--border); border-radius: 7px; background: #0d1016; color: #dce6f2; font-family: Consolas, monospace; font-size: 11px; line-height: 1.5; white-space: pre-wrap; }
+.patch-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.patch-actions button { padding: 6px 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); color: var(--text); font-size: 10px; }
+.patch-actions button:first-child { border-color: #2d997b; background: #176a56; }
 
 .message-content pre { margin: 12px 0; padding: 13px; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: #11141b; }
 .message-content code { font-family: Consolas, "SFMono-Regular", monospace; font-size: 12px; }

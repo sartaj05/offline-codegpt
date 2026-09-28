@@ -1,5 +1,6 @@
 import ast
 import base64
+import difflib
 import hashlib
 import json
 import os
@@ -583,6 +584,26 @@ def quality_analyze(request):
     if len(code) > MAX_EXECUTION_CHARS:
         return JsonResponse({"success": False, "error": "Analysis input is too large."}, status=400)
     return JsonResponse({"success": True, **analyze_code_quality(code, language, mode)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def preview_patch(request):
+    original = request.POST.get("original", "")
+    updated = request.POST.get("updated", "")
+    filename = request.POST.get("filename", "editor-buffer")
+    diff = "".join(difflib.unified_diff(
+        original.splitlines(keepends=True),
+        updated.splitlines(keepends=True),
+        fromfile=filename + " (current)",
+        tofile=filename + " (proposed)",
+        n=3,
+    ))
+    return JsonResponse({
+        "success": True,
+        "changed": original != updated,
+        "diff": diff or "No changes detected.",
+    })
 
 
 @require_POST

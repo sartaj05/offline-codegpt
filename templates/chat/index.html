@@ -161,6 +161,18 @@
                         <button type="button" onclick="analyzeQuality()">Analyze code</button>
                     </div>
                     <div id="qualityOutput" class="quality-output">Quality findings will appear here.</div>
+                    <div id="patchPanel" class="patch-panel" hidden>
+                        <div class="patch-heading">
+                            <strong>Review AI patch</strong>
+                            <span id="patchStatus">Compare before applying.</span>
+                        </div>
+                        <pre id="patchDiff" class="patch-diff"></pre>
+                        <div class="patch-actions">
+                            <button type="button" onclick="applyPatch()">Apply patch</button>
+                            <button type="button" onclick="restorePatch()">Restore previous code</button>
+                            <button type="button" onclick="rejectPatch()">Reject</button>
+                        </div>
+                    </div>
                 {% else %}
                     <div class="guest-tool-note">Free chat is ready. <a href="{% url 'signup' %}">Create a free account</a> to upload code files, images, folders, search projects, export chats, and run quality tools.</div>
                 {% endif %}
