@@ -7,7 +7,7 @@ from django.test import TestCase
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import AiEvent, AuditEvent, ChatMessage, ChatSession, KnowledgeChunk, KnowledgeDocument, WorkspaceMembership
+from .models import AiEvent, AuditEvent, ChatMessage, ChatSession, KnowledgeChunk, KnowledgeDocument, WorkspaceMembership, WorkspacePolicy
 from .views import _search_knowledge
 
 
@@ -264,6 +264,20 @@ class ChatFeatureTests(TestCase):
         verified = self.client.post("/api/provenance/verify/", {"provenance": provenance})
         self.assertEqual(verified.status_code, 200)
         self.assertTrue(verified.json()["valid"])
+
+    def test_identity_policy_center_allows_admin_and_blocks_member_changes(self):
+        saved = self.client.post("/api/identity/policy/", {
+            "require_approval_for_git": "true",
+            "require_approval_for_tools": "true",
+            "require_approval_for_deploy": "false",
+            "require_tests": "true",
+            "allow_external_connectors": "false",
+            "audit_retention_days": "180",
+        })
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json()["policy"]["audit_retention_days"], 180)
+        self.assertTrue(WorkspacePolicy.objects.exists())
+        self.assertTrue(AuditEvent.objects.filter(event_type="policy.updated").exists())
 
     def test_quality_endpoint_finds_security_issue(self):
         response = self.client.post("/api/analyze/", {

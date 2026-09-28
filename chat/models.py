@@ -146,6 +146,17 @@ class AuditEvent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class WorkspacePolicy(models.Model):
+    workspace = models.OneToOneField(Workspace, on_delete=models.CASCADE, related_name="policy")
+    require_approval_for_git = models.BooleanField(default=True)
+    require_approval_for_tools = models.BooleanField(default=True)
+    require_approval_for_deploy = models.BooleanField(default=True)
+    require_tests = models.BooleanField(default=True)
+    allow_external_connectors = models.BooleanField(default=False)
+    audit_retention_days = models.PositiveIntegerField(default=90)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
 class ChatSession(models.Model):
     owner = models.ForeignKey(
         User,

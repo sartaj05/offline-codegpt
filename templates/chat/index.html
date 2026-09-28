@@ -101,6 +101,7 @@
                     <button type="button" onclick="toggleArchitecture()">Arch</button>
                     <button type="button" onclick="toggleContracts()">API</button>
                     <button type="button" onclick="toggleProvenance()">Proof</button>
+                    <button type="button" onclick="toggleIdentityPolicy()">Policy</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -419,6 +420,26 @@
             <textarea id="provenanceOutput" class="provenance-output" placeholder="Provenance JSON will appear here..."></textarea>
             <button type="button" onclick="verifyProvenance()">Verify provenance</button>
             <div id="provenanceStatus" class="provenance-status">No provenance verification yet.</div>
+        </section>
+        <section id="identityPolicyPanel" class="identity-policy-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Identity and policy center</strong>
+                    <span>Workspace identity, approval rules, and audit controls.</span>
+                </div>
+                <button type="button" onclick="toggleIdentityPolicy()">Close</button>
+            </div>
+            <div id="identitySummary" class="identity-summary">Loading identity...</div>
+            <div class="policy-grid">
+                <label><input id="policyGit" type="checkbox"> Approve Git actions</label>
+                <label><input id="policyTools" type="checkbox"> Approve tool actions</label>
+                <label><input id="policyDeploy" type="checkbox"> Approve deployment actions</label>
+                <label><input id="policyTests" type="checkbox"> Require tests before release</label>
+                <label><input id="policyExternal" type="checkbox"> Allow external connectors</label>
+                <label>Audit retention days<input id="policyRetention" type="number" min="7" max="3650" value="90"></label>
+            </div>
+            <button type="button" onclick="saveIdentityPolicy()">Save policy</button>
+            <div id="identityPolicyStatus" class="identity-policy-status">Policy status will appear here.</div>
         </section>
 
         <section id="chatBox" class="chat-box">

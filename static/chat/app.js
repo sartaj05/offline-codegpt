@@ -88,6 +88,15 @@ const provenanceCommit = document.getElementById("provenanceCommit");
 const provenanceFiles = document.getElementById("provenanceFiles");
 const provenanceOutput = document.getElementById("provenanceOutput");
 const provenanceStatus = document.getElementById("provenanceStatus");
+const identityPolicyPanel = document.getElementById("identityPolicyPanel");
+const identitySummary = document.getElementById("identitySummary");
+const policyGit = document.getElementById("policyGit");
+const policyTools = document.getElementById("policyTools");
+const policyDeploy = document.getElementById("policyDeploy");
+const policyTests = document.getElementById("policyTests");
+const policyExternal = document.getElementById("policyExternal");
+const policyRetention = document.getElementById("policyRetention");
+const identityPolicyStatus = document.getElementById("identityPolicyStatus");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -751,6 +760,60 @@ async function verifyProvenance() {
             data.checks.map(check => (check.passed ? "PASS " : "FAIL ") + check.name).join(" · ");
     } catch (error) {
         provenanceStatus.innerText = "Verification error: " + error;
+    }
+}
+
+function toggleIdentityPolicy() {
+    if (!identityPolicyPanel) return;
+    identityPolicyPanel.hidden = !identityPolicyPanel.hidden;
+    if (!identityPolicyPanel.hidden) loadIdentityPolicy();
+}
+
+function renderIdentityPolicy(data) {
+    identitySummary.innerText = data.identity.username + " · " + data.identity.role + " · " + data.workspace + " · " + data.identity.authentication;
+    const policy = data.policy;
+    policyGit.checked = policy.require_approval_for_git;
+    policyTools.checked = policy.require_approval_for_tools;
+    policyDeploy.checked = policy.require_approval_for_deploy;
+    policyTests.checked = policy.require_tests;
+    policyExternal.checked = policy.allow_external_connectors;
+    policyRetention.value = policy.audit_retention_days;
+}
+
+async function loadIdentityPolicy() {
+    identityPolicyStatus.innerText = "Loading policy...";
+    try {
+        const response = await fetch("/api/identity/policy/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load policy.");
+        renderIdentityPolicy(data);
+        identityPolicyStatus.innerText = "Policy loaded.";
+    } catch (error) {
+        identityPolicyStatus.innerText = "Policy error: " + error;
+    }
+}
+
+async function saveIdentityPolicy() {
+    identityPolicyStatus.innerText = "Saving policy...";
+    try {
+        const response = await fetch("/api/identity/policy/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                require_approval_for_git: policyGit.checked,
+                require_approval_for_tools: policyTools.checked,
+                require_approval_for_deploy: policyDeploy.checked,
+                require_tests: policyTests.checked,
+                allow_external_connectors: policyExternal.checked,
+                audit_retention_days: policyRetention.value,
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to save policy.");
+        renderIdentityPolicy(data);
+        identityPolicyStatus.innerText = "Policy saved and added to the audit log.";
+    } catch (error) {
+        identityPolicyStatus.innerText = "Policy error: " + error;
     }
 }
 

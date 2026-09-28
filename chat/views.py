@@ -38,6 +38,7 @@ from .models import (
     UserOllamaSettings,
     Workspace,
     WorkspaceMembership,
+    WorkspacePolicy,
 )
 from .quality import analyze_code_quality
 from .sandbox import run_sandboxed_code
@@ -1251,6 +1252,57 @@ def workspace_api(request):
             return JsonResponse({"success": False, "error": "Unsupported workspace action."}, status=400)
 
     return JsonResponse({"success": True, "workspace": _workspace_payload(workspace)})
+
+
+def _policy_payload(policy, membership):
+    return {
+        "identity": {
+            "username": membership.user.username,
+            "role": membership.role,
+            "authentication": "local Django account",
+        },
+        "policy": {
+            "require_approval_for_git": policy.require_approval_for_git,
+            "require_approval_for_tools": policy.require_approval_for_tools,
+            "require_approval_for_deploy": policy.require_approval_for_deploy,
+            "require_tests": policy.require_tests,
+            "allow_external_connectors": policy.allow_external_connectors,
+            "audit_retention_days": policy.audit_retention_days,
+        },
+    }
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def identity_policy_api(request):
+    workspace = _workspace_for_user(request.user)
+    membership = _workspace_membership(request.user, workspace)
+    if not membership:
+        return JsonResponse({"success": False, "error": "You are not a workspace member."}, status=403)
+    policy, _ = WorkspacePolicy.objects.get_or_create(workspace=workspace)
+    if request.method == "POST":
+        if membership.role != "admin":
+            return JsonResponse({"success": False, "error": "Only workspace admins can change policy."}, status=403)
+        for field in (
+            "require_approval_for_git",
+            "require_approval_for_tools",
+            "require_approval_for_deploy",
+            "require_tests",
+            "allow_external_connectors",
+        ):
+            setattr(policy, field, request.POST.get(field, "false").lower() in {"1", "true", "yes", "on"})
+        try:
+            policy.audit_retention_days = min(3650, max(7, int(request.POST.get("audit_retention_days", "90"))))
+        except (TypeError, ValueError):
+            return JsonResponse({"success": False, "error": "Audit retention must be a number of days."}, status=400)
+        policy.save()
+        AuditEvent.objects.create(
+            actor=request.user,
+            workspace=workspace,
+            event_type="policy.updated",
+            details=_policy_payload(policy, membership)["policy"],
+        )
+    return JsonResponse({"success": True, "workspace": workspace.name, **_policy_payload(policy, membership)})
 
 
 @login_required(login_url="/login/")

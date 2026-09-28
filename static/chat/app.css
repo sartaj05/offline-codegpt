@@ -246,6 +246,13 @@ button { cursor: pointer; }
 .provenance-input, .provenance-output { width: 100%; min-height: 130px; margin-top: 12px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); font-family: Consolas, monospace; font-size: 11px; resize: vertical; }
 .provenance-output { min-height: 230px; }
 .provenance-status { margin-top: 12px; color: var(--accent); font-size: 11px; font-weight: 700; }
+.identity-policy-panel { margin: 12px 24px 0; padding: 16px; border: 1px solid rgba(126,167,255,.3); border-radius: 12px; background: linear-gradient(145deg, rgba(32,42,67,.98), rgba(24,29,40,.98)); }
+.identity-summary { margin-top: 12px; color: var(--accent); font-size: 12px; }
+.policy-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
+.policy-grid label { display: flex; align-items: center; gap: 7px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; color: #dbe4f1; font-size: 11px; }
+.policy-grid label:last-child { flex-direction: column; align-items: flex-start; }
+.policy-grid input[type="number"] { width: 100%; padding: 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); }
+.identity-policy-status { margin-top: 12px; color: var(--muted); font-size: 11px; }
 .git-file { display: flex; align-items: center; gap: 5px; margin-top: 5px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); }
 .git-file-status { flex: 0 0 22px; color: var(--accent); font-family: Consolas, monospace; font-size: 9px; }
 .git-file-path { min-width: 0; flex: 1; overflow: hidden; color: var(--muted); font-family: Consolas, monospace; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }

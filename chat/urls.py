@@ -24,6 +24,7 @@ urlpatterns = [
     path("api/agent/task/<int:task_id>/control/", views.agent_control, name="agent_control"),
     path("api/observability/", views.ai_observability, name="ai_observability"),
     path("api/workspace/", views.workspace_api, name="workspace_api"),
+    path("api/identity/policy/", views.identity_policy_api, name="identity_policy_api"),
     path("api/devops/generate/", views.devops_generate, name="devops_generate"),
     path("api/devops/logs/", views.devops_logs, name="devops_logs"),
     path("api/documentation/generate/", views.documentation_generate, name="documentation_generate"),
