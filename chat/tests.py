@@ -111,6 +111,24 @@ class ChatFeatureTests(TestCase):
         })
         self.assertEqual(denied.status_code, 403)
 
+    def test_devops_assistant_generates_dockerfile_and_analyzes_logs(self):
+        artifact = self.client.post("/api/devops/generate/", {
+            "kind": "dockerfile",
+            "code": "from django import forms",
+            "filenames": "requirements.txt",
+        })
+        self.assertEqual(artifact.status_code, 200)
+        self.assertIn("python:3.12", artifact.json()["artifact"])
+        self.assertIn("requirements.txt", artifact.json()["artifact"])
+
+        logs = self.client.post("/api/devops/logs/", {
+            "logs": "ERROR connection refused on port 8000\nWARNING retrying",
+        })
+        payload = logs.json()
+        self.assertTrue(payload["success"])
+        self.assertEqual(len(payload["findings"]), 2)
+        self.assertTrue(payload["recommendations"])
+
     def test_quality_endpoint_finds_security_issue(self):
         response = self.client.post("/api/analyze/", {
             "language": "python",

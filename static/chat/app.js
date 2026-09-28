@@ -36,6 +36,11 @@ const workspaceRole = document.getElementById("workspaceRole");
 const workspaceSummary = document.getElementById("workspaceSummary");
 const workspaceMembers = document.getElementById("workspaceMembers");
 const workspaceAudit = document.getElementById("workspaceAudit");
+const devopsPanel = document.getElementById("devopsPanel");
+const devopsKind = document.getElementById("devopsKind");
+const devopsArtifact = document.getElementById("devopsArtifact");
+const devopsLogs = document.getElementById("devopsLogs");
+const devopsLogOutput = document.getElementById("devopsLogOutput");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -355,6 +360,48 @@ async function addWorkspaceMember() {
         workspaceMember.value = "";
     } catch (error) {
         workspaceSummary.innerText = "Workspace error: " + error;
+    }
+}
+
+function toggleDevops() {
+    if (!devopsPanel) return;
+    devopsPanel.hidden = !devopsPanel.hidden;
+}
+
+async function generateDevopsArtifact() {
+    devopsArtifact.innerText = "Generating...";
+    try {
+        const response = await fetch("/api/devops/generate/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                kind: devopsKind.value,
+                code: codeInput ? codeInput.value : "",
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to generate artifact.");
+        devopsArtifact.innerText = data.artifact + "\n\nDeployment checklist:\n- " + data.checklist.join("\n- ");
+    } catch (error) {
+        devopsArtifact.innerText = "DevOps error: " + error;
+    }
+}
+
+async function analyzeDevopsLogs() {
+    devopsLogOutput.innerText = "Analyzing logs...";
+    try {
+        const response = await fetch("/api/devops/logs/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ logs: devopsLogs.value }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to analyze logs.");
+        devopsLogOutput.innerText = data.summary + "\n\n" +
+            (data.findings.length ? data.findings.map(item => item.severity.toUpperCase() + " line " + item.line + ": " + item.message).join("\n") : "No error or warning lines detected.") +
+            "\n\nRecommendations:\n- " + (data.recommendations.join("\n- ") || "No extra recommendations.");
+    } catch (error) {
+        devopsLogOutput.innerText = "Log analysis error: " + error;
     }
 }
 

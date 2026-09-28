@@ -90,6 +90,7 @@
                     <button type="button" onclick="toggleMcpPanel()">Tools</button>
                     <button type="button" onclick="toggleObservability()">Metrics</button>
                     <button type="button" onclick="toggleWorkspace()">Team</button>
+                    <button type="button" onclick="toggleDevops()">DevOps</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -222,6 +223,28 @@
                 <pre id="workspaceMembers" class="workspace-output"></pre>
                 <pre id="workspaceAudit" class="workspace-output"></pre>
             </div>
+        </section>
+        <section id="devopsPanel" class="devops-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>DevOps assistant</strong>
+                    <span>Generate deployment files and diagnose local build logs.</span>
+                </div>
+                <button type="button" onclick="toggleDevops()">Close</button>
+            </div>
+            <div class="devops-row">
+                <select id="devopsKind">
+                    <option value="dockerfile">Dockerfile</option>
+                    <option value="compose">Docker Compose</option>
+                    <option value="github-actions">GitHub Actions CI</option>
+                    <option value="gitlab-ci">GitLab CI</option>
+                </select>
+                <button type="button" onclick="generateDevopsArtifact()">Generate artifact</button>
+            </div>
+            <pre id="devopsArtifact" class="devops-output">Generated deployment files will appear here.</pre>
+            <textarea id="devopsLogs" class="devops-logs" placeholder="Paste build, server, or deployment logs..."></textarea>
+            <button type="button" onclick="analyzeDevopsLogs()">Analyze logs</button>
+            <pre id="devopsLogOutput" class="devops-output">Log findings will appear here.</pre>
         </section>
 
         <section id="chatBox" class="chat-box">

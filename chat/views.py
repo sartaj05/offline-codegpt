@@ -42,6 +42,7 @@ from .models import (
 from .quality import analyze_code_quality
 from .sandbox import run_sandboxed_code
 from .security import scan_files
+from .devops import analyze_logs, generate_artifact
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -1240,6 +1241,35 @@ def workspace_api(request):
             return JsonResponse({"success": False, "error": "Unsupported workspace action."}, status=400)
 
     return JsonResponse({"success": True, "workspace": _workspace_payload(workspace)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def devops_generate(request):
+    kind = request.POST.get("kind", "dockerfile").strip()
+    code = request.POST.get("code", "")[:30_000]
+    filenames = request.POST.getlist("filenames")
+    try:
+        artifact = generate_artifact(kind, code, filenames)
+    except ValueError as exc:
+        return JsonResponse({"success": False, "error": str(exc)}, status=400)
+    return JsonResponse({
+        "success": True,
+        "kind": kind,
+        "artifact": artifact,
+        "checklist": [
+            "Review exposed ports and runtime command.",
+            "Move secrets to environment variables or a secret manager.",
+            "Run the generated CI job and security scan before deployment.",
+        ],
+    })
+
+
+@login_required(login_url="/login/")
+@require_POST
+def devops_logs(request):
+    logs = request.POST.get("logs", "")[:50_000]
+    return JsonResponse({"success": True, **analyze_logs(logs)})
 
 
 def _mcp_tools():
