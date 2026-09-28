@@ -44,6 +44,7 @@ from .sandbox import run_sandboxed_code
 from .security import scan_files
 from .devops import analyze_logs, generate_artifact
 from .documentation import generate_documentation
+from .dependencies import analyze_dependencies
 from .review import review_gate
 
 
@@ -1321,6 +1322,27 @@ def review_gate_api(request):
     if not files:
         return JsonResponse({"success": False, "error": "Provide code or project files to review."}, status=400)
     return JsonResponse({"success": True, **review_gate(files, language, diff, tests)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def dependencies_analyze(request):
+    filename = request.POST.get("filename", "requirements.txt")
+    content = request.POST.get("content", "")[:30_000]
+    files = [{"filename": filename, "content": content}]
+    raw_files = request.POST.get("files_json", "")
+    if raw_files:
+        try:
+            parsed = json.loads(raw_files)
+            if not isinstance(parsed, list) or len(parsed) > MAX_PROJECT_FILES:
+                raise ValueError("invalid dependency file list")
+            files = [
+                {"filename": _safe_filename(item.get("filename", "manifest")), "content": str(item.get("content", ""))}
+                for item in parsed if isinstance(item, dict)
+            ]
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return JsonResponse({"success": False, "error": "Invalid dependency file list."}, status=400)
+    return JsonResponse({"success": True, **analyze_dependencies(files)})
 
 
 def _mcp_tools():

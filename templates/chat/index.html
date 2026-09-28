@@ -93,6 +93,7 @@
                     <button type="button" onclick="toggleDevops()">DevOps</button>
                     <button type="button" onclick="toggleDocumentation()">Docs</button>
                     <button type="button" onclick="toggleReviewGate()">Review</button>
+                    <button type="button" onclick="toggleDependencies()">Deps</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -284,6 +285,25 @@
             <button type="button" onclick="runReviewGate()">Run release gate</button>
             <div id="reviewGateSummary" class="review-gate-summary">No review run yet.</div>
             <pre id="reviewGateOutput" class="review-gate-output"></pre>
+        </section>
+        <section id="dependenciesPanel" class="dependencies-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Dependency assistant</strong>
+                    <span>Inventory manifests and prepare safer upgrade plans locally.</span>
+                </div>
+                <button type="button" onclick="toggleDependencies()">Close</button>
+            </div>
+            <div class="dependencies-row">
+                <select id="dependencyFilename">
+                    <option value="requirements.txt">requirements.txt</option>
+                    <option value="package.json">package.json</option>
+                    <option value="requirements-dev.txt">requirements-dev.txt</option>
+                </select>
+                <button type="button" onclick="analyzeDependencies()">Analyze manifest</button>
+            </div>
+            <textarea id="dependencyContent" class="dependency-content" placeholder="Paste requirements.txt or package.json..."></textarea>
+            <pre id="dependencyOutput" class="dependency-output">Dependency findings will appear here.</pre>
         </section>
 
         <section id="chatBox" class="chat-box">

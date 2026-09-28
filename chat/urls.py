@@ -28,6 +28,7 @@ urlpatterns = [
     path("api/devops/logs/", views.devops_logs, name="devops_logs"),
     path("api/documentation/generate/", views.documentation_generate, name="documentation_generate"),
     path("api/review/gate/", views.review_gate_api, name="review_gate_api"),
+    path("api/dependencies/analyze/", views.dependencies_analyze, name="dependencies_analyze"),
     path("api/mcp/connectors/", views.mcp_connectors, name="mcp_connectors"),
     path("api/mcp/connectors/<int:connector_id>/", views.mcp_connector_delete, name="mcp_connector_delete"),
     path("api/mcp/", views.mcp_rpc, name="mcp_rpc"),

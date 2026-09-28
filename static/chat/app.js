@@ -51,6 +51,10 @@ const reviewDiff = document.getElementById("reviewDiff");
 const reviewTests = document.getElementById("reviewTests");
 const reviewGateSummary = document.getElementById("reviewGateSummary");
 const reviewGateOutput = document.getElementById("reviewGateOutput");
+const dependenciesPanel = document.getElementById("dependenciesPanel");
+const dependencyFilename = document.getElementById("dependencyFilename");
+const dependencyContent = document.getElementById("dependencyContent");
+const dependencyOutput = document.getElementById("dependencyOutput");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -468,6 +472,33 @@ async function runReviewGate() {
             "\n\nFindings:\n" + (data.findings.length ? data.findings.map(item => item.severity.toUpperCase() + " " + item.filename + (item.line ? ":" + item.line : "") + " — " + item.message).join("\n") : "No findings.");
     } catch (error) {
         reviewGateSummary.innerText = "Review error: " + error;
+    }
+}
+
+function toggleDependencies() {
+    if (!dependenciesPanel) return;
+    dependenciesPanel.hidden = !dependenciesPanel.hidden;
+}
+
+async function analyzeDependencies() {
+    dependencyOutput.innerText = "Analyzing dependencies...";
+    try {
+        const response = await fetch("/api/dependencies/analyze/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                filename: dependencyFilename.value,
+                content: dependencyContent.value,
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Dependency analysis failed.");
+        dependencyOutput.innerText = data.summary + "\n\n" +
+            (data.findings.length ? data.findings.map(item => item.severity.toUpperCase() + " " + item.package + " — " + item.message).join("\n") : "No manifest hygiene findings.") +
+            "\n\nUpgrade plan:\n- " + (data.upgrade_plan.join("\n- ") || "No upgrade actions generated.") +
+            "\n\n" + data.limitations;
+    } catch (error) {
+        dependencyOutput.innerText = "Dependency error: " + error;
     }
 }
 

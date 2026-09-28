@@ -162,6 +162,18 @@ class ChatFeatureTests(TestCase):
         self.assertLess(payload["score"], 80)
         self.assertTrue(any(item["source"] == "security" for item in payload["findings"]))
 
+    def test_dependency_assistant_finds_unpinned_packages(self):
+        response = self.client.post("/api/dependencies/analyze/", {
+            "filename": "requirements.txt",
+            "content": "Django>=5.0\nrequests==2.32.3\n",
+        })
+        payload = response.json()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(payload["dependencies"]), 2)
+        self.assertEqual(payload["dependencies"][0]["name"], "Django")
+        self.assertTrue(payload["findings"])
+        self.assertIn("Pin Django", payload["upgrade_plan"][0])
+
     def test_quality_endpoint_finds_security_issue(self):
         response = self.client.post("/api/analyze/", {
             "language": "python",
