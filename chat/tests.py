@@ -1,3 +1,5 @@
+import json
+
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -12,11 +14,48 @@ class ChatFeatureTests(TestCase):
         self.user = User.objects.create_user(username="tester", password="safe-password-123")
         self.client.login(username="tester", password="safe-password-123")
 
-    def test_home_requires_authentication(self):
+    def test_home_is_available_to_guests(self):
         self.client.logout()
         response = self.client.get("/")
-        self.assertEqual(response.status_code, 302)
-        self.assertIn("/login/", response["Location"])
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "FREE PREVIEW")
+
+    def test_guest_upload_requires_free_account(self):
+        self.client.logout()
+        image = SimpleUploadedFile("diagram.png", b"fake-image", content_type="image/png")
+        response = self.client.post("/api/ask-code/", {
+            "prompt": "Explain this image",
+            "images": image,
+        })
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(response.json()["login_required"])
+
+    def test_auth_pages_render(self):
+        self.client.logout()
+        self.assertEqual(self.client.get("/login/").status_code, 200)
+        self.assertEqual(self.client.get("/signup/").status_code, 200)
+
+    def test_authenticated_image_uses_vision_model(self):
+        class FakeResponse:
+            status_code = 200
+            text = ""
+
+            def iter_lines(self, decode_unicode=True):
+                return [
+                    json.dumps({"response": "Image understood. "}).encode(),
+                    json.dumps({"done": True}).encode(),
+                ]
+
+        image = SimpleUploadedFile("diagram.png", b"fake-image", content_type="image/png")
+        with patch("chat.views.requests.post", return_value=FakeResponse()) as post:
+            response = self.client.post("/api/ask-code/", {
+                "prompt": "Explain this image",
+                "images": image,
+            })
+            list(response.streaming_content)
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["model"], "llava:latest")
+        self.assertEqual(len(payload["images"]), 1)
 
     def test_quality_endpoint_finds_security_issue(self):
         response = self.client.post("/api/analyze/", {

@@ -1,6 +1,8 @@
 import ast
+import base64
 import hashlib
 import json
+import os
 import re
 import sqlite3
 import time
@@ -28,8 +30,10 @@ from .quality import analyze_code_quality
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 OLLAMA_URL = f"{OLLAMA_BASE_URL}/api/generate"
 DEFAULT_MODEL = "qwen2.5-coder:1.5b"
+VISION_MODEL = os.environ.get("OLLAMA_VISION_MODEL", "llava:latest")
 MAX_PROJECT_FILES = 100
 MAX_FILE_BYTES = 1_000_000
+MAX_IMAGE_BYTES = 5_000_000
 CHUNK_SIZE = 2_000
 MAX_EXECUTION_CHARS = 20_000
 
@@ -43,6 +47,8 @@ def _available_models():
 
     if DEFAULT_MODEL not in names:
         names.insert(0, DEFAULT_MODEL)
+    if VISION_MODEL not in names:
+        names.append(VISION_MODEL)
 
     try:
         response = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=3)
@@ -185,12 +191,15 @@ def login_view(request):
 @require_POST
 def logout_view(request):
     logout(request)
-    return redirect("login")
+    return redirect("chat_home")
 
 
-@login_required(login_url="/login/")
 def index(request):
-    sessions = ChatSession.objects.filter(owner=request.user).order_by("-updated_at")[:30]
+    sessions = (
+        ChatSession.objects.filter(owner=request.user).order_by("-updated_at")[:30]
+        if request.user.is_authenticated
+        else ChatSession.objects.none()
+    )
     return render(request, "chat/index.html", {
         "sessions": sessions,
         "models": _available_models(),
@@ -198,7 +207,6 @@ def index(request):
     })
 
 
-@login_required(login_url="/login/")
 def model_list(request):
     return JsonResponse({
         "success": True,
@@ -217,9 +225,9 @@ def knowledge_search(request):
     })
 
 
-@login_required(login_url="/login/")
 def session_messages(request, session_id):
-    session = get_object_or_404(ChatSession, id=session_id, owner=request.user)
+    owner = request.user if request.user.is_authenticated else None
+    session = get_object_or_404(ChatSession, id=session_id, owner=owner)
     messages = [
         {
             "role": msg.role,
@@ -249,7 +257,7 @@ def _session_markdown(session):
     for message in session.messages.order_by("created_at"):
         label = "You" if message.role == "user" else "Offline CodeGPT"
         lines.extend([f"## {label}", "", message.content, ""])
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 
 def _pdf_escape(value):
@@ -270,25 +278,25 @@ def _session_pdf(session):
         content_lines.append(f"({_pdf_escape(line)}) Tj")
         content_lines.append("0 -11 Td")
     content_lines.append("ET")
-    content = "\\n".join(content_lines).encode("latin-1", errors="replace")
+    content = "\n".join(content_lines).encode("latin-1", errors="replace")
 
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-        b"<< /Length " + str(len(content)).encode() + b" >>\\nstream\\n" + content + b"\\nendstream",
+        b"<< /Length " + str(len(content)).encode() + b" >>\nstream\n" + content + b"\nendstream",
     ]
-    pdf = b"%PDF-1.4\\n%\\xe2\\xe3\\xcf\\xd3\\n"
+    pdf = b"%PDF-1.4\n%\\xe2\\xe3\\xcf\\xd3\n"
     offsets = [0]
     for index, obj in enumerate(objects, start=1):
         offsets.append(len(pdf))
-        pdf += f"{index} 0 obj\\n".encode() + obj + b"\\nendobj\\n"
+        pdf += f"{index} 0 obj\n".encode() + obj + b"\nendobj\n"
     xref_offset = len(pdf)
-    pdf += f"xref\\n0 {len(objects) + 1}\\n".encode()
-    pdf += b"0000000000 65535 f \\n"
-    pdf += b"".join(f"{offset:010d} 00000 n \\n".encode() for offset in offsets[1:])
-    pdf += f"trailer\\n<< /Size {len(objects) + 1} /Root 1 0 R >>\\nstartxref\\n{xref_offset}\\n%%EOF".encode()
+    pdf += f"xref\n0 {len(objects) + 1}\n".encode()
+    pdf += b"0000000000 65535 f \n"
+    pdf += b"".join(f"{offset:010d} 00000 n \n".encode() for offset in offsets[1:])
+    pdf += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF".encode()
     return pdf
 
 
@@ -394,7 +402,7 @@ def execute_code(request):
             connection.close()
             return JsonResponse({
                 "success": True,
-                "stdout": "\\n".join(output) or "SQL completed without rows.",
+                "stdout": "\n".join(output) or "SQL completed without rows.",
                 "stderr": "",
                 "duration_ms": round((time.perf_counter() - started) * 1000),
             })
@@ -425,7 +433,6 @@ def quality_analyze(request):
     return JsonResponse({"success": True, **analyze_code_quality(code, language, mode)})
 
 
-@login_required(login_url="/login/")
 @require_POST
 def ask_code(request):
     prompt = request.POST.get("prompt", "").strip()
@@ -435,10 +442,18 @@ def ask_code(request):
     requested_model = request.POST.get("model", "").strip()
 
     uploaded_files = request.FILES.getlist("files")
+    image_files = request.FILES.getlist("images")
     relative_paths = request.POST.getlist("file_paths")
     single_file = request.FILES.get("file")
     if single_file and not uploaded_files:
         uploaded_files = [single_file]
+
+    if (uploaded_files or image_files) and not request.user.is_authenticated:
+        return JsonResponse({
+            "success": False,
+            "login_required": True,
+            "error": "Create a free account or sign in to upload files and images.",
+        }, status=403)
 
     if len(uploaded_files) > MAX_PROJECT_FILES:
         return JsonResponse({
@@ -448,6 +463,8 @@ def ask_code(request):
 
     uploaded_code_parts = []
     uploaded_filenames = []
+    image_data = []
+    image_filenames = []
 
     for index, uploaded_file in enumerate(uploaded_files):
         submitted_path = relative_paths[index] if index < len(relative_paths) else uploaded_file.name
@@ -464,7 +481,7 @@ def ask_code(request):
 
             raw_content = uploaded_file.read()
             file_text = raw_content.decode("utf-8", errors="ignore")
-            if "\\x00" in file_text:
+            if "\x00" in file_text:
                 continue
 
             source_type = "project" if "/" in filename else "upload"
@@ -478,18 +495,36 @@ def ask_code(request):
                 f"Unable to read file: {str(ex)}"
             )
 
+    for image_file in image_files:
+        if image_file.size > MAX_IMAGE_BYTES:
+            return JsonResponse({
+                "success": False,
+                "error": f"Image {image_file.name} is larger than 5 MB.",
+            }, status=400)
+        if not image_file.content_type.startswith("image/"):
+            return JsonResponse({
+                "success": False,
+                "error": f"{image_file.name} is not a supported image.",
+            }, status=400)
+        image_filenames.append(_safe_filename(image_file.name))
+        image_data.append(base64.b64encode(image_file.read()).decode("ascii"))
     uploaded_code = "\n".join(uploaded_code_parts)
     final_code = uploaded_code.strip() if uploaded_code.strip() else code
 
+    if image_data and not prompt and not final_code:
+        prompt = "Describe this image and explain any visible code or error."
     if not prompt and not final_code:
         return JsonResponse({
             "success": False,
             "error": "Please enter prompt or upload/paste code.",
         }, status=400)
 
+    owner = request.user if request.user.is_authenticated else None
     if session_id:
-        session = get_object_or_404(ChatSession, id=session_id, owner=request.user)
+        session = get_object_or_404(ChatSession, id=session_id, owner=owner)
         model_name = requested_model or session.model_name or DEFAULT_MODEL
+        if image_data and model_name == DEFAULT_MODEL:
+            model_name = VISION_MODEL
         if session.model_name != model_name:
             session.model_name = model_name
             session.save(update_fields=["model_name", "updated_at"])
@@ -498,8 +533,10 @@ def ask_code(request):
             uploaded_filenames[0][:60] if uploaded_filenames else "New Chat"
         )
         model_name = requested_model or DEFAULT_MODEL
+        if image_data and model_name == DEFAULT_MODEL:
+            model_name = VISION_MODEL
         session = ChatSession.objects.create(
-            owner=request.user,
+            owner=owner,
             title=title,
             model_name=model_name,
         )
@@ -509,6 +546,8 @@ def ask_code(request):
         user_message_parts.append(f"Prompt:\n{prompt}")
     if uploaded_filenames:
         user_message_parts.append("Uploaded Files:\n" + "\n".join(uploaded_filenames))
+    if image_filenames:
+        user_message_parts.append("Uploaded Images:\n" + "\n".join(image_filenames))
     if final_code:
         user_message_parts.append(f"Code:\n{final_code[:6000]}")
 
@@ -516,7 +555,7 @@ def ask_code(request):
         session=session,
         role="user",
         content="\n\n".join(user_message_parts),
-        filename=", ".join(uploaded_filenames),
+        filename=", ".join(uploaded_filenames + image_filenames),
         model_name=model_name,
     )
 
@@ -526,7 +565,7 @@ def ask_code(request):
         final_code = final_code[:max_code_chars]
         truncated_note = "\n\nNote: the uploaded code was truncated for the local model."
 
-    relevant_chunks = _search_knowledge(prompt or code, owner=request.user)
+    relevant_chunks = _search_knowledge(prompt or code, owner=owner)
     knowledge_context = "\n\n".join(
         f"===== PROJECT CONTEXT: {item['filename']} (chunk {item['chunk_index']}) =====\n"
         f"{item['content']}"
@@ -566,7 +605,12 @@ Instructions:
     try:
         response = requests.post(
             OLLAMA_URL,
-            json={"model": model_name, "prompt": full_prompt, "stream": True},
+            json={
+                "model": model_name,
+                "prompt": full_prompt,
+                "stream": True,
+                **({"images": image_data} if image_data else {}),
+            },
             timeout=(10, 300),
             stream=True,
         )

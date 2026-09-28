@@ -34,6 +34,7 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 python manage.py migrate
 ollama pull qwen2.5-coder:1.5b
+ollama pull llava:latest
 python manage.py runserver
 ```
 
