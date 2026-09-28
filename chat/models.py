@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.contrib.auth.models import User
 
@@ -72,6 +74,26 @@ class ChatMessage(models.Model):
 
     def __str__(self):
         return f"{self.role}: {self.content[:80]}"
+
+
+class ConversationRevision(models.Model):
+    session = models.ForeignKey(
+        ChatSession,
+        on_delete=models.CASCADE,
+        related_name="revisions",
+    )
+    source_message_id = models.IntegerField()
+    branch_id = models.UUIDField(default=uuid.uuid4, db_index=True)
+    role = models.CharField(max_length=20)
+    content = models.TextField()
+    model_name = models.CharField(max_length=100, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+    def __str__(self):
+        return f"Revision {self.branch_id}: {self.role}"
 
 
 class KnowledgeDocument(models.Model):

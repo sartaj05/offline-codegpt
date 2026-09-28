@@ -6,6 +6,7 @@ import os
 import re
 import sqlite3
 import time
+import uuid
 from pathlib import PurePosixPath
 
 import requests
@@ -13,6 +14,7 @@ import requests
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.db.models import Count, Min
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -20,6 +22,7 @@ from django.views.decorators.http import require_POST
 from .models import (
     ChatMessage,
     ChatSession,
+    ConversationRevision,
     KnowledgeChunk,
     KnowledgeDocument,
     LocalModelConfig,
@@ -230,6 +233,7 @@ def session_messages(request, session_id):
     session = get_object_or_404(ChatSession, id=session_id, owner=owner)
     messages = [
         {
+            "id": msg.id,
             "role": msg.role,
             "content": msg.content,
             "filename": msg.filename,
@@ -244,6 +248,29 @@ def session_messages(request, session_id):
         "model": session.model_name,
         "messages": messages,
     })
+
+
+@login_required(login_url="/login/")
+def session_revisions(request, session_id):
+    session = get_object_or_404(ChatSession, id=session_id, owner=request.user)
+    revisions = [
+        {
+            "branch_id": str(branch_id),
+            "created_at": created_at.strftime("%d-%m-%Y %H:%M"),
+            "messages": count,
+        }
+        for branch_id, created_at, count in (
+            ConversationRevision.objects.filter(session=session)
+            .values("branch_id")
+            .annotate(
+                created_at=Min("created_at"),
+                count=Count("id"),
+            )
+            .values_list("branch_id", "created_at", "count")
+            .order_by("-created_at")
+        )
+    ]
+    return JsonResponse({"success": True, "revisions": revisions})
 
 
 def _session_markdown(session):
@@ -439,6 +466,7 @@ def ask_code(request):
     language = request.POST.get("language", "auto").strip()
     code = request.POST.get("code", "").strip()
     session_id = request.POST.get("session_id", "").strip()
+    edit_message_id = request.POST.get("edit_message_id", "").strip()
     requested_model = request.POST.get("model", "").strip()
 
     uploaded_files = request.FILES.getlist("files")
@@ -520,6 +548,7 @@ def ask_code(request):
         }, status=400)
 
     owner = request.user if request.user.is_authenticated else None
+    revision_branch_id = None
     if session_id:
         session = get_object_or_404(ChatSession, id=session_id, owner=owner)
         model_name = requested_model or session.model_name or DEFAULT_MODEL
@@ -541,6 +570,33 @@ def ask_code(request):
             model_name=model_name,
         )
 
+    if edit_message_id:
+        if not session_id:
+            return JsonResponse({"success": False, "error": "An existing chat is required to edit a message."}, status=400)
+        target = get_object_or_404(
+            ChatMessage,
+            id=edit_message_id,
+            session=session,
+            role="user",
+        )
+        revision_branch_id = uuid.uuid4()
+        previous_messages = ChatMessage.objects.filter(
+            session=session,
+            id__gte=target.id,
+        ).order_by("id")
+        ConversationRevision.objects.bulk_create([
+            ConversationRevision(
+                session=session,
+                source_message_id=message.id,
+                branch_id=revision_branch_id,
+                role=message.role,
+                content=message.content,
+                model_name=message.model_name,
+            )
+            for message in previous_messages
+        ])
+        previous_messages.delete()
+
     user_message_parts = []
     if prompt:
         user_message_parts.append(f"Prompt:\n{prompt}")
@@ -551,7 +607,7 @@ def ask_code(request):
     if final_code:
         user_message_parts.append(f"Code:\n{final_code[:6000]}")
 
-    ChatMessage.objects.create(
+    user_message = ChatMessage.objects.create(
         session=session,
         role="user",
         content="\n\n".join(user_message_parts),
@@ -644,6 +700,8 @@ Instructions:
                     "session_id": session.id,
                     "title": session.title,
                     "model": model_name,
+                    "user_message_id": user_message.id,
+                    "revision_branch_id": str(revision_branch_id) if revision_branch_id else "",
                     "answer": answer,
                 })
             except Exception as ex:

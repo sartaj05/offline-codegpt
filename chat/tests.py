@@ -101,3 +101,43 @@ class ChatFeatureTests(TestCase):
         document = KnowledgeDocument.objects.get(owner=self.user)
         self.assertEqual(document.filename, "project/app.py")
         self.assertTrue(KnowledgeChunk.objects.filter(document=document).exists())
+
+    def test_edit_message_archives_old_branch_and_regenerates(self):
+        session = ChatSession.objects.create(owner=self.user, title="Editable chat")
+        old_user = ChatMessage.objects.create(
+            session=session,
+            role="user",
+            content="Old request",
+        )
+        ChatMessage.objects.create(
+            session=session,
+            role="assistant",
+            content="Old answer",
+        )
+
+        class FakeResponse:
+            status_code = 200
+            text = ""
+
+            def iter_lines(self, decode_unicode=True):
+                return [
+                    json.dumps({"response": "New answer"}).encode(),
+                    json.dumps({"done": True}).encode(),
+                ]
+
+        with patch("chat.views.requests.post", return_value=FakeResponse()):
+            response = self.client.post("/api/ask-code/", {
+                "session_id": session.id,
+                "edit_message_id": old_user.id,
+                "prompt": "New request",
+                "language": "python",
+            })
+            list(response.streaming_content)
+
+        current_messages = list(session.messages.order_by("id"))
+        self.assertEqual(len(current_messages), 2)
+        self.assertIn("New request", current_messages[0].content)
+        self.assertEqual(current_messages[1].content, "New answer")
+        revisions = self.client.get(f"/api/session/{session.id}/revisions/").json()
+        self.assertTrue(revisions["success"])
+        self.assertEqual(revisions["revisions"][0]["messages"], 2)

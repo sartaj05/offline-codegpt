@@ -1,5 +1,6 @@
 let currentSessionId = null;
 let editingMessage = null;
+let editingMessageId = "";
 
 const chatBox = document.getElementById("chatBox");
 const promptInput = document.getElementById("promptInput");
@@ -195,6 +196,7 @@ function addUserActions(column, wrapper, payload) {
     editButton.innerText = "Edit message";
     editButton.onclick = () => {
         editingMessage = wrapper;
+        editingMessageId = wrapper.dataset.messageId || "";
         wrapper.classList.add("editing-message");
         promptInput.value = payload.prompt || "";
         codeInput.value = payload.code || "";
@@ -245,6 +247,7 @@ function setPrompt(text) {
 function newChat() {
     currentSessionId = null;
     editingMessage = null;
+    editingMessageId = "";
     sendStatus.textContent = "";
     chatBox.innerHTML = `
         <div class="welcome">
@@ -269,6 +272,7 @@ function addMessage(role, content, options = {}) {
 
     const wrapper = document.createElement("div");
     wrapper.className = "message " + (role === "user" ? "user-message" : "assistant-message");
+    if (options.messageId) wrapper.dataset.messageId = options.messageId;
 
     const inner = document.createElement("div");
     inner.className = "message-inner";
@@ -300,7 +304,7 @@ function addMessage(role, content, options = {}) {
     return body;
 }
 
-async function readStream(response, output) {
+async function readStream(response, output, userWrapper) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -316,6 +320,9 @@ async function readStream(response, output) {
             chatBox.scrollTop = chatBox.scrollHeight;
         } else if (event.type === "complete") {
             currentSessionId = event.session_id;
+            if (userWrapper && event.user_message_id) {
+                userWrapper.dataset.messageId = event.user_message_id;
+            }
             renderMessageContent(output, event.answer);
         } else if (event.type === "error") {
             output.innerText = "Error:\n" + event.error;
@@ -361,6 +368,7 @@ async function sendMessage() {
     }
     if (code) userText += "\n\nCode:\n" + code.substring(0, 2000);
 
+    const editId = editingMessageId;
     if (editingMessage) {
         const assistantMessage = editingMessage.nextElementSibling;
         editingMessage.remove();
@@ -368,6 +376,7 @@ async function sendMessage() {
             assistantMessage.remove();
         }
         editingMessage = null;
+        editingMessageId = "";
     }
 
     const payload = {
@@ -381,7 +390,8 @@ async function sendMessage() {
         fileNames: files.map(file => file.webkitRelativePath || file.name),
         imageNames: images.map(image => image.name),
     };
-    addMessage("user", userText.trim(), { payload });
+    const userBody = addMessage("user", userText.trim(), { payload });
+    const userWrapper = userBody.closest(".message");
     promptInput.value = "";
     sendBtn.disabled = true;
     sendBtn.innerText = "Generating...";
@@ -395,6 +405,7 @@ async function sendMessage() {
     formData.append("model", modelInput.value);
     formData.append("language", languageInput.value);
     if (currentSessionId) formData.append("session_id", currentSessionId);
+    if (editId) formData.append("edit_message_id", editId);
     files.forEach(file => {
         const relativePath = file.webkitRelativePath || file.name;
         formData.append("files", file, relativePath);
@@ -415,7 +426,7 @@ async function sendMessage() {
                 ? "Sign in to unlock uploads and image analysis."
                 : "Error:\n" + (data.error || "Request failed.");
         } else {
-            await readStream(response, output);
+            await readStream(response, output, userWrapper);
         }
     } catch (error) {
         output.innerText = "Error: Backend or Ollama not available.\n\n" + error;
@@ -505,7 +516,10 @@ async function loadSession(sessionId) {
         chatBox.innerHTML = "";
         data.messages.forEach(message => {
             const options = message.role === "user"
-                ? { payload: parseStoredUserMessage(message.content, data.model) }
+                ? {
+                    messageId: message.id,
+                    payload: parseStoredUserMessage(message.content, data.model),
+                }
                 : {};
             addMessage(message.role, message.content, options);
         });
