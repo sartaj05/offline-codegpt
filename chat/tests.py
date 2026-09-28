@@ -129,6 +129,25 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(len(payload["findings"]), 2)
         self.assertTrue(payload["recommendations"])
 
+    def test_documentation_generator_creates_readme_and_onboarding(self):
+        readme = self.client.post("/api/documentation/generate/", {
+            "doc_type": "readme",
+            "project_name": "Syntax Local AI",
+            "filename": "chat/views.py",
+            "code": "def ask_code(request):\n    return None\nclass Runner:\n    pass\n",
+        })
+        self.assertEqual(readme.status_code, 200)
+        self.assertIn("# Syntax Local AI", readme.json()["markdown"])
+        self.assertIn("ask_code", readme.json()["markdown"])
+
+        onboarding = self.client.post("/api/documentation/generate/", {
+            "doc_type": "onboarding",
+            "project_name": "Syntax Local AI",
+            "files_json": '[{"filename":"README.md","content":"hello"}]',
+        })
+        self.assertEqual(onboarding.status_code, 200)
+        self.assertIn("First setup", onboarding.json()["markdown"])
+
     def test_quality_endpoint_finds_security_issue(self):
         response = self.client.post("/api/analyze/", {
             "language": "python",

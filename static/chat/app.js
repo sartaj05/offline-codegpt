@@ -41,6 +41,11 @@ const devopsKind = document.getElementById("devopsKind");
 const devopsArtifact = document.getElementById("devopsArtifact");
 const devopsLogs = document.getElementById("devopsLogs");
 const devopsLogOutput = document.getElementById("devopsLogOutput");
+const documentationPanel = document.getElementById("documentationPanel");
+const documentationType = document.getElementById("documentationType");
+const documentationProjectName = document.getElementById("documentationProjectName");
+const documentationChangeSummary = document.getElementById("documentationChangeSummary");
+const documentationOutput = document.getElementById("documentationOutput");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -402,6 +407,33 @@ async function analyzeDevopsLogs() {
             "\n\nRecommendations:\n- " + (data.recommendations.join("\n- ") || "No extra recommendations.");
     } catch (error) {
         devopsLogOutput.innerText = "Log analysis error: " + error;
+    }
+}
+
+function toggleDocumentation() {
+    if (!documentationPanel) return;
+    documentationPanel.hidden = !documentationPanel.hidden;
+}
+
+async function generateDocumentation() {
+    documentationOutput.innerText = "Generating Markdown...";
+    try {
+        const response = await fetch("/api/documentation/generate/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                doc_type: documentationType.value,
+                project_name: documentationProjectName.value.trim(),
+                change_summary: documentationChangeSummary.value,
+                filename: editorFileName ? editorFileName.innerText : "current-code",
+                code: codeInput ? codeInput.value : "",
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to generate documentation.");
+        documentationOutput.innerText = data.markdown;
+    } catch (error) {
+        documentationOutput.innerText = "Documentation error: " + error;
     }
 }
 

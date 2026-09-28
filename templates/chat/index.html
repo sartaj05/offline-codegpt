@@ -91,6 +91,7 @@
                     <button type="button" onclick="toggleObservability()">Metrics</button>
                     <button type="button" onclick="toggleWorkspace()">Team</button>
                     <button type="button" onclick="toggleDevops()">DevOps</button>
+                    <button type="button" onclick="toggleDocumentation()">Docs</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -245,6 +246,27 @@
             <textarea id="devopsLogs" class="devops-logs" placeholder="Paste build, server, or deployment logs..."></textarea>
             <button type="button" onclick="analyzeDevopsLogs()">Analyze logs</button>
             <pre id="devopsLogOutput" class="devops-output">Log findings will appear here.</pre>
+        </section>
+        <section id="documentationPanel" class="documentation-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Documentation and onboarding</strong>
+                    <span>Generate project docs from the local editor and indexed files.</span>
+                </div>
+                <button type="button" onclick="toggleDocumentation()">Close</button>
+            </div>
+            <div class="documentation-row">
+                <select id="documentationType">
+                    <option value="readme">README</option>
+                    <option value="api">API reference</option>
+                    <option value="changelog">Changelog</option>
+                    <option value="onboarding">Developer onboarding</option>
+                </select>
+                <input id="documentationProjectName" value="Syntax Local AI" placeholder="Project name">
+                <button type="button" onclick="generateDocumentation()">Generate docs</button>
+            </div>
+            <textarea id="documentationChangeSummary" class="documentation-summary" placeholder="Optional change summary for a changelog..."></textarea>
+            <pre id="documentationOutput" class="documentation-output">Generated Markdown will appear here.</pre>
         </section>
 
         <section id="chatBox" class="chat-box">

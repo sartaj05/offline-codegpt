@@ -43,6 +43,7 @@ from .quality import analyze_code_quality
 from .sandbox import run_sandboxed_code
 from .security import scan_files
 from .devops import analyze_logs, generate_artifact
+from .documentation import generate_documentation
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -1270,6 +1271,29 @@ def devops_generate(request):
 def devops_logs(request):
     logs = request.POST.get("logs", "")[:50_000]
     return JsonResponse({"success": True, **analyze_logs(logs)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def documentation_generate(request):
+    doc_type = request.POST.get("doc_type", "readme").strip()
+    project_name = request.POST.get("project_name", "Local project")
+    code = request.POST.get("code", "")[:30_000]
+    filename = request.POST.get("filename", "current-code")
+    change_summary = request.POST.get("change_summary", "")[:2_000]
+    files = [{"filename": filename, "content": code}]
+    raw_files = request.POST.get("files_json", "")
+    if raw_files:
+        try:
+            parsed_files = json.loads(raw_files)
+            if isinstance(parsed_files, list):
+                files.extend(item for item in parsed_files[:100] if isinstance(item, dict))
+        except (TypeError, ValueError):
+            return JsonResponse({"success": False, "error": "files_json must be a JSON array."}, status=400)
+    if doc_type not in {"readme", "api", "changelog", "onboarding"}:
+        return JsonResponse({"success": False, "error": "Unsupported documentation type."}, status=400)
+    markdown = generate_documentation(files, doc_type, project_name, change_summary)
+    return JsonResponse({"success": True, "doc_type": doc_type, "markdown": markdown[:60_000]})
 
 
 def _mcp_tools():
