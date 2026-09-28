@@ -17,6 +17,64 @@ function updateActiveModel() {
     if (activeModel && modelInput) activeModel.innerText = modelInput.value;
 }
 
+function escapeHtml(value) {
+    return value.replace(/[&<>'"]/g, character => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "'": "&#39;",
+        '"': "&quot;",
+    })[character]);
+}
+
+function highlightCode(code, language) {
+    const placeholders = [];
+    const stash = html => {
+        placeholders.push(html);
+        return `@@TOKEN_${placeholders.length - 1}@@`;
+    };
+
+    let highlighted = escapeHtml(code);
+    highlighted = highlighted.replace(/(\/\/[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\/)/g,
+        match => stash(`<span class="token-comment">${match}</span>`));
+    highlighted = highlighted.replace(/(&quot;[\s\S]*?&quot;|&#39;[\s\S]*?&#39;)/g,
+        match => stash(`<span class="token-string">${match}</span>`));
+
+    const keywords = language === "python"
+        ? "and|as|class|def|elif|else|for|from|if|import|in|is|None|not|or|return|True|False|while|with|yield"
+        : "async|await|break|case|catch|class|const|else|export|false|for|from|function|if|import|interface|let|new|null|return|switch|this|throw|true|try|typeof|var|while|public|private|static|void|int|string|SELECT|FROM|WHERE|INSERT|UPDATE|DELETE";
+    highlighted = highlighted.replace(new RegExp(`\\b(${keywords})\\b`, "g"),
+        '<span class="token-keyword">$1</span>');
+
+    return highlighted.replace(/@@TOKEN_(\d+)@@/g, (_, index) => placeholders[index]);
+}
+
+function renderMessageContent(element, content) {
+    const fence = /```([\w+#-]*)\s*\n?([\s\S]*?)```/g;
+    let cursor = 0;
+    let match;
+    element.innerHTML = "";
+
+    while ((match = fence.exec(content)) !== null) {
+        if (match.index > cursor) {
+            element.appendChild(document.createTextNode(content.slice(cursor, match.index)));
+        }
+
+        const pre = document.createElement("pre");
+        const code = document.createElement("code");
+        code.className = `language-${match[1] || "text"}`;
+        code.innerHTML = highlightCode(match[2].replace(/\n$/, ""), match[1]);
+        pre.appendChild(code);
+        element.appendChild(pre);
+        cursor = fence.lastIndex;
+    }
+
+    if (cursor === 0) {
+        element.innerText = content;
+    } else if (cursor < content.length) {
+        element.appendChild(document.createTextNode(content.slice(cursor)));
+    }
+}
 function clearWelcome() {
     const welcome = document.querySelector(".welcome");
     if (welcome) welcome.remove();
@@ -61,7 +119,11 @@ function addMessage(role, content) {
 
     const body = document.createElement("div");
     body.className = "message-content";
-    body.innerText = content;
+    if (role === "assistant") {
+        renderMessageContent(body, content);
+    } else {
+        body.innerText = content;
+    }
 
     inner.append(avatar, body);
     wrapper.appendChild(inner);
@@ -86,16 +148,16 @@ async function readStream(response, output) {
             chatBox.scrollTop = chatBox.scrollHeight;
         } else if (event.type === "complete") {
             currentSessionId = event.session_id;
-            output.innerText = event.answer;
+            renderMessageContent(output, event.answer);
         } else if (event.type === "error") {
-            output.innerText = "Error:\\n" + event.error;
+            output.innerText = "Error:\n" + event.error;
         }
     };
 
     while (true) {
         const { value, done } = await reader.read();
         buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-        const lines = buffer.split("\\n");
+        const lines = buffer.split("\n");
         buffer = lines.pop();
         lines.forEach(consumeLine);
         if (done) break;
@@ -114,12 +176,12 @@ async function sendMessage() {
         return;
     }
 
-    let userText = prompt ? "Prompt:\\n" + prompt : "";
+    let userText = prompt ? "Prompt:\n" + prompt : "";
     if (files.length > 0) {
-        userText += "\\n\\nUploaded Files:\\n";
-        userText += files.map(file => file.webkitRelativePath || file.name).join("\\n");
+        userText += "\n\nUploaded Files:\n";
+        userText += files.map(file => file.webkitRelativePath || file.name).join("\n");
     }
-    if (code) userText += "\\n\\nCode:\\n" + code.substring(0, 2000);
+    if (code) userText += "\n\nCode:\n" + code.substring(0, 2000);
 
     addMessage("user", userText.trim());
     promptInput.value = "";
@@ -146,12 +208,12 @@ async function sendMessage() {
 
         if (!response.ok) {
             const data = await response.json();
-            output.innerText = "Error:\\n" + (data.error || "Request failed.");
+            output.innerText = "Error:\n" + (data.error || "Request failed.");
         } else {
             await readStream(response, output);
         }
     } catch (error) {
-        output.innerText = "Error: Backend or Ollama not available.\\n\\n" + error;
+        output.innerText = "Error: Backend or Ollama not available.\n\n" + error;
     } finally {
         sendBtn.disabled = false;
         sendBtn.innerText = "Send";

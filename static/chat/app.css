@@ -555,6 +555,33 @@ body {
     display: none;
 }
 
+.message-content pre {
+    margin: 14px 0;
+    padding: 14px;
+    overflow-x: auto;
+    background: #202123;
+    border: 1px solid #565869;
+    border-radius: 8px;
+}
+
+.message-content code {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 13px;
+}
+
+.token-comment {
+    color: #8b949e;
+}
+
+.token-string {
+    color: #a5d6ff;
+}
+
+.token-keyword {
+    color: #ff7b72;
+    font-weight: 600;
+}
+
 .project-search {
     padding: 0 10px 12px;
 }
