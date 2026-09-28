@@ -14,6 +14,10 @@ const ollamaTopP = document.getElementById("ollamaTopP");
 const ollamaContextLength = document.getElementById("ollamaContextLength");
 const ollamaModelName = document.getElementById("ollamaModelName");
 const ollamaSettingsStatus = document.getElementById("ollamaSettingsStatus");
+const agentGoal = document.getElementById("agentGoal");
+const agentStatus = document.getElementById("agentStatus");
+const agentPlan = document.getElementById("agentPlan");
+let agentTaskId = null;
 const languageInput = document.getElementById("language");
 const fileInput = document.getElementById("fileInput");
 const folderInput = document.getElementById("folderInput");
@@ -717,6 +721,98 @@ async function runTests() {
     } catch (error) {
         output.innerText = "Test execution error: " + error;
     }
+}
+
+function renderAgentTask(task) {
+    if (!agentPlan) return;
+    agentTaskId = task.id;
+    agentStatus.innerText = task.status.toUpperCase() + " | " + task.progress + "/" + task.total_steps + " steps | " + task.result;
+    agentPlan.innerHTML = "";
+    task.plan.forEach((step, index) => {
+        const row = document.createElement("div");
+        row.className = "agent-step" + (step.completed ? " completed" : "");
+        const details = document.createElement("div");
+        details.className = "agent-step-details";
+        const title = document.createElement("strong");
+        title.innerText = (index + 1) + ". " + step.title;
+        const description = document.createElement("span");
+        description.innerText = step.description + (step.requires_approval ? " Approval required." : "");
+        details.append(title, description);
+        const actions = document.createElement("div");
+        actions.className = "agent-step-actions";
+        if (step.requires_approval && !step.approved && !step.completed) {
+            const approve = document.createElement("button");
+            approve.type = "button";
+            approve.innerText = "Approve";
+            approve.onclick = () => updateAgentStep(index, "approve");
+            actions.appendChild(approve);
+        }
+        if (!step.completed) {
+            const complete = document.createElement("button");
+            complete.type = "button";
+            complete.innerText = step.requires_approval ? "Complete" : "Mark done";
+            complete.disabled = step.requires_approval && !step.approved;
+            complete.onclick = () => updateAgentStep(index, "complete");
+            actions.appendChild(complete);
+        }
+        if (!step.completed && (step.approved || !step.requires_approval)) {
+            const reject = document.createElement("button");
+            reject.type = "button";
+            reject.innerText = "Reject";
+            reject.onclick = () => updateAgentStep(index, "reject");
+            actions.appendChild(reject);
+        }
+        row.append(details, actions);
+        agentPlan.appendChild(row);
+    });
+}
+
+async function createAgentPlan() {
+    const goal = agentGoal ? agentGoal.value.trim() : "";
+    if (!goal) {
+        alert("Describe the task for the agent.");
+        return;
+    }
+    agentStatus.innerText = "Creating plan...";
+    try {
+        const response = await fetch("/api/agent/plan/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({ goal }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to create agent plan.");
+        renderAgentTask(data.task);
+    } catch (error) {
+        agentStatus.innerText = "Agent error: " + error;
+    }
+}
+
+async function updateAgentStep(step, action) {
+    if (!agentTaskId) return;
+    try {
+        const response = await fetch("/api/agent/task/" + agentTaskId + "/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({ step, action }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Agent action failed.");
+        renderAgentTask(data.task);
+    } catch (error) {
+        agentStatus.innerText = "Agent error: " + error;
+    }
+}
+
+function resetAgentTask() {
+    if (agentTaskId) updateAgentStep(0, "undo");
+    else if (agentPlan) agentPlan.innerHTML = "";
 }
 
 async function loadSession(sessionId) {

@@ -331,6 +331,37 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(executed.json()["summary"], "Tests passed.")
         self.assertIn("PASS", executed.json()["result"]["stdout"])
 
+    def test_agent_plan_requires_approval_and_supports_undo(self):
+        planned = self.client.post(
+            "/api/agent/plan/",
+            {"goal": "Update the editor, run tests, and prepare a Git commit"},
+        )
+        self.assertTrue(planned.json()["success"])
+        task = planned.json()["task"]
+        self.assertEqual(task["status"], "planned")
+        self.assertTrue(task["plan"][0]["approved"])
+        self.assertTrue(task["plan"][1]["requires_approval"])
+
+        approved = self.client.post(
+            f"/api/agent/task/{task['id']}/",
+            {"action": "approve", "step": 1},
+        )
+        self.assertEqual(approved.json()["task"]["status"], "running")
+        self.assertTrue(approved.json()["task"]["plan"][1]["approved"])
+
+        rejected = self.client.post(
+            f"/api/agent/task/{task['id']}/",
+            {"action": "reject", "step": 1},
+        )
+        self.assertEqual(rejected.json()["task"]["status"], "blocked")
+
+        undone = self.client.post(
+            f"/api/agent/task/{task['id']}/",
+            {"action": "undo"},
+        )
+        self.assertEqual(undone.json()["task"]["status"], "planned")
+        self.assertFalse(undone.json()["task"]["plan"][1]["approved"])
+
     def test_rag_results_include_source_line_ranges(self):
         source = "first" + chr(10) + "needle = True" + chr(10) + "last"
         document = KnowledgeDocument.objects.create(

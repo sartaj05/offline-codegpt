@@ -325,6 +325,26 @@ select { padding: 0 10px; }
 .test-actions button:last-child { border-color: #2d997b; background: #176a56; color: #e7fff7; }
 .test-input { width: 100%; min-height: 120px; margin-top: 9px; resize: vertical; padding: 10px; border: 1px solid var(--border); border-radius: 8px; outline: 0; background: #11141b; color: #dce6f2; font-family: Consolas, monospace; font-size: 11px; line-height: 1.5; }
 .test-output { max-height: 130px; overflow: auto; margin: 8px 0 0; padding: 9px; border: 1px solid var(--border); border-radius: 8px; background: #0d1016; color: var(--muted); font-family: Consolas, monospace; font-size: 10px; white-space: pre-wrap; }
+.agent-workspace { margin-top: 10px; padding: 11px; border: 1px solid rgba(123,151,255,.25); border-radius: 9px; background: rgba(30,40,72,.25); }
+.agent-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.agent-heading strong, .agent-heading span { display: block; }
+.agent-heading strong { color: #e4e9ff; font-size: 11px; }
+.agent-heading span { margin-top: 3px; color: var(--muted); font-size: 10px; }
+.agent-heading button, .agent-plan-button { padding: 6px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); color: var(--text); font-size: 10px; }
+.agent-plan-button { width: 100%; margin-top: 7px; border-color: #697ee5; background: #34448d; color: #f0f3ff; }
+.agent-goal { width: 100%; min-height: 58px; margin-top: 9px; resize: vertical; padding: 9px; border: 1px solid var(--border); border-radius: 8px; outline: 0; background: #11141b; color: var(--text); font-size: 11px; line-height: 1.45; }
+.agent-status { min-height: 16px; margin-top: 8px; color: #b5c2ff; font-size: 10px; }
+.agent-plan { display: grid; gap: 6px; }
+.agent-step { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 7px; background: rgba(17,20,27,.55); }
+.agent-step.completed { border-color: rgba(99,230,190,.35); background: rgba(27,49,48,.3); }
+.agent-step-details { min-width: 0; }
+.agent-step-details strong, .agent-step-details span { display: block; }
+.agent-step-details strong { color: var(--text); font-size: 10px; }
+.agent-step-details span { margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.35; }
+.agent-step-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 4px; }
+.agent-step-actions button { padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-2); color: var(--muted); font-size: 9px; }
+.agent-step-actions button:first-child { border-color: #697ee5; color: #d7ddff; }
+.agent-step-actions button:disabled { opacity: .45; }
 .patch-panel { margin-top: 10px; padding: 11px; border: 1px solid rgba(99,230,190,.25); border-radius: 9px; background: rgba(27,49,48,.35); }
 .patch-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #dcebe7; font-size: 11px; }
 .patch-heading span { color: var(--muted); font-size: 10px; }

@@ -29,6 +29,7 @@ from .models import (
     KnowledgeChunk,
     KnowledgeDocument,
     LocalModelConfig,
+    AgentTask,
     UserOllamaSettings,
 )
 from .quality import analyze_code_quality
@@ -46,6 +47,68 @@ CHUNK_SIZE = 2_000
 MAX_EXECUTION_CHARS = 20_000
 MAX_TEST_CHARS = 20_000
 MAX_GIT_OUTPUT_CHARS = 50_000
+
+
+def _agent_plan(goal):
+    plan = [
+        {
+            "title": "Inspect project context",
+            "description": "Read indexed files and relevant project history.",
+            "kind": "read",
+            "requires_approval": False,
+            "approved": True,
+            "completed": False,
+        },
+        {
+            "title": "Prepare file changes",
+            "description": "Propose edits for the files related to this task.",
+            "kind": "file_write",
+            "requires_approval": True,
+            "approved": False,
+            "completed": False,
+        },
+        {
+            "title": "Run guarded tests",
+            "description": "Execute the project test command inside the guarded workspace.",
+            "kind": "execute",
+            "requires_approval": True,
+            "approved": False,
+            "completed": False,
+        },
+        {
+            "title": "Review Git changes",
+            "description": "Inspect the resulting diff and changed files.",
+            "kind": "git_read",
+            "requires_approval": False,
+            "approved": True,
+            "completed": False,
+        },
+        {
+            "title": "Create a Git commit",
+            "description": "Prepare a commit only after explicit user approval.",
+            "kind": "git_write",
+            "requires_approval": True,
+            "approved": False,
+            "completed": False,
+        },
+    ]
+    return plan
+
+
+def _agent_payload(task):
+    completed = sum(1 for step in task.plan if step.get("completed"))
+    return {
+        "id": task.id,
+        "title": task.title,
+        "goal": task.goal,
+        "status": task.status,
+        "plan": task.plan,
+        "current_step": task.current_step,
+        "progress": completed,
+        "total_steps": len(task.plan),
+        "result": task.result,
+        "created_at": task.created_at.strftime("%d-%m-%Y %H:%M"),
+    }
 
 
 def _run_git(args):
@@ -751,6 +814,66 @@ def execute_code(request):
         }, status=400)
 
     return JsonResponse(run_sandboxed_code(language, code))
+
+
+@login_required(login_url="/login/")
+@require_POST
+def agent_plan(request):
+    goal = request.POST.get("goal", "").strip()
+    if not goal:
+        return JsonResponse({"success": False, "error": "Describe the task for the agent."}, status=400)
+    if len(goal) > 4000:
+        return JsonResponse({"success": False, "error": "Agent goals are limited to 4,000 characters."}, status=400)
+    task = AgentTask.objects.create(
+        owner=request.user,
+        title=goal[:80],
+        goal=goal,
+        plan=_agent_plan(goal),
+    )
+    return JsonResponse({"success": True, "task": _agent_payload(task)})
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def agent_task(request, task_id):
+    task = get_object_or_404(AgentTask, id=task_id, owner=request.user)
+    if request.method == "GET":
+        return JsonResponse({"success": True, "task": _agent_payload(task)})
+
+    action = request.POST.get("action", "").strip().lower()
+    try:
+        step_index = int(request.POST.get("step", task.current_step))
+    except (TypeError, ValueError):
+        return JsonResponse({"success": False, "error": "Invalid plan step."}, status=400)
+    if action == "undo":
+        task.plan = _agent_plan(task.goal)
+        task.current_step = 0
+        task.status = "planned"
+        task.result = "Task reset. No approved actions remain."
+    elif action in {"approve", "reject", "complete"}:
+        if step_index < 0 or step_index >= len(task.plan):
+            return JsonResponse({"success": False, "error": "Plan step does not exist."}, status=400)
+        step = task.plan[step_index]
+        if action == "approve":
+            step["approved"] = True
+            task.status = "running"
+            task.current_step = step_index
+            task.result = "Step approved. Review the proposed action before execution."
+        elif action == "reject":
+            step["approved"] = False
+            task.status = "blocked"
+            task.result = "Step rejected. The agent is paused until the plan is reset."
+        else:
+            if step.get("requires_approval") and not step.get("approved"):
+                return JsonResponse({"success": False, "error": "Approve this step before marking it complete."}, status=400)
+            step["completed"] = True
+            task.current_step = min(step_index + 1, len(task.plan) - 1)
+            task.status = "completed" if all(item.get("completed") for item in task.plan) else "running"
+            task.result = "Step completed."
+    else:
+        return JsonResponse({"success": False, "error": "Use approve, reject, complete, or undo."}, status=400)
+    task.save(update_fields=["plan", "current_step", "status", "result", "updated_at"])
+    return JsonResponse({"success": True, "task": _agent_payload(task)})
 
 
 @login_required(login_url="/login/")
