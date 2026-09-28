@@ -1,6 +1,6 @@
-# Offline CodeGPT
+# Syntax Local AI
 
-Offline CodeGPT is a Django web app that lets you upload or paste code and ask a local Ollama model for explanations, debugging help, optimization suggestions, and refactoring ideas.
+Syntax Local AI is a private Django web app that lets you upload or paste code and ask a local Ollama model for explanations, debugging help, optimization suggestions, and refactoring ideas.
 
 ## Features
 

@@ -255,7 +255,7 @@ def _session_markdown(session):
         "",
     ]
     for message in session.messages.order_by("created_at"):
-        label = "You" if message.role == "user" else "Offline CodeGPT"
+        label = "You" if message.role == "user" else "Syntax Local AI"
         lines.extend([f"## {label}", "", message.content, ""])
     return "\n".join(lines)
 
@@ -304,7 +304,7 @@ def _session_pdf(session):
 def export_session(request, session_id):
     session = get_object_or_404(ChatSession, id=session_id, owner=request.user)
     export_format = request.GET.get("format", "markdown").lower()
-    filename = f"offline-codegpt-{session.id}"
+    filename = f"syntax-local-ai-{session.id}"
 
     if export_format in ("md", "markdown"):
         response = HttpResponse(_session_markdown(session), content_type="text/markdown")

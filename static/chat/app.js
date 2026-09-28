@@ -127,7 +127,7 @@ function addAssistantActions(element) {
     const downloadButton = document.createElement("button");
     downloadButton.type = "button";
     downloadButton.innerText = "Download .md";
-    downloadButton.onclick = () => downloadText("offline-codegpt-answer.md", element.dataset.rawContent || element.innerText);
+    downloadButton.onclick = () => downloadText("syntax-local-ai-answer.md", element.dataset.rawContent || element.innerText);
 
     actions.append(copyButton, downloadButton);
     element.parentElement.appendChild(actions);
