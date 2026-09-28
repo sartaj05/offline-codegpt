@@ -6,6 +6,7 @@ const codeInput = document.getElementById("codeInput");
 const modelInput = document.getElementById("model");
 const languageInput = document.getElementById("language");
 const fileInput = document.getElementById("fileInput");
+const folderInput = document.getElementById("folderInput");
 const sendBtn = document.getElementById("sendBtn");
 const csrfToken = document.getElementById("csrfToken").value;
 
@@ -40,6 +41,7 @@ function newChat() {
     promptInput.value = "";
     codeInput.value = "";
     fileInput.value = "";
+    folderInput.value = "";
 }
 
 function addMessage(role, content) {
@@ -103,7 +105,7 @@ async function readStream(response, output) {
 async function sendMessage() {
     const prompt = promptInput.value.trim();
     const code = codeInput.value.trim();
-    const files = fileInput.files;
+    const files = [...fileInput.files, ...folderInput.files];
 
     if (!prompt && !code && files.length === 0) {
         alert("Please enter prompt, paste code, or upload one or more files.");
@@ -113,7 +115,7 @@ async function sendMessage() {
     let userText = prompt ? "Prompt:\\n" + prompt : "";
     if (files.length > 0) {
         userText += "\\n\\nUploaded Files:\\n";
-        userText += Array.from(files).map(file => file.name).join("\\n");
+        userText += files.map(file => file.webkitRelativePath || file.name).join("\\n");
     }
     if (code) userText += "\\n\\nCode:\\n" + code.substring(0, 2000);
 
@@ -129,7 +131,9 @@ async function sendMessage() {
     formData.append("model", modelInput.value);
     formData.append("language", languageInput.value);
     if (currentSessionId) formData.append("session_id", currentSessionId);
-    Array.from(files).forEach(file => formData.append("files", file));
+    files.forEach(file => {
+        formData.append("files", file, file.webkitRelativePath || file.name);
+    });
 
     try {
         const response = await fetch("/api/ask-code/", {
