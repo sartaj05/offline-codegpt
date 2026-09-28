@@ -395,13 +395,41 @@ function renderEvaluationTasks(tasks) {
         heading.append(title, meta);
         const prompt = document.createElement("p");
         prompt.innerText = task.prompt;
+        const run = document.createElement("button");
+        run.type = "button";
+        run.innerText = "Run with selected model";
+        run.onclick = () => runEvaluationTask(task);
         const remove = document.createElement("button");
         remove.type = "button";
         remove.innerText = "Delete";
         remove.onclick = () => deleteEvaluationTask(task.id, task.name);
-        card.append(heading, prompt, remove);
+        const actions = document.createElement("div");
+        actions.className = "evaluation-task-actions";
+        actions.append(run, remove);
+        const result = document.createElement("pre");
+        result.className = "evaluation-task-result";
+        result.id = "evaluation-result-" + task.id;
+        result.innerText = "No run yet.";
+        card.append(heading, prompt, actions, result);
         evaluationTaskList.appendChild(card);
     });
+}
+
+async function runEvaluationTask(task) {
+    const output = document.getElementById("evaluation-result-" + task.id);
+    output.innerText = "Running " + (modelInput ? modelInput.value : "local model") + "...";
+    try {
+        const response = await fetch("/api/evaluations/tasks/" + task.id + "/run/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ model: modelInput ? modelInput.value : "" }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || data.run?.response || "Evaluation run failed.");
+        output.innerText = data.run.model_name + " · " + data.run.duration_ms + " ms\n\n" + data.run.response;
+    } catch (error) {
+        output.innerText = "Run error: " + error;
+    }
 }
 
 async function loadEvaluationTasks() {

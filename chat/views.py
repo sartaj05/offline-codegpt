@@ -40,6 +40,7 @@ from .models import (
     WorkspaceMembership,
     WorkspacePolicy,
     EvaluationTask,
+    EvaluationRun,
 )
 from .quality import analyze_code_quality
 from .sandbox import run_sandboxed_code
@@ -1179,6 +1180,87 @@ def evaluation_task_detail(request, task_id):
     task.is_active = request.POST.get("is_active", "true").lower() not in {"false", "0", "off"}
     task.save()
     return JsonResponse({"success": True, "task": _evaluation_task_payload(task)})
+
+
+def _evaluation_run_payload(run):
+    return {
+        "id": run.id,
+        "task_id": run.task_id,
+        "model_name": run.model_name,
+        "response": run.response,
+        "status": run.status,
+        "duration_ms": run.duration_ms,
+        "input_chars": run.input_chars,
+        "output_chars": run.output_chars,
+        "metadata": run.metadata,
+        "created_at": run.created_at.isoformat(),
+    }
+
+
+@login_required(login_url="/login/")
+@require_POST
+def evaluation_run(request, task_id):
+    task = get_object_or_404(EvaluationTask, id=task_id, owner=request.user, is_active=True)
+    settings = _user_ollama_settings(request.user)
+    model_name = request.POST.get("model", "").strip()[:100] or settings.default_model
+    evaluation_prompt = (
+        "You are being evaluated as a local coding assistant.\n"
+        f"Language: {task.language}\n"
+        f"Task: {task.prompt}\n"
+        f"Code fixture:\n{task.code}\n"
+        "Return a practical answer with corrected code when appropriate."
+    )
+    run = EvaluationRun.objects.create(
+        owner=request.user,
+        task=task,
+        model_name=model_name,
+        input_chars=len(evaluation_prompt),
+    )
+    started = time.perf_counter()
+    try:
+        response = requests.post(
+            f"{settings.server_url}/api/generate",
+            json={
+                "model": model_name,
+                "prompt": evaluation_prompt,
+                "stream": False,
+                "options": {
+                    "temperature": settings.temperature,
+                    "top_p": settings.top_p,
+                    "num_ctx": max(512, settings.max_context_chars // 4),
+                },
+            },
+            timeout=(10, 300),
+        )
+        duration_ms = round((time.perf_counter() - started) * 1000)
+        run.duration_ms = duration_ms
+        if not response.ok:
+            run.status = "failed"
+            run.response = response.text[:4000]
+            run.metadata = {"status_code": response.status_code}
+        else:
+            payload = response.json()
+            run.response = str(payload.get("response", "")).strip()
+            run.output_chars = len(run.response)
+            run.status = "completed"
+            run.metadata = {"done": payload.get("done", True)}
+    except (requests.RequestException, ValueError) as exc:
+        run.duration_ms = round((time.perf_counter() - started) * 1000)
+        run.status = "failed"
+        run.response = str(exc)
+        run.metadata = {"error": str(exc)}
+    run.save(update_fields=["status", "response", "duration_ms", "output_chars", "metadata"])
+    AiEvent.objects.create(
+        owner=request.user,
+        event_type="evaluation",
+        model_name=model_name,
+        duration_ms=run.duration_ms,
+        input_chars=run.input_chars,
+        output_chars=run.output_chars,
+        success=run.status == "completed",
+        metadata={"task_id": task.id, "run_id": run.id},
+    )
+    return JsonResponse({"success": run.status == "completed", "run": _evaluation_run_payload(run)}, status=200 if run.status == "completed" else 502)
 
 
 def _workspace_for_user(user):

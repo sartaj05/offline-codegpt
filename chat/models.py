@@ -425,3 +425,28 @@ class EvaluationTask(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class EvaluationRun(models.Model):
+    STATUS_CHOICES = (
+        ("running", "Running"),
+        ("completed", "Completed"),
+        ("failed", "Failed"),
+    )
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="evaluation_runs")
+    task = models.ForeignKey(EvaluationTask, on_delete=models.CASCADE, related_name="runs")
+    model_name = models.CharField(max_length=100)
+    response = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="running")
+    duration_ms = models.PositiveIntegerField(default=0)
+    input_chars = models.PositiveIntegerField(default=0)
+    output_chars = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"{self.task.name} · {self.model_name}"

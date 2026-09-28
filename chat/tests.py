@@ -7,7 +7,7 @@ from django.test import TestCase
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import AiEvent, AuditEvent, ChatMessage, ChatSession, KnowledgeChunk, KnowledgeDocument, WorkspaceMembership, WorkspacePolicy
+from .models import AiEvent, AuditEvent, ChatMessage, ChatSession, EvaluationTask, KnowledgeChunk, KnowledgeDocument, WorkspaceMembership, WorkspacePolicy
 from .views import _search_knowledge
 
 
@@ -38,6 +38,29 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(listing.json()["tasks"][0]["id"], task["id"])
         deleted = self.client.delete(f"/api/evaluations/tasks/{task['id']}/")
         self.assertTrue(deleted.json()["deleted"])
+
+    @patch("chat.views.requests.post")
+    def test_evaluation_task_runs_selected_ollama_model(self, mock_post):
+        class FakeResponse:
+            ok = True
+            status_code = 200
+            text = ""
+
+            def json(self):
+                return {"response": "Use a + b.", "done": True}
+
+        mock_post.return_value = FakeResponse()
+        task = EvaluationTask.objects.create(
+            owner=self.user,
+            name="Add numbers",
+            prompt="Explain how to add two numbers.",
+            language="python",
+        )
+        response = self.client.post(f"/api/evaluations/tasks/{task.id}/run/", {"model": "qwen2.5-coder:1.5b"})
+        self.assertTrue(response.json()["success"])
+        self.assertEqual(response.json()["run"]["model_name"], "qwen2.5-coder:1.5b")
+        self.assertEqual(response.json()["run"]["response"], "Use a + b.")
+        self.assertEqual(AiEvent.objects.get(event_type="evaluation").output_chars, len("Use a + b."))
 
     def test_guest_upload_requires_free_account(self):
         self.client.logout()
