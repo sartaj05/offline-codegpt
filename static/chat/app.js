@@ -664,6 +664,46 @@ async function analyzeQuality() {
     }
 }
 
+async function scanSecurity() {
+    const code = codeInput.value.trim();
+    const output = document.getElementById("securityOutput");
+    if (!code) {
+        alert("Paste code before scanning it.");
+        return;
+    }
+    output.innerText = "Scanning locally...";
+    try {
+        const response = await fetch("/api/security/scan/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({
+                code,
+                filename: editorFileName ? editorFileName.innerText : "editor-buffer",
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Security scan failed.");
+        const lines = [
+            data.summary,
+            "",
+            ...data.findings.map(item => "[" + item.severity.toUpperCase() + "] " + item.rule + " " + item.filename + (item.line ? ":" + item.line : "") + " - " + item.message),
+            "",
+            "Dependencies: " + data.dependencies.length,
+            "Licenses: " + data.licenses.map(item => item.filename + "=" + item.license).join(", "),
+            data.limitations,
+            "",
+            "SBOM:",
+            JSON.stringify(data.sbom, null, 2),
+        ];
+        output.innerText = lines.join("\n");
+    } catch (error) {
+        output.innerText = "Security scan error: " + error;
+    }
+}
+
 async function generateTests() {
     const code = codeInput.value.trim();
     const output = document.getElementById("testOutput");

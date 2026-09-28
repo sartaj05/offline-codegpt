@@ -362,6 +362,30 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(undone.json()["task"]["status"], "planned")
         self.assertFalse(undone.json()["task"]["plan"][1]["approved"])
 
+    def test_security_center_detects_secrets_and_dependency_hygiene(self):
+        response = self.client.post(
+            "/api/security/scan/",
+            {
+                "files": json.dumps([
+                    {
+                        "filename": "app.py",
+                        "content": "API_KEY = 'sk_test_1234567890'\nimport os\nos.system(user_input)\n",
+                    },
+                    {
+                        "filename": "requirements.txt",
+                        "content": "django==5.2.15\nrequests\n",
+                    },
+                ]),
+            },
+        )
+        payload = response.json()
+        self.assertTrue(payload["success"])
+        rules = {item["rule"] for item in payload["findings"]}
+        self.assertIn("secret-generic", rules)
+        self.assertIn("command-execution", rules)
+        self.assertIn("unpinned-dependency", rules)
+        self.assertEqual(payload["sbom"]["bomFormat"], "SPDX")
+
     def test_rag_results_include_source_line_ranges(self):
         source = "first" + chr(10) + "needle = True" + chr(10) + "last"
         document = KnowledgeDocument.objects.create(

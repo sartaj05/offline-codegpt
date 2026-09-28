@@ -34,6 +34,7 @@ from .models import (
 )
 from .quality import analyze_code_quality
 from .sandbox import run_sandboxed_code
+from .security import scan_files
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -887,6 +888,29 @@ def quality_analyze(request):
     if len(code) > MAX_EXECUTION_CHARS:
         return JsonResponse({"success": False, "error": "Analysis input is too large."}, status=400)
     return JsonResponse({"success": True, **analyze_code_quality(code, language, mode)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def security_scan(request):
+    code = request.POST.get("code", "")
+    filename = request.POST.get("filename", "editor-buffer")
+    files = [{"filename": filename, "content": code}] if code else []
+    raw_files = request.POST.get("files", "")
+    if raw_files:
+        try:
+            submitted = json.loads(raw_files)
+            if not isinstance(submitted, list) or len(submitted) > MAX_PROJECT_FILES:
+                raise ValueError("invalid file list")
+            files = [
+                {"filename": _safe_filename(item.get("filename", "uploaded-file")), "content": str(item.get("content", ""))}
+                for item in submitted
+            ]
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return JsonResponse({"success": False, "error": "Invalid security scan file list."}, status=400)
+    if not files or sum(len(item["content"]) for item in files) > MAX_TEST_CHARS:
+        return JsonResponse({"success": False, "error": "Provide code or a project smaller than 20,000 characters."}, status=400)
+    return JsonResponse({"success": True, **scan_files(files)})
 
 
 @login_required(login_url="/login/")

@@ -21,6 +21,7 @@ urlpatterns = [
     path("api/agent/plan/", views.agent_plan, name="agent_plan"),
     path("api/agent/task/<int:task_id>/", views.agent_task, name="agent_task"),
     path("api/analyze/", views.quality_analyze, name="quality_analyze"),
+    path("api/security/scan/", views.security_scan, name="security_scan"),
     path("api/tests/generate/", views.generate_tests, name="generate_tests"),
     path("api/tests/run/", views.run_tests, name="run_tests"),
     path("api/patch/preview/", views.preview_patch, name="preview_patch"),

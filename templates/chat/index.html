@@ -213,6 +213,16 @@
                         <textarea id="testInput" class="test-input" placeholder="Generated tests will appear here..."></textarea>
                         <pre id="testOutput" class="test-output">Test results will appear here.</pre>
                     </div>
+                    <div class="security-workspace">
+                        <div class="security-heading">
+                            <div>
+                                <strong>AI Security Center</strong>
+                                <span>Secrets, risky code, dependencies, licenses, and SBOM.</span>
+                            </div>
+                            <button type="button" onclick="scanSecurity()">Scan code</button>
+                        </div>
+                        <pre id="securityOutput" class="security-output">Security findings will appear here.</pre>
+                    </div>
                     <div class="agent-workspace">
                         <div class="agent-heading">
                             <div>
