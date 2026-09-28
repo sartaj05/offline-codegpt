@@ -233,6 +233,10 @@ select { padding: 0 10px; }
 #sendBtn { width: 98px; flex: 0 0 98px; align-self: stretch; border: 0; border-radius: 8px; background: var(--accent-strong); color: #071319; font-weight: 800; }
 #sendBtn:hover { background: var(--accent); }
 #sendBtn:disabled { background: #667085; color: #e0e5eb; cursor: wait; }
+.send-status { min-height: 17px; width: min(980px, 100%); margin: 6px auto 0; color: var(--accent); font-size: 11px; text-align: right; }
+.generating-output { color: #b8c4d6; }
+.generating-output::after { content: "  .  .  ."; display: inline-block; color: var(--accent); letter-spacing: 3px; animation: generatingDots 1.2s infinite ease-in-out; }
+@keyframes generatingDots { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
 .composer-hint { margin-top: 8px; color: #6f7c91; text-align: center; font-size: 10px; }
 .guest-tool-note { margin-top: 9px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-size: 11px; }
 .guest-tool-note a { color: var(--accent); }

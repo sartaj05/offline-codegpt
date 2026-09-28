@@ -9,6 +9,13 @@ const fileInput = document.getElementById("fileInput");
 const folderInput = document.getElementById("folderInput");
 const imageInput = document.getElementById("imageInput");
 const sendBtn = document.getElementById("sendBtn");
+const sendStatus = document.createElement("div");
+sendStatus.className = "send-status";
+sendStatus.setAttribute("aria-live", "polite");
+if (sendBtn) {
+    const promptBar = sendBtn.closest(".prompt-bar");
+    if (promptBar) promptBar.insertAdjacentElement("afterend", sendStatus);
+}
 const searchInput = document.getElementById("searchInput");
 const searchResults = document.getElementById("searchResults");
 const csrfToken = document.getElementById("csrfToken").value;
@@ -247,7 +254,9 @@ async function sendMessage() {
     promptInput.value = "";
     sendBtn.disabled = true;
     sendBtn.innerText = "Generating...";
-    const output = addMessage("assistant", "Thinking locally...");
+    const output = addMessage("assistant", "Generating response...");
+    output.classList.add("generating-output");
+    sendStatus.textContent = "Message sent - Generating response...";
 
     const formData = new FormData();
     formData.append("prompt", prompt);
@@ -280,8 +289,10 @@ async function sendMessage() {
     } catch (error) {
         output.innerText = "Error: Backend or Ollama not available.\n\n" + error;
     } finally {
+        output.classList.remove("generating-output");
         sendBtn.disabled = false;
         sendBtn.innerText = "Send";
+        sendStatus.textContent = "";
     }
 }
 async function runCode() {
