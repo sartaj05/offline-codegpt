@@ -33,6 +33,7 @@ const remotePrBody = document.getElementById("remotePrBody");
 const agentGoal = document.getElementById("agentGoal");
 const agentStatus = document.getElementById("agentStatus");
 const agentPlan = document.getElementById("agentPlan");
+const agentLogs = document.getElementById("agentLogs");
 let agentTaskId = null;
 const languageInput = document.getElementById("language");
 const fileInput = document.getElementById("fileInput");
@@ -973,6 +974,7 @@ function renderAgentTask(task) {
     if (!agentPlan) return;
     agentTaskId = task.id;
     agentStatus.innerText = task.status.toUpperCase() + " | " + task.progress + "/" + task.total_steps + " steps | " + task.result;
+    if (agentLogs) agentLogs.innerText = (task.logs || []).map(log => "[" + log.level + "] " + log.message).join("\n") || "Agent logs will appear here.";
     agentPlan.innerHTML = "";
     task.plan.forEach((step, index) => {
         const row = document.createElement("div");
@@ -1050,6 +1052,41 @@ async function updateAgentStep(step, action) {
         });
         const data = await response.json();
         if (!data.success) throw new Error(data.error || "Agent action failed.");
+        renderAgentTask(data.task);
+    } catch (error) {
+        agentStatus.innerText = "Agent error: " + error;
+    }
+}
+
+async function runAgentTask() {
+    if (!agentTaskId) return;
+    try {
+        const response = await fetch("/api/agent/task/" + agentTaskId + "/run/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                code: codeInput.value,
+                test_code: document.getElementById("testInput") ? document.getElementById("testInput").value : "",
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Agent run failed.");
+        renderAgentTask(data.task);
+    } catch (error) {
+        agentStatus.innerText = "Agent error: " + error;
+    }
+}
+
+async function controlAgentTask(action) {
+    if (!agentTaskId) return;
+    try {
+        const response = await fetch("/api/agent/task/" + agentTaskId + "/control/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ action }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Agent control failed.");
         renderAgentTask(data.task);
     } catch (error) {
         agentStatus.innerText = "Agent error: " + error;

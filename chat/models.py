@@ -55,6 +55,10 @@ class AgentTask(models.Model):
     plan = models.JSONField(default=list)
     current_step = models.PositiveIntegerField(default=0)
     result = models.TextField(blank=True, default="")
+    control_state = models.CharField(max_length=20, default="ready")
+    logs = models.JSONField(default=list)
+    retry_count = models.PositiveIntegerField(default=0)
+    source_branch = models.CharField(max_length=200, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

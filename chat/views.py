@@ -111,6 +111,10 @@ def _agent_payload(task):
         "progress": completed,
         "total_steps": len(task.plan),
         "result": task.result,
+        "control_state": task.control_state,
+        "logs": task.logs,
+        "retry_count": task.retry_count,
+        "source_branch": task.source_branch,
         "created_at": task.created_at.strftime("%d-%m-%Y %H:%M"),
     }
 
@@ -979,6 +983,9 @@ def agent_task(request, task_id):
         task.current_step = 0
         task.status = "planned"
         task.result = "Task reset. No approved actions remain."
+        task.control_state = "ready"
+        task.logs = []
+        task.retry_count = 0
     elif action in {"approve", "reject", "complete"}:
         if step_index < 0 or step_index >= len(task.plan):
             return JsonResponse({"success": False, "error": "Plan step does not exist."}, status=400)
@@ -1001,10 +1008,67 @@ def agent_task(request, task_id):
             task.result = "Step completed."
     else:
         return JsonResponse({"success": False, "error": "Use approve, reject, complete, or undo."}, status=400)
-    task.save(update_fields=["plan", "current_step", "status", "result", "updated_at"])
+    task.save(update_fields=["plan", "current_step", "status", "result", "control_state", "logs", "retry_count", "updated_at"])
     return JsonResponse({"success": True, "task": _agent_payload(task)})
 
 
+@login_required(login_url="/login/")
+@require_POST
+def agent_run(request, task_id):
+    task = get_object_or_404(AgentTask, id=task_id, owner=request.user)
+    if task.control_state == "cancelled":
+        return JsonResponse({"success": False, "error": "This task was cancelled."}, status=400)
+    if any(step.get("requires_approval") and not step.get("approved") for step in task.plan):
+        return JsonResponse({"success": False, "error": "Approve protected plan steps before running the task."}, status=400)
+    code = request.POST.get("code", "").strip()
+    test_code = request.POST.get("test_code", "").strip()
+    branch = request.POST.get("branch", "").strip()
+    logs = list(task.logs or [])
+    logs.append({"message": "Run started. Protected actions remain approval-gated.", "level": "info"})
+    task.status = "running"
+    task.control_state = "running"
+    task.retry_count += 1
+    if branch:
+        task.source_branch = branch[:200]
+        logs.append({"message": "Branch requested: " + task.source_branch, "level": "info"})
+    if code:
+        scan = scan_files([{"filename": "agent-buffer", "content": code}])
+        logs.append({"message": scan["summary"], "level": "warning" if scan["findings"] else "info"})
+    if test_code:
+        result = run_sandboxed_code("python", code + "\n\n" + test_code)
+        logs.append({"message": "Guarded tests " + ("passed." if result["success"] else "failed."), "level": "info" if result["success"] else "error"})
+    logs.append({"message": "Run paused after safe checks. Apply file patches and Git writes explicitly.", "level": "info"})
+    task.logs = logs[-50:]
+    task.result = logs[-1]["message"]
+    task.save(update_fields=["status", "control_state", "retry_count", "source_branch", "logs", "result", "updated_at"])
+    return JsonResponse({"success": True, "task": _agent_payload(task)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def agent_control(request, task_id):
+    task = get_object_or_404(AgentTask, id=task_id, owner=request.user)
+    action = request.POST.get("action", "").strip().lower()
+    if action == "pause":
+        task.control_state = "paused"
+        task.result = "Task paused by user."
+    elif action == "resume":
+        task.control_state = "running"
+        task.status = "running"
+        task.result = "Task resumed. Review the next protected action."
+    elif action == "retry":
+        task.control_state = "ready"
+        task.status = "planned"
+        task.result = "Task ready for another approved run."
+    elif action == "cancel":
+        task.control_state = "cancelled"
+        task.status = "blocked"
+        task.result = "Task cancelled by user."
+    else:
+        return JsonResponse({"success": False, "error": "Use pause, resume, retry, or cancel."}, status=400)
+    task.logs = [*(task.logs or []), {"message": task.result, "level": "warning" if action in {"pause", "cancel"} else "info"}][-50:]
+    task.save(update_fields=["control_state", "status", "result", "logs", "updated_at"])
+    return JsonResponse({"success": True, "task": _agent_payload(task)})
 def _mcp_tools():
     return [
         {"name": "project.search", "description": "Search indexed project code.", "write": False},

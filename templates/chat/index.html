@@ -285,12 +285,19 @@
                                 <strong>Agent mode</strong>
                                 <span>Plans work and waits for approval before protected actions.</span>
                             </div>
-                            <button type="button" onclick="resetAgentTask()">Undo / reset</button>
+                            <div class="agent-controls">
+                                <button type="button" onclick="runAgentTask()">Run</button>
+                                <button type="button" onclick="controlAgentTask('pause')">Pause</button>
+                                <button type="button" onclick="controlAgentTask('resume')">Resume</button>
+                                <button type="button" onclick="controlAgentTask('retry')">Retry</button>
+                                <button type="button" onclick="resetAgentTask()">Undo / reset</button>
+                            </div>
                         </div>
                         <textarea id="agentGoal" class="agent-goal" placeholder="Describe a multi-step coding task..."></textarea>
                         <button type="button" class="agent-plan-button" onclick="createAgentPlan()">Create approved plan</button>
                         <div id="agentStatus" class="agent-status">No agent task yet.</div>
                         <div id="agentPlan" class="agent-plan"></div>
+                        <pre id="agentLogs" class="agent-logs">Agent logs will appear here.</pre>
                     </div>
                     <div id="patchPanel" class="patch-panel" hidden>
                         <div class="patch-heading">

@@ -362,6 +362,25 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(undone.json()["task"]["status"], "planned")
         self.assertFalse(undone.json()["task"]["plan"][1]["approved"])
 
+    def test_agent_run_logs_safe_checks_and_supports_controls(self):
+        task = self.client.post("/api/agent/plan/", {"goal": "Run tests and review changes"}).json()["task"]
+        for step in (1, 2, 4):
+            self.client.post(f"/api/agent/task/{task['id']}/", {"action": "approve", "step": step})
+        run = self.client.post(
+            f"/api/agent/task/{task['id']}/run/",
+            {
+                "code": "def add(a, b):\n    return a + b",
+                "test_code": "assert add(2, 3) == 5",
+            },
+        )
+        self.assertTrue(run.json()["success"])
+        self.assertEqual(run.json()["task"]["control_state"], "running")
+        self.assertTrue(any("Guarded tests passed" in item["message"] for item in run.json()["task"]["logs"]))
+        paused = self.client.post(f"/api/agent/task/{task['id']}/control/", {"action": "pause"})
+        self.assertEqual(paused.json()["task"]["control_state"], "paused")
+        resumed = self.client.post(f"/api/agent/task/{task['id']}/control/", {"action": "resume"})
+        self.assertEqual(resumed.json()["task"]["control_state"], "running")
+
     def test_security_center_detects_secrets_and_dependency_hygiene(self):
         response = self.client.post(
             "/api/security/scan/",
