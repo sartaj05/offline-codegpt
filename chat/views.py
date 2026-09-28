@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 from pathlib import PurePosixPath
 
 import requests
@@ -49,7 +50,7 @@ def _available_models():
 
 
 def _event(payload):
-    return json.dumps(payload, ensure_ascii=False) + "\\n"
+    return json.dumps(payload, ensure_ascii=False) + "\n"
 
 
 def _safe_filename(name):
@@ -105,6 +106,37 @@ def _save_knowledge_document(filename, file_text, source_type):
     return document
 
 
+def _search_knowledge(query, limit=8):
+    terms = list(dict.fromkeys(re.findall(r"[a-zA-Z0-9_]{2,}", query.lower())))
+    if not terms:
+        return []
+
+    matches = []
+    chunks = KnowledgeChunk.objects.filter(
+        document__is_active=True,
+    ).select_related("document")
+
+    for chunk in chunks:
+        content = chunk.content.lower()
+        filename = (chunk.document.filename or "").lower()
+        score = sum(content.count(term) for term in terms)
+        score += 3 * sum(filename.count(term) for term in terms)
+        if score:
+            matches.append((score, chunk))
+
+    matches.sort(key=lambda item: item[0], reverse=True)
+    return [
+        {
+            "filename": chunk.document.filename,
+            "language": chunk.language,
+            "chunk_index": chunk.chunk_index,
+            "content": chunk.content,
+            "score": score,
+        }
+        for score, chunk in matches[:limit]
+    ]
+
+
 def index(request):
     sessions = ChatSession.objects.order_by("-updated_at")[:30]
     return render(request, "chat/index.html", {
@@ -119,6 +151,15 @@ def model_list(request):
         "success": True,
         "models": _available_models(),
         "default_model": DEFAULT_MODEL,
+    })
+
+
+def knowledge_search(request):
+    query = request.GET.get("q", "").strip()
+    return JsonResponse({
+        "success": True,
+        "query": query,
+        "results": _search_knowledge(query),
     })
 
 
@@ -171,7 +212,7 @@ def ask_code(request):
         try:
             if uploaded_file.size > MAX_FILE_BYTES:
                 uploaded_code_parts.append(
-                    f"\\n\\n===== FILE: {filename} =====\\n"
+                    f"\n\n===== FILE: {filename} =====\n"
                     f"Skipped because it is larger than {MAX_FILE_BYTES // 1_000_000} MB."
                 )
                 continue
@@ -184,15 +225,15 @@ def ask_code(request):
             source_type = "project" if "/" in filename else "upload"
             _save_knowledge_document(filename, file_text, source_type)
             uploaded_code_parts.append(
-                f"\\n\\n===== FILE: {filename} =====\\n{file_text}"
+                f"\n\n===== FILE: {filename} =====\n{file_text}"
             )
         except Exception as ex:
             uploaded_code_parts.append(
-                f"\\n\\n===== FILE: {filename} =====\\n"
+                f"\n\n===== FILE: {filename} =====\n"
                 f"Unable to read file: {str(ex)}"
             )
 
-    uploaded_code = "\\n".join(uploaded_code_parts)
+    uploaded_code = "\n".join(uploaded_code_parts)
     final_code = uploaded_code.strip() if uploaded_code.strip() else code
 
     if not prompt and not final_code:
@@ -214,16 +255,16 @@ def ask_code(request):
 
     user_message_parts = []
     if prompt:
-        user_message_parts.append(f"Prompt:\\n{prompt}")
+        user_message_parts.append(f"Prompt:\n{prompt}")
     if uploaded_filenames:
-        user_message_parts.append("Uploaded Files:\\n" + "\\n".join(uploaded_filenames))
+        user_message_parts.append("Uploaded Files:\n" + "\n".join(uploaded_filenames))
     if final_code:
-        user_message_parts.append(f"Code:\\n{final_code[:6000]}")
+        user_message_parts.append(f"Code:\n{final_code[:6000]}")
 
     ChatMessage.objects.create(
         session=session,
         role="user",
-        content="\\n\\n".join(user_message_parts),
+        content="\n\n".join(user_message_parts),
         filename=", ".join(uploaded_filenames),
         model_name=model_name,
     )
@@ -232,7 +273,14 @@ def ask_code(request):
     truncated_note = ""
     if len(final_code) > max_code_chars:
         final_code = final_code[:max_code_chars]
-        truncated_note = "\\n\\nNote: the uploaded code was truncated for the local model."
+        truncated_note = "\n\nNote: the uploaded code was truncated for the local model."
+
+    relevant_chunks = _search_knowledge(prompt or code)
+    knowledge_context = "\n\n".join(
+        f"===== PROJECT CONTEXT: {item['filename']} (chunk {item['chunk_index']}) =====\n"
+        f"{item['content']}"
+        for item in relevant_chunks
+    )
 
     full_prompt = f"""
 You are a fully offline coding assistant running locally.
@@ -245,6 +293,9 @@ User task:
 
 Uploaded files:
 {", ".join(uploaded_filenames)}
+
+Relevant project context:
+{knowledge_context or "No matching project context found."}
 
 Code:
 {final_code}

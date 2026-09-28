@@ -28,6 +28,15 @@
             {% endfor %}
         </div>
 
+        <div class="project-search">
+            <div class="history-title">Search Project</div>
+            <div class="search-row">
+                <input id="searchInput" type="search" placeholder="Find code...">
+                <button id="searchBtn" type="button" onclick="searchProject()">Search</button>
+            </div>
+            <div id="searchResults" class="search-results"></div>
+        </div>
+
         <div class="sidebar-footer">
             <div class="model-name">Model: <span id="activeModel">{{ default_model }}</span></div>
             <div class="offline-badge">Offline Mode</div>

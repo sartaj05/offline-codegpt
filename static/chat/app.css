@@ -554,3 +554,54 @@ body {
 .file-input input[type="file"] {
     display: none;
 }
+
+.project-search {
+    padding: 0 10px 12px;
+}
+
+.search-row {
+    display: flex;
+    gap: 6px;
+}
+
+#searchInput {
+    min-width: 0;
+    width: 100%;
+    background: #40414f;
+    border: 1px solid #565869;
+    color: #ececf1;
+    border-radius: 7px;
+    padding: 8px;
+}
+
+#searchBtn,
+.search-result {
+    background: #40414f;
+    border: 1px solid #565869;
+    color: #ececf1;
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+#searchBtn {
+    padding: 0 8px;
+}
+
+.search-results {
+    max-height: 130px;
+    overflow-y: auto;
+    margin-top: 7px;
+    color: #c5c5d2;
+    font-size: 12px;
+}
+
+.search-result {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 7px;
+    margin-top: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

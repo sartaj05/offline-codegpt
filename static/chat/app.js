@@ -8,6 +8,8 @@ const languageInput = document.getElementById("language");
 const fileInput = document.getElementById("fileInput");
 const folderInput = document.getElementById("folderInput");
 const sendBtn = document.getElementById("sendBtn");
+const searchInput = document.getElementById("searchInput");
+const searchResults = document.getElementById("searchResults");
 const csrfToken = document.getElementById("csrfToken").value;
 
 function updateActiveModel() {
@@ -172,6 +174,45 @@ async function loadSession(sessionId) {
         alert("Error loading chat: " + error);
     }
 }
+
+async function searchProject() {
+    const query = searchInput.value.trim();
+    if (!query) {
+        searchResults.innerHTML = "";
+        return;
+    }
+
+    searchResults.innerText = "Searching...";
+    try {
+        const response = await fetch(`/api/search/?q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        searchResults.innerHTML = "";
+
+        if (!data.results.length) {
+            searchResults.innerText = "No matching project code.";
+            return;
+        }
+
+        data.results.forEach(result => {
+            const item = document.createElement("button");
+            item.type = "button";
+            item.className = "search-result";
+            item.innerText = `${result.filename} · chunk ${result.chunk_index + 1}`;
+            item.title = result.content;
+            item.onclick = () => {
+                codeInput.value = result.content;
+                codeInput.focus();
+            };
+            searchResults.appendChild(item);
+        });
+    } catch (error) {
+        searchResults.innerText = "Search failed: " + error;
+    }
+}
+
+searchInput.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") searchProject();
+});
 
 promptInput.addEventListener("keydown", function (event) {
     if (event.key === "Enter" && !event.shiftKey) {
