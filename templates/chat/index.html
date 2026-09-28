@@ -95,6 +95,7 @@
                     <button type="button" onclick="toggleReviewGate()">Review</button>
                     <button type="button" onclick="toggleDependencies()">Deps</button>
                     <button type="button" onclick="toggleBrowserTests()">Browser</button>
+                    <button type="button" onclick="toggleModelRouter()">Router</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -324,6 +325,22 @@
             <textarea id="browserReport" class="browser-flow" placeholder="Paste Playwright output or visual diff report..."></textarea>
             <button type="button" onclick="analyzeBrowserReport()">Analyze report</button>
             <pre id="browserReportOutput" class="browser-test-output">Browser report findings will appear here.</pre>
+        </section>
+        <section id="modelRouterPanel" class="model-router-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Smart local model router</strong>
+                    <span>Choose a model using task intent and hardware limits.</span>
+                </div>
+                <button type="button" onclick="toggleModelRouter()">Close</button>
+            </div>
+            <textarea id="routerTask" class="router-task" placeholder="What should the local model do?"></textarea>
+            <div class="router-row">
+                <input id="routerMemory" type="number" min="0" step="1" placeholder="RAM GB">
+                <label><input id="routerGpu" type="checkbox"> GPU available</label>
+                <button type="button" onclick="routeLocalModel()">Recommend model</button>
+            </div>
+            <pre id="routerOutput" class="router-output">Model recommendation will appear here.</pre>
         </section>
 
         <section id="chatBox" class="chat-box">

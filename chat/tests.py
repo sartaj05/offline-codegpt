@@ -189,6 +189,17 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(len(report.json()["failed"]), 1)
         self.assertEqual(len(report.json()["visual_events"]), 2)
 
+    def test_smart_model_router_prefers_coding_model(self):
+        response = self.client.post("/api/models/route/", {
+            "task": "debug Python code and generate tests",
+            "models_json": json.dumps(["phi3:mini", "qwen2.5-coder:1.5b", "llava:latest"]),
+            "memory_gb": "8",
+            "gpu": "false",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["selected_model"], "qwen2.5-coder:1.5b")
+        self.assertTrue(response.json()["candidates"])
+
     def test_quality_endpoint_finds_security_issue(self):
         response = self.client.post("/api/analyze/", {
             "language": "python",

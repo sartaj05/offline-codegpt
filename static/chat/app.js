@@ -62,6 +62,11 @@ const browserFlow = document.getElementById("browserFlow");
 const browserTestOutput = document.getElementById("browserTestOutput");
 const browserReport = document.getElementById("browserReport");
 const browserReportOutput = document.getElementById("browserReportOutput");
+const modelRouterPanel = document.getElementById("modelRouterPanel");
+const routerTask = document.getElementById("routerTask");
+const routerMemory = document.getElementById("routerMemory");
+const routerGpu = document.getElementById("routerGpu");
+const routerOutput = document.getElementById("routerOutput");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -549,6 +554,38 @@ async function analyzeBrowserReport() {
             "\n\nNext steps:\n- " + data.next_steps.join("\n- ");
     } catch (error) {
         browserReportOutput.innerText = "Browser report error: " + error;
+    }
+}
+
+function toggleModelRouter() {
+    if (!modelRouterPanel) return;
+    modelRouterPanel.hidden = !modelRouterPanel.hidden;
+}
+
+async function routeLocalModel() {
+    routerOutput.innerText = "Selecting local model...";
+    const models = modelInput ? Array.from(modelInput.options).map(option => option.value) : [];
+    try {
+        const response = await fetch("/api/models/route/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                task: routerTask.value,
+                memory_gb: routerMemory.value || "0",
+                gpu: routerGpu.checked ? "true" : "false",
+                models_json: JSON.stringify(models),
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Model routing failed.");
+        if (modelInput) {
+            modelInput.value = data.selected_model;
+            updateActiveModel();
+        }
+        routerOutput.innerText = "Recommended: " + data.selected_model + "\nReason: " + data.reason +
+            "\n\nCandidates:\n" + data.candidates.map(item => item.model + " (" + item.score + ") — " + item.reasons.join(", ")).join("\n");
+    } catch (error) {
+        routerOutput.innerText = "Router error: " + error;
     }
 }
 

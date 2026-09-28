@@ -46,6 +46,7 @@ from .devops import analyze_logs, generate_artifact
 from .documentation import generate_documentation
 from .dependencies import analyze_dependencies
 from .browser_testing import analyze_browser_report, generate_playwright_test
+from .model_router import route_model
 from .review import review_gate
 
 
@@ -1364,6 +1365,27 @@ def browser_test_generate(request):
 @require_POST
 def browser_test_report(request):
     return JsonResponse({"success": True, **analyze_browser_report(request.POST.get("report", "")[:50_000])})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def model_route(request):
+    raw_models = request.POST.get("models_json", "[]")
+    try:
+        models = json.loads(raw_models)
+        if not isinstance(models, list):
+            raise ValueError("models must be a list")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "models_json must be a JSON array."}, status=400)
+    try:
+        memory_gb = max(0, float(request.POST.get("memory_gb", "0") or 0))
+    except (TypeError, ValueError):
+        memory_gb = 0
+    gpu = request.POST.get("gpu", "").lower() in {"1", "true", "yes", "on"}
+    return JsonResponse({
+        "success": True,
+        **route_model(request.POST.get("task", ""), models, memory_gb, gpu),
+    })
 
 
 def _mcp_tools():
