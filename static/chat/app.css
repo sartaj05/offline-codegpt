@@ -535,4 +535,8 @@ select { padding: 0 10px; }
 .evaluation-task-card p { color: var(--muted); white-space: pre-wrap; }
 .evaluation-task-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .evaluation-task-result { margin: 12px 0 0; max-height: 260px; overflow: auto; white-space: pre-wrap; }
+.evaluation-regression { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border); display: grid; gap: 8px; }
+.evaluation-regression span { color: var(--muted); font-size: .9rem; }
+.evaluation-regression-form { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.evaluation-regression-form input { flex: 1 1 220px; }
 @media (max-width: 760px) { .evaluation-task-form { grid-template-columns: 1fr; } .evaluation-task-form textarea:first-of-type { grid-column: 1; } }

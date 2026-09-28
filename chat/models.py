@@ -465,3 +465,21 @@ class EvaluationScore(models.Model):
 
     def __str__(self):
         return f"Score for run {self.run_id}: {self.overall}/100"
+
+
+class EvaluationRegressionSuite(models.Model):
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="evaluation_regression_suites")
+    name = models.CharField(max_length=160)
+    description = models.TextField(blank=True, default="")
+    task_ids = models.JSONField(default=list)
+    baseline = models.JSONField(default=dict)
+    last_result = models.JSONField(default=dict)
+    last_run_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+
+    def __str__(self):
+        return self.name

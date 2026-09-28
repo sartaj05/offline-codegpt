@@ -20,6 +20,7 @@ from django.contrib.auth.models import User
 from django.db.models import Count, Min, Q
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from django.views.decorators.csrf import csrf_exempt
 
@@ -42,6 +43,7 @@ from .models import (
     EvaluationTask,
     EvaluationRun,
     EvaluationScore,
+    EvaluationRegressionSuite,
 )
 from .quality import analyze_code_quality
 from .sandbox import run_sandboxed_code
@@ -1324,6 +1326,84 @@ def evaluation_score(request, run_id):
         },
     )
     return JsonResponse({"success": True, "score": _evaluation_score_payload(score), "run": _evaluation_run_payload(run)})
+
+
+def _regression_suite_payload(suite):
+    return {
+        "id": suite.id,
+        "name": suite.name,
+        "description": suite.description,
+        "task_ids": suite.task_ids,
+        "baseline": suite.baseline,
+        "last_result": suite.last_result,
+        "last_run_at": suite.last_run_at.isoformat() if suite.last_run_at else None,
+    }
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def evaluation_regressions(request):
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()[:160]
+        if not name:
+            return JsonResponse({"success": False, "error": "Regression suite name is required."}, status=400)
+        try:
+            requested_ids = json.loads(request.POST.get("task_ids", "[]"))
+            task_ids = [int(value) for value in requested_ids]
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return JsonResponse({"success": False, "error": "Task IDs must be a JSON array."}, status=400)
+        valid_ids = set(EvaluationTask.objects.filter(owner=request.user, is_active=True, id__in=task_ids).values_list("id", flat=True))
+        if not task_ids:
+            task_ids = list(EvaluationTask.objects.filter(owner=request.user, is_active=True).values_list("id", flat=True))
+        elif set(task_ids) != valid_ids:
+            return JsonResponse({"success": False, "error": "Every task must belong to your account."}, status=400)
+        suite = EvaluationRegressionSuite.objects.create(
+            owner=request.user,
+            name=name,
+            description=request.POST.get("description", "").strip()[:1000],
+            task_ids=task_ids,
+        )
+        return JsonResponse({"success": True, "suite": _regression_suite_payload(suite)}, status=201)
+    suites = EvaluationRegressionSuite.objects.filter(owner=request.user)
+    return JsonResponse({"success": True, "suites": [_regression_suite_payload(suite) for suite in suites[:100]]})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def evaluation_regression_run(request, suite_id):
+    suite = get_object_or_404(EvaluationRegressionSuite, id=suite_id, owner=request.user)
+    model_name = request.POST.get("model", "").strip()
+    results = []
+    baseline = dict(suite.baseline or {})
+    if model_name:
+        runs = EvaluationRun.objects.filter(owner=request.user, model_name=model_name, status="completed", score__isnull=False)
+    else:
+        runs = EvaluationRun.objects.filter(owner=request.user, status="completed", score__isnull=False)
+    for task_id in suite.task_ids:
+        run = runs.filter(task_id=task_id).select_related("score").order_by("-created_at").first()
+        if not run:
+            results.append({"task_id": task_id, "status": "missing", "score": None})
+            continue
+        current = run.score.overall
+        key = str(task_id)
+        if key not in baseline:
+            baseline[key] = current
+        threshold = max(0, int(baseline[key]) - 10)
+        results.append({
+            "task_id": task_id,
+            "run_id": run.id,
+            "model_name": run.model_name,
+            "score": current,
+            "baseline": baseline[key],
+            "delta": current - int(baseline[key]),
+            "status": "passed" if current >= threshold else "regressed",
+        })
+    passed = bool(results) and all(item["status"] == "passed" for item in results)
+    suite.baseline = baseline
+    suite.last_result = {"passed": passed, "model_name": model_name or "latest", "results": results}
+    suite.last_run_at = timezone.now()
+    suite.save(update_fields=["baseline", "last_result", "last_run_at", "updated_at"])
+    return JsonResponse({"success": True, "suite": _regression_suite_payload(suite)})
 
 
 def _workspace_for_user(user):

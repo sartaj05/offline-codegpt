@@ -36,6 +36,11 @@ const evaluationTaskCode = document.getElementById("evaluationTaskCode");
 const evaluationTaskExpected = document.getElementById("evaluationTaskExpected");
 const evaluationTaskStatus = document.getElementById("evaluationTaskStatus");
 const evaluationTaskList = document.getElementById("evaluationTaskList");
+const evaluationSuiteName = document.getElementById("evaluationSuiteName");
+const evaluationSuiteDescription = document.getElementById("evaluationSuiteDescription");
+const evaluationSuiteStatus = document.getElementById("evaluationSuiteStatus");
+const evaluationSuiteList = document.getElementById("evaluationSuiteList");
+let evaluationTasksCache = [];
 const observabilityStats = document.getElementById("observabilityStats");
 const observabilityOutput = document.getElementById("observabilityOutput");
 const workspacePanel = document.getElementById("workspacePanel");
@@ -461,8 +466,10 @@ async function loadEvaluationTasks() {
         const response = await fetch("/api/evaluations/tasks/");
         const data = await response.json();
         if (!data.success) throw new Error(data.error || "Unable to load evaluation tasks.");
+        evaluationTasksCache = data.tasks;
         renderEvaluationTasks(data.tasks);
         evaluationTaskStatus.innerText = data.tasks.length + " reusable task(s) ready.";
+        loadEvaluationSuites();
     } catch (error) {
         evaluationTaskStatus.innerText = "Evaluation task error: " + error;
     }
@@ -506,6 +513,86 @@ async function deleteEvaluationTask(taskId, taskName) {
         await loadEvaluationTasks();
     } catch (error) {
         evaluationTaskStatus.innerText = "Evaluation task error: " + error;
+    }
+}
+
+function renderEvaluationSuites(suites) {
+    if (!evaluationSuiteList) return;
+    evaluationSuiteList.innerHTML = "";
+    if (!suites.length) {
+        evaluationSuiteList.innerText = "No regression suites yet.";
+        return;
+    }
+    suites.forEach(suite => {
+        const card = document.createElement("div");
+        card.className = "evaluation-task-card";
+        const result = suite.last_result && suite.last_result.results
+            ? (suite.last_result.passed ? "PASS" : "CHECK") + " · " + suite.last_result.model_name
+            : "No baseline run yet.";
+        card.innerText = suite.name + " · " + suite.task_ids.length + " task(s) · " + result;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.innerText = "Run regression";
+        button.onclick = () => runEvaluationSuite(suite.id);
+        card.appendChild(button);
+        evaluationSuiteList.appendChild(card);
+    });
+}
+
+async function loadEvaluationSuites() {
+    if (!evaluationSuiteList) return;
+    try {
+        const response = await fetch("/api/evaluations/regressions/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load regression suites.");
+        renderEvaluationSuites(data.suites);
+        evaluationSuiteStatus.innerText = data.suites.length + " regression suite(s) ready.";
+    } catch (error) {
+        evaluationSuiteStatus.innerText = "Regression error: " + error;
+    }
+}
+
+async function createEvaluationSuite() {
+    if (!evaluationSuiteName.value.trim()) {
+        evaluationSuiteStatus.innerText = "Enter a regression suite name.";
+        return;
+    }
+    try {
+        const response = await fetch("/api/evaluations/regressions/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                name: evaluationSuiteName.value.trim(),
+                description: evaluationSuiteDescription.value,
+                task_ids: JSON.stringify(evaluationTasksCache.map(task => task.id)),
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to create regression suite.");
+        evaluationSuiteName.value = "";
+        evaluationSuiteDescription.value = "";
+        await loadEvaluationSuites();
+    } catch (error) {
+        evaluationSuiteStatus.innerText = "Regression error: " + error;
+    }
+}
+
+async function runEvaluationSuite(suiteId) {
+    evaluationSuiteStatus.innerText = "Running regression suite...";
+    try {
+        const response = await fetch("/api/evaluations/regressions/" + suiteId + "/run/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ model: modelInput ? modelInput.value : "" }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Regression run failed.");
+        const result = data.suite.last_result;
+        evaluationSuiteStatus.innerText = (result.passed ? "Regression passed." : "Regression needs review.") +
+            " " + result.results.filter(item => item.status === "passed").length + "/" + result.results.length + " task(s) passed.";
+        await loadEvaluationSuites();
+    } catch (error) {
+        evaluationSuiteStatus.innerText = "Regression error: " + error;
     }
 }
 

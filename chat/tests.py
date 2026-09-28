@@ -7,7 +7,7 @@ from django.test import TestCase
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import AiEvent, AuditEvent, ChatMessage, ChatSession, EvaluationTask, KnowledgeChunk, KnowledgeDocument, WorkspaceMembership, WorkspacePolicy
+from .models import AiEvent, AuditEvent, ChatMessage, ChatSession, EvaluationRun, EvaluationScore, EvaluationTask, KnowledgeChunk, KnowledgeDocument, WorkspaceMembership, WorkspacePolicy
 from .views import _search_knowledge
 
 
@@ -84,6 +84,21 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(scored.json()["success"])
         self.assertEqual(scored.json()["score"]["correctness"], 100)
         self.assertGreater(scored.json()["score"]["overall"], 0)
+
+    def test_regression_suite_establishes_and_checks_a_baseline(self):
+        task = EvaluationTask.objects.create(owner=self.user, name="Baseline task", prompt="Explain this.")
+        run = EvaluationRun.objects.create(owner=self.user, task=task, model_name="qwen2.5-coder:1.5b", status="completed", response="answer")
+        EvaluationScore.objects.create(run=run, correctness=90, relevance=90, completeness=90, safety=90, overall=90)
+        created = self.client.post("/api/evaluations/regressions/", {
+            "name": "Core benchmark",
+            "task_ids": f"[{task.id}]",
+        })
+        self.assertEqual(created.status_code, 201)
+        suite_id = created.json()["suite"]["id"]
+        result = self.client.post(f"/api/evaluations/regressions/{suite_id}/run/", {"model": "qwen2.5-coder:1.5b"})
+        payload = result.json()["suite"]["last_result"]
+        self.assertTrue(payload["passed"])
+        self.assertEqual(payload["results"][0]["delta"], 0)
 
     def test_guest_upload_requires_free_account(self):
         self.client.logout()

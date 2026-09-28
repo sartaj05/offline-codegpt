@@ -167,6 +167,17 @@
             </div>
             <div id="evaluationTaskStatus" class="evaluation-status">No evaluation tasks loaded.</div>
             <div id="evaluationTaskList" class="evaluation-task-list"></div>
+            <div class="evaluation-regression">
+                <strong>Regression suites</strong>
+                <span>Run the latest scored result for each saved task and detect drops over 10 points.</span>
+                <div class="evaluation-regression-form">
+                    <input id="evaluationSuiteName" placeholder="Suite name, e.g. Release benchmark">
+                    <input id="evaluationSuiteDescription" placeholder="Optional description">
+                    <button type="button" onclick="createEvaluationSuite()">Create suite from all tasks</button>
+                </div>
+                <div id="evaluationSuiteStatus" class="evaluation-status">No regression suites loaded.</div>
+                <div id="evaluationSuiteList" class="evaluation-task-list"></div>
+            </div>
         </section>
         {% endif %}
         {% endif %}
