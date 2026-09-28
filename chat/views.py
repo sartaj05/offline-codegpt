@@ -494,7 +494,9 @@ def ask_code(request):
             session.model_name = model_name
             session.save(update_fields=["model_name", "updated_at"])
     else:
-        title = prompt[:60] if prompt else uploaded_filenames[0][:60]
+        title = prompt[:60] if prompt else (
+            uploaded_filenames[0][:60] if uploaded_filenames else "New Chat"
+        )
         model_name = requested_model or DEFAULT_MODEL
         session = ChatSession.objects.create(
             owner=request.user,
