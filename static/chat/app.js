@@ -82,6 +82,12 @@ const contractsPanel = document.getElementById("contractsPanel");
 const contractSpec = document.getElementById("contractSpec");
 const contractCode = document.getElementById("contractCode");
 const contractOutput = document.getElementById("contractOutput");
+const provenancePanel = document.getElementById("provenancePanel");
+const provenanceArtifact = document.getElementById("provenanceArtifact");
+const provenanceCommit = document.getElementById("provenanceCommit");
+const provenanceFiles = document.getElementById("provenanceFiles");
+const provenanceOutput = document.getElementById("provenanceOutput");
+const provenanceStatus = document.getElementById("provenanceStatus");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -702,6 +708,49 @@ async function analyzeContracts() {
             "\n\nSuggested OpenAPI:\n" + data.suggested_openapi;
     } catch (error) {
         contractOutput.innerText = "Contract error: " + error;
+    }
+}
+
+function toggleProvenance() {
+    if (!provenancePanel) return;
+    provenancePanel.hidden = !provenancePanel.hidden;
+}
+
+async function generateProvenance() {
+    provenanceStatus.innerText = "Generating artifact provenance...";
+    try {
+        const response = await fetch("/api/provenance/generate/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                artifact_name: provenanceArtifact.value,
+                commit: provenanceCommit.value || "unknown",
+                files_json: provenanceFiles.value || "[]",
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Provenance generation failed.");
+        provenanceOutput.value = data.provenance;
+        provenanceStatus.innerText = "Provenance generated.";
+    } catch (error) {
+        provenanceStatus.innerText = "Provenance error: " + error;
+    }
+}
+
+async function verifyProvenance() {
+    provenanceStatus.innerText = "Verifying provenance...";
+    try {
+        const response = await fetch("/api/provenance/verify/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ provenance: provenanceOutput.value }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Provenance verification failed.");
+        provenanceStatus.innerText = (data.valid ? "Valid provenance." : "Invalid provenance.") + " " +
+            data.checks.map(check => (check.passed ? "PASS " : "FAIL ") + check.name).join(" · ");
+    } catch (error) {
+        provenanceStatus.innerText = "Verification error: " + error;
     }
 }
 

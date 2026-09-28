@@ -249,6 +249,22 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["undocumented"][0]["path"], "/api/orders")
         self.assertIn("openapi", payload["suggested_openapi"])
 
+    def test_provenance_generator_and_verifier(self):
+        generated = self.client.post("/api/provenance/generate/", {
+            "artifact_name": "syntax-local-ai.zip",
+            "commit": "abc123",
+            "files_json": json.dumps([
+                {"filename": "requirements.txt", "content": "Django==5.0"},
+                {"filename": "manage.py", "content": "print('ok')"},
+            ]),
+        })
+        self.assertEqual(generated.status_code, 200)
+        provenance = generated.json()["provenance"]
+        self.assertIn("predicateType", provenance)
+        verified = self.client.post("/api/provenance/verify/", {"provenance": provenance})
+        self.assertEqual(verified.status_code, 200)
+        self.assertTrue(verified.json()["valid"])
+
     def test_quality_endpoint_finds_security_issue(self):
         response = self.client.post("/api/analyze/", {
             "language": "python",

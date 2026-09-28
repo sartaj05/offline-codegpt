@@ -100,6 +100,7 @@
                     <button type="button" onclick="toggleIncident()">Incident</button>
                     <button type="button" onclick="toggleArchitecture()">Arch</button>
                     <button type="button" onclick="toggleContracts()">API</button>
+                    <button type="button" onclick="toggleProvenance()">Proof</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -400,6 +401,24 @@
             <textarea id="contractCode" class="contract-input" placeholder="Paste route/controller code..."></textarea>
             <button type="button" onclick="analyzeContracts()">Analyze API contract</button>
             <pre id="contractOutput" class="contract-output">Contract findings will appear here.</pre>
+        </section>
+        <section id="provenancePanel" class="provenance-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Release provenance</strong>
+                    <span>Generate and verify local artifact build metadata.</span>
+                </div>
+                <button type="button" onclick="toggleProvenance()">Close</button>
+            </div>
+            <div class="provenance-row">
+                <input id="provenanceArtifact" value="local-artifact" placeholder="Artifact name">
+                <input id="provenanceCommit" placeholder="Commit or release ID">
+            </div>
+            <textarea id="provenanceFiles" class="provenance-input" placeholder='Project files JSON: [{"filename":"app.py","content":"..."}]'></textarea>
+            <button type="button" onclick="generateProvenance()">Generate provenance</button>
+            <textarea id="provenanceOutput" class="provenance-output" placeholder="Provenance JSON will appear here..."></textarea>
+            <button type="button" onclick="verifyProvenance()">Verify provenance</button>
+            <div id="provenanceStatus" class="provenance-status">No provenance verification yet.</div>
         </section>
 
         <section id="chatBox" class="chat-box">

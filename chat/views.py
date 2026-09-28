@@ -51,6 +51,7 @@ from .devcontainer import generate_devcontainer
 from .incident import analyze_incident
 from .architecture import analyze_architecture
 from .api_contract import analyze_api_contract
+from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
 
 
@@ -1461,6 +1462,32 @@ def api_contract_analyze(request):
     if result.get("error"):
         return JsonResponse({"success": False, "error": result["error"]}, status=400)
     return JsonResponse({"success": True, **result})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def provenance_generate(request):
+    raw_files = request.POST.get("files_json", "[]")
+    try:
+        files = json.loads(raw_files)
+        if not isinstance(files, list) or len(files) > MAX_PROJECT_FILES:
+            raise ValueError("invalid provenance file list")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "files_json must be a JSON array."}, status=400)
+    return JsonResponse({
+        "success": True,
+        "provenance": generate_provenance(
+            [item for item in files if isinstance(item, dict)],
+            request.POST.get("artifact_name", "local-artifact"),
+            request.POST.get("commit", "unknown"),
+        ),
+    })
+
+
+@login_required(login_url="/login/")
+@require_POST
+def provenance_verify(request):
+    return JsonResponse({"success": True, **verify_provenance(request.POST.get("provenance", "")[:100_000])})
 
 
 def _mcp_tools():
