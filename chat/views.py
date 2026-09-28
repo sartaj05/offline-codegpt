@@ -22,6 +22,7 @@ from .models import (
     KnowledgeDocument,
     LocalModelConfig,
 )
+from .quality import analyze_code_quality
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -30,6 +31,7 @@ DEFAULT_MODEL = "qwen2.5-coder:1.5b"
 MAX_PROJECT_FILES = 100
 MAX_FILE_BYTES = 1_000_000
 CHUNK_SIZE = 2_000
+MAX_EXECUTION_CHARS = 20_000
 
 
 def _available_models():
@@ -412,6 +414,19 @@ def execute_code(request):
 
 @login_required(login_url="/login/")
 @require_POST
+def quality_analyze(request):
+    code = request.POST.get("code", "")
+    language = request.POST.get("language", "auto").strip().lower()
+    mode = request.POST.get("mode", "all").strip().lower()
+    if not code.strip():
+        return JsonResponse({"success": False, "error": "Enter code to analyze."}, status=400)
+    if len(code) > MAX_EXECUTION_CHARS:
+        return JsonResponse({"success": False, "error": "Analysis input is too large."}, status=400)
+    return JsonResponse({"success": True, **analyze_code_quality(code, language, mode)})
+
+
+@login_required(login_url="/login/")
+@require_POST
 def ask_code(request):
     prompt = request.POST.get("prompt", "").strip()
     language = request.POST.get("language", "auto").strip()
@@ -420,6 +435,7 @@ def ask_code(request):
     requested_model = request.POST.get("model", "").strip()
 
     uploaded_files = request.FILES.getlist("files")
+    relative_paths = request.POST.getlist("file_paths")
     single_file = request.FILES.get("file")
     if single_file and not uploaded_files:
         uploaded_files = [single_file]
@@ -433,8 +449,9 @@ def ask_code(request):
     uploaded_code_parts = []
     uploaded_filenames = []
 
-    for uploaded_file in uploaded_files:
-        filename = _safe_filename(uploaded_file.name)
+    for index, uploaded_file in enumerate(uploaded_files):
+        submitted_path = relative_paths[index] if index < len(relative_paths) else uploaded_file.name
+        filename = _safe_filename(submitted_path)
         uploaded_filenames.append(filename)
 
         try:

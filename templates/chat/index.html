@@ -107,6 +107,17 @@
 
                 <textarea id="codeInput" placeholder="Paste code here, or upload a file..."></textarea>
                 <pre id="executionOutput" class="execution-output">Safe mode: Python and JavaScript are syntax-checked; SQL runs in memory.</pre>
+                <div class="quality-row">
+                    <select id="qualityMode" aria-label="Quality check type">
+                        <option value="all">All quality checks</option>
+                        <option value="lint">Lint</option>
+                        <option value="security">Security scan</option>
+                        <option value="bugs">Bug heuristics</option>
+                        <option value="tests">Generate tests</option>
+                    </select>
+                    <button type="button" onclick="analyzeQuality()">Analyze code</button>
+                </div>
+                <div id="qualityOutput" class="quality-output">Quality findings will appear here.</div>
             </div>
 
             <div class="prompt-bar">

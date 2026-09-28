@@ -629,6 +629,37 @@ body {
     white-space: pre-wrap;
 }
 
+.quality-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.quality-row select,
+.quality-row button {
+    border: 1px solid #565869;
+    border-radius: 7px;
+    background: #40414f;
+    color: #ececf1;
+    padding: 8px;
+}
+
+.quality-row button { cursor: pointer; background: #14532d; }
+
+.quality-output {
+    max-height: 180px;
+    overflow: auto;
+    margin-top: 8px;
+    padding: 10px;
+    border: 1px solid #565869;
+    border-radius: 8px;
+    background: #202123;
+    color: #c5c5d2;
+    white-space: pre-wrap;
+    font-family: Consolas, monospace;
+    font-size: 12px;
+}
+
 .message-content pre {
     position: relative;
     margin: 14px 0;

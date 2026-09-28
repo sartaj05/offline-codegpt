@@ -246,7 +246,9 @@ async function sendMessage() {
     formData.append("language", languageInput.value);
     if (currentSessionId) formData.append("session_id", currentSessionId);
     files.forEach(file => {
-        formData.append("files", file, file.webkitRelativePath || file.name);
+        const relativePath = file.webkitRelativePath || file.name;
+        formData.append("files", file, relativePath);
+        formData.append("file_paths", relativePath);
     });
 
     try {
@@ -294,6 +296,45 @@ async function runCode() {
             : (data.stderr || data.error || "Check failed.");
     } catch (error) {
         output.innerText = "Check error: " + error;
+    }
+}
+
+async function analyzeQuality() {
+    const code = codeInput.value.trim();
+    if (!code) {
+        alert("Paste code before analyzing it.");
+        return;
+    }
+
+    const output = document.getElementById("qualityOutput");
+    output.innerText = "Analyzing locally...";
+    try {
+        const response = await fetch("/api/analyze/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({
+                code,
+                language: languageInput.value,
+                mode: document.getElementById("qualityMode").value,
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) {
+            output.innerText = data.error || "Analysis failed.";
+            return;
+        }
+
+        const lines = [data.summary];
+        data.findings.forEach(finding => {
+            lines.push(`[${finding.severity}] ${finding.category}${finding.line ? ` (line ${finding.line})` : ""}: ${finding.message}`);
+        });
+        if (data.test_template) lines.push("\\nGenerated test template:\\n" + data.test_template);
+        output.innerText = lines.join("\\n");
+    } catch (error) {
+        output.innerText = "Analysis error: " + error;
     }
 }
 
