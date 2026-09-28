@@ -22,6 +22,10 @@ const searchInput = document.getElementById("searchInput");
 const searchResults = document.getElementById("searchResults");
 const projectStats = document.getElementById("projectStats");
 const projectFiles = document.getElementById("projectFiles");
+const gitBranch = document.getElementById("gitBranch");
+const gitFiles = document.getElementById("gitFiles");
+const gitDiff = document.getElementById("gitDiff");
+const gitCommitMessage = document.getElementById("gitCommitMessage");
 const chatSearch = document.getElementById("chatSearch");
 const chatHistory = document.getElementById("chatHistory");
 const editorFileName = document.getElementById("editorFileName");
@@ -938,6 +942,100 @@ async function loadProjectWorkspace() {
     }
 }
 
+function renderGitFiles(files) {
+    if (!gitFiles) return;
+    gitFiles.innerHTML = "";
+    if (!files.length) {
+        gitFiles.innerText = "Working tree clean.";
+        return;
+    }
+    const stageAll = document.createElement("button");
+    stageAll.type = "button";
+    stageAll.className = "git-stage-all";
+    stageAll.innerText = "Stage all changes";
+    stageAll.onclick = () => stageGitFile("");
+    gitFiles.appendChild(stageAll);
+    files.forEach(file => {
+        const row = document.createElement("div");
+        row.className = "git-file";
+        const status = document.createElement("span");
+        status.className = "git-file-status";
+        status.innerText = file.status || "??";
+        const path = document.createElement("span");
+        path.className = "git-file-path";
+        path.innerText = file.path;
+        path.title = file.path;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.innerText = "Stage";
+        button.onclick = () => stageGitFile(file.path);
+        row.append(status, path, button);
+        gitFiles.appendChild(row);
+    });
+}
+
+async function loadGitStatus() {
+    if (!gitFiles) return;
+    gitFiles.innerText = "Loading Git status...";
+    try {
+        const [statusResponse, diffResponse] = await Promise.all([
+            fetch("/api/git/status/"),
+            fetch("/api/git/diff/"),
+        ]);
+        const status = await statusResponse.json();
+        const diff = await diffResponse.json();
+        if (!status.success) throw new Error(status.error || "Unable to load Git status.");
+        gitBranch.innerText = "Branch: " + status.branch + " | " + status.files.length + " changed file(s)";
+        renderGitFiles(status.files);
+        gitDiff.innerText = diff.success ? (diff.diff || "No diff available.") : (diff.error || "Unable to load diff.");
+    } catch (error) {
+        gitBranch.innerText = "Git unavailable";
+        gitFiles.innerText = String(error);
+    }
+}
+
+async function stageGitFile(path) {
+    try {
+        const body = new URLSearchParams();
+        if (path) body.append("paths", path);
+        const response = await fetch("/api/git/stage/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken },
+            body,
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to stage changes.");
+        await loadGitStatus();
+    } catch (error) {
+        alert("Git stage failed: " + error);
+    }
+}
+
+async function commitGitChanges() {
+    const message = gitCommitMessage ? gitCommitMessage.value.trim() : "";
+    if (!message) {
+        alert("Enter a commit message.");
+        return;
+    }
+    try {
+        const response = await fetch("/api/git/commit/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({ message }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to create commit.");
+        gitCommitMessage.value = "";
+        sendStatus.innerText = "Git commit created.";
+        await loadGitStatus();
+    } catch (error) {
+        alert("Git commit failed: " + error);
+    }
+}
+
 async function reindexProjectFile(documentId) {
     try {
         await fetch("/api/project/" + documentId + "/reindex/", {
@@ -988,4 +1086,5 @@ updateActiveModel();
 renderEditorTabs();
 syncEditorPreview();
 if (projectFiles) loadProjectWorkspace();
+if (gitFiles) loadGitStatus();
 if (chatHistory) loadChatHistory();

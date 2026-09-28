@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -249,6 +250,31 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(payload["changed"])
         self.assertIn("--- editor.py (current)", payload["diff"])
         self.assertIn("+print('new')", payload["diff"])
+
+    @patch("chat.views.subprocess.run")
+    def test_git_workspace_reports_stages_and_commits_changes(self, mock_run):
+        result = lambda stdout="", stderr="", returncode=0: SimpleNamespace(
+            stdout=stdout,
+            stderr=stderr,
+            returncode=returncode,
+        )
+        mock_run.side_effect = [
+            result(stdout="main\n"),
+            result(stdout=" M app.py\n?? new.py\n"),
+            result(),
+            result(stdout="[main abc123] Add files\n"),
+        ]
+
+        status = self.client.get("/api/git/status/")
+        self.assertEqual(status.json()["branch"], "main")
+        self.assertEqual(status.json()["files"][0]["path"], "app.py")
+        self.assertEqual(status.json()["files"][1]["status"], "??")
+
+        staged = self.client.post("/api/git/stage/", {"paths": ["app.py"]})
+        self.assertTrue(staged.json()["success"])
+        committed = self.client.post("/api/git/commit/", {"message": "Add files"})
+        self.assertTrue(committed.json()["success"])
+        self.assertEqual(mock_run.call_args_list[-1].args[0][-2:], ["-m", "Add files"])
 
     def test_rag_results_include_source_line_ranges(self):
         source = "first" + chr(10) + "needle = True" + chr(10) + "last"

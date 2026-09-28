@@ -6,6 +6,7 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
 import time
 import uuid
 from pathlib import PurePosixPath
@@ -41,6 +42,95 @@ MAX_FILE_BYTES = 1_000_000
 MAX_IMAGE_BYTES = 5_000_000
 CHUNK_SIZE = 2_000
 MAX_EXECUTION_CHARS = 20_000
+MAX_GIT_OUTPUT_CHARS = 50_000
+
+
+def _run_git(args):
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    try:
+        return subprocess.run(
+            ["git", "-C", project_root, *args],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return None, str(exc)
+
+
+def _git_path_is_safe(path):
+    normalized = str(path or "").replace("\\", "/")
+    parsed = PurePosixPath(normalized)
+    return bool(normalized) and not parsed.is_absolute() and ".." not in parsed.parts
+
+
+@login_required(login_url="/login/")
+def git_status(request):
+    branch_result = _run_git(["rev-parse", "--abbrev-ref", "HEAD"])
+    status_result = _run_git(["status", "--short"])
+    if isinstance(branch_result, tuple) or isinstance(status_result, tuple):
+        error = branch_result[1] if isinstance(branch_result, tuple) else status_result[1]
+        return JsonResponse({"success": False, "error": "Git is unavailable: " + error}, status=503)
+    if branch_result.returncode != 0 or status_result.returncode != 0:
+        return JsonResponse({"success": False, "error": (status_result.stderr or branch_result.stderr).strip()}, status=503)
+
+    files = []
+    for line in status_result.stdout.splitlines():
+        if len(line) < 3:
+            continue
+        path = line[3:]
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        files.append({"status": line[:2].strip() or "??", "path": path})
+    return JsonResponse({
+        "success": True,
+        "branch": branch_result.stdout.strip() or "detached",
+        "files": files,
+        "raw": status_result.stdout,
+    })
+
+
+@login_required(login_url="/login/")
+def git_diff(request):
+    result = _run_git(["diff", "HEAD", "--"])
+    if isinstance(result, tuple):
+        return JsonResponse({"success": False, "error": "Git is unavailable: " + result[1]}, status=503)
+    if result.returncode != 0:
+        return JsonResponse({"success": False, "error": result.stderr.strip()}, status=503)
+    return JsonResponse({"success": True, "diff": result.stdout[:MAX_GIT_OUTPUT_CHARS]})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def git_stage(request):
+    paths = request.POST.getlist("paths")
+    if not paths:
+        paths = [request.POST.get("path", "").strip()] if request.POST.get("path") else []
+    if any(not _git_path_is_safe(path) for path in paths):
+        return JsonResponse({"success": False, "error": "One or more Git paths are invalid."}, status=400)
+    result = _run_git(["add", "--", *paths] if paths else ["add", "-A"])
+    if isinstance(result, tuple):
+        return JsonResponse({"success": False, "error": "Git is unavailable: " + result[1]}, status=503)
+    if result.returncode != 0:
+        return JsonResponse({"success": False, "error": result.stderr.strip()}, status=400)
+    return JsonResponse({"success": True, "staged": paths or ["all changes"]})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def git_commit(request):
+    message = request.POST.get("message", "").strip()
+    if not message:
+        return JsonResponse({"success": False, "error": "Enter a commit message."}, status=400)
+    if len(message) > 200:
+        return JsonResponse({"success": False, "error": "Commit messages are limited to 200 characters."}, status=400)
+    result = _run_git(["commit", "-m", message])
+    if isinstance(result, tuple):
+        return JsonResponse({"success": False, "error": "Git is unavailable: " + result[1]}, status=503)
+    if result.returncode != 0:
+        return JsonResponse({"success": False, "error": (result.stderr or result.stdout).strip()}, status=400)
+    return JsonResponse({"success": True, "output": result.stdout.strip()})
 
 
 def _available_models():

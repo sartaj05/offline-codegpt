@@ -176,6 +176,16 @@ button { cursor: pointer; }
 .project-file-actions { display: flex; flex: 0 0 auto; gap: 3px; }
 .project-file-actions button { padding: 4px 5px; border: 1px solid var(--border); border-radius: 5px; background: transparent; color: var(--muted); font-size: 9px; }
 .project-file-actions button:hover { color: var(--text); background: var(--surface-3); }
+.git-workspace { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.git-files { max-height: 170px; overflow-y: auto; }
+.git-stage-all, .git-commit-button { width: 100%; padding: 6px 8px; border: 1px solid rgba(99,230,190,.3); border-radius: 6px; background: rgba(99,230,190,.1); color: var(--accent); font-size: 10px; cursor: pointer; }
+.git-file { display: flex; align-items: center; gap: 5px; margin-top: 5px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); }
+.git-file-status { flex: 0 0 22px; color: var(--accent); font-family: Consolas, monospace; font-size: 9px; }
+.git-file-path { min-width: 0; flex: 1; overflow: hidden; color: var(--muted); font-family: Consolas, monospace; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.git-file button { padding: 3px 5px; border: 1px solid var(--border); border-radius: 5px; background: transparent; color: var(--muted); font-size: 9px; }
+.git-commit-message { width: 100%; min-height: 48px; margin-top: 8px; resize: vertical; padding: 7px; border: 1px solid var(--border); border-radius: 7px; outline: 0; background: var(--surface-2); color: var(--text); font-size: 10px; }
+.git-commit-button { margin-top: 6px; border-color: #2d997b; background: #176a56; color: #e7fff7; }
+.git-diff { max-height: 180px; overflow: auto; margin: 8px 0 0; padding: 8px; border: 1px solid var(--border); border-radius: 7px; background: #11141b; color: #aebbd0; font-family: Consolas, monospace; font-size: 9px; line-height: 1.45; white-space: pre-wrap; }
 
 .sidebar-footer { padding: 15px 8px 0; border-top: 1px solid var(--border); }
 .model-name { overflow: hidden; color: #dbe4f1; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }

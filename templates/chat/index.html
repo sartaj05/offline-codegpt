@@ -57,6 +57,17 @@
             <div id="projectStats" class="project-stats">No indexed files yet.</div>
             <div id="projectFiles" class="project-files"></div>
         </div>
+        <div class="git-workspace">
+            <div class="workspace-heading">
+                <div class="history-title">Git workspace</div>
+                <button type="button" onclick="loadGitStatus()">Refresh</button>
+            </div>
+            <div id="gitBranch" class="project-stats">Checking repository...</div>
+            <div id="gitFiles" class="git-files"></div>
+            <textarea id="gitCommitMessage" class="git-commit-message" placeholder="Commit message..."></textarea>
+            <button type="button" class="git-commit-button" onclick="commitGitChanges()">Commit staged changes</button>
+            <pre id="gitDiff" class="git-diff">No diff loaded.</pre>
+        </div>
         {% endif %}
 
         <div class="sidebar-footer">
