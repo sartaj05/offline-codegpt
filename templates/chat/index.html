@@ -92,6 +92,7 @@
                     <button type="button" onclick="toggleWorkspace()">Team</button>
                     <button type="button" onclick="toggleDevops()">DevOps</button>
                     <button type="button" onclick="toggleDocumentation()">Docs</button>
+                    <button type="button" onclick="toggleReviewGate()">Review</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -267,6 +268,22 @@
             </div>
             <textarea id="documentationChangeSummary" class="documentation-summary" placeholder="Optional change summary for a changelog..."></textarea>
             <pre id="documentationOutput" class="documentation-output">Generated Markdown will appear here.</pre>
+        </section>
+        <section id="reviewGatePanel" class="review-gate-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>AI review gate</strong>
+                    <span>Quality, security, tests, and merge-readiness checks.</span>
+                </div>
+                <button type="button" onclick="toggleReviewGate()">Close</button>
+            </div>
+            <div class="review-gate-row">
+                <textarea id="reviewDiff" placeholder="Paste the Git diff to review..."></textarea>
+                <textarea id="reviewTests" placeholder="Paste test output or test code..."></textarea>
+            </div>
+            <button type="button" onclick="runReviewGate()">Run release gate</button>
+            <div id="reviewGateSummary" class="review-gate-summary">No review run yet.</div>
+            <pre id="reviewGateOutput" class="review-gate-output"></pre>
         </section>
 
         <section id="chatBox" class="chat-box">

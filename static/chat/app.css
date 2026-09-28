@@ -204,6 +204,11 @@ button { cursor: pointer; }
 .documentation-row select, .documentation-row input { min-width: 0; flex: 1; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); }
 .documentation-summary { width: 100%; min-height: 60px; margin-top: 12px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); resize: vertical; }
 .documentation-output { max-height: 360px; margin: 12px 0 0; padding: 13px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: rgba(10,12,18,.55); color: #dbe4f1; font-size: 12px; line-height: 1.6; white-space: pre-wrap; }
+.review-gate-panel { margin: 12px 24px 0; padding: 16px; border: 1px solid rgba(126,167,255,.35); border-radius: 12px; background: linear-gradient(145deg, rgba(32,42,67,.98), rgba(24,29,40,.98)); }
+.review-gate-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+.review-gate-row textarea { min-height: 90px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); resize: vertical; }
+.review-gate-summary { margin-top: 12px; color: var(--accent); font-size: 13px; font-weight: 800; }
+.review-gate-output { max-height: 280px; margin: 10px 0 0; padding: 11px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: rgba(10,12,18,.55); color: #dbe4f1; font-size: 11px; line-height: 1.55; white-space: pre-wrap; }
 .git-file { display: flex; align-items: center; gap: 5px; margin-top: 5px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); }
 .git-file-status { flex: 0 0 22px; color: var(--accent); font-family: Consolas, monospace; font-size: 9px; }
 .git-file-path { min-width: 0; flex: 1; overflow: hidden; color: var(--muted); font-family: Consolas, monospace; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }

@@ -44,6 +44,7 @@ from .sandbox import run_sandboxed_code
 from .security import scan_files
 from .devops import analyze_logs, generate_artifact
 from .documentation import generate_documentation
+from .review import review_gate
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -1294,6 +1295,32 @@ def documentation_generate(request):
         return JsonResponse({"success": False, "error": "Unsupported documentation type."}, status=400)
     markdown = generate_documentation(files, doc_type, project_name, change_summary)
     return JsonResponse({"success": True, "doc_type": doc_type, "markdown": markdown[:60_000]})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def review_gate_api(request):
+    code = request.POST.get("code", "")[:30_000]
+    filename = request.POST.get("filename", "editor-buffer")
+    language = request.POST.get("language", "auto").strip().lower()
+    diff = request.POST.get("diff", "")
+    tests = request.POST.get("tests", "")
+    files = [{"filename": filename, "content": code}] if code else []
+    raw_files = request.POST.get("files_json", "")
+    if raw_files:
+        try:
+            parsed = json.loads(raw_files)
+            if not isinstance(parsed, list) or len(parsed) > MAX_PROJECT_FILES:
+                raise ValueError("invalid file list")
+            files = [
+                {"filename": _safe_filename(item.get("filename", "uploaded-file")), "content": str(item.get("content", ""))}
+                for item in parsed if isinstance(item, dict)
+            ]
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return JsonResponse({"success": False, "error": "Invalid review file list."}, status=400)
+    if not files:
+        return JsonResponse({"success": False, "error": "Provide code or project files to review."}, status=400)
+    return JsonResponse({"success": True, **review_gate(files, language, diff, tests)})
 
 
 def _mcp_tools():

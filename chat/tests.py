@@ -148,6 +148,20 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(onboarding.status_code, 200)
         self.assertIn("First setup", onboarding.json()["markdown"])
 
+    def test_review_gate_reports_blocking_security_issue(self):
+        response = self.client.post("/api/review/gate/", {
+            "filename": "app.py",
+            "language": "python",
+            "code": "result = eval(user_input)",
+            "diff": "+ result = eval(user_input)",
+            "tests": "assert True",
+        })
+        payload = response.json()
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(payload["ready"])
+        self.assertLess(payload["score"], 80)
+        self.assertTrue(any(item["source"] == "security" for item in payload["findings"]))
+
     def test_quality_endpoint_finds_security_issue(self):
         response = self.client.post("/api/analyze/", {
             "language": "python",

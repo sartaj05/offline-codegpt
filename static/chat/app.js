@@ -46,6 +46,11 @@ const documentationType = document.getElementById("documentationType");
 const documentationProjectName = document.getElementById("documentationProjectName");
 const documentationChangeSummary = document.getElementById("documentationChangeSummary");
 const documentationOutput = document.getElementById("documentationOutput");
+const reviewGatePanel = document.getElementById("reviewGatePanel");
+const reviewDiff = document.getElementById("reviewDiff");
+const reviewTests = document.getElementById("reviewTests");
+const reviewGateSummary = document.getElementById("reviewGateSummary");
+const reviewGateOutput = document.getElementById("reviewGateOutput");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -434,6 +439,35 @@ async function generateDocumentation() {
         documentationOutput.innerText = data.markdown;
     } catch (error) {
         documentationOutput.innerText = "Documentation error: " + error;
+    }
+}
+
+function toggleReviewGate() {
+    if (!reviewGatePanel) return;
+    reviewGatePanel.hidden = !reviewGatePanel.hidden;
+}
+
+async function runReviewGate() {
+    reviewGateSummary.innerText = "Running quality and security checks...";
+    try {
+        const response = await fetch("/api/review/gate/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                code: codeInput ? codeInput.value : "",
+                filename: editorFileName ? editorFileName.innerText : "editor-buffer",
+                language: languageInput ? languageInput.value : "auto",
+                diff: reviewDiff.value,
+                tests: reviewTests.value,
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Review gate failed.");
+        reviewGateSummary.innerText = data.summary + " Score: " + data.score + "/100";
+        reviewGateOutput.innerText = data.checks.map(check => (check.passed ? "PASS " : "FAIL ") + check.name + " — " + check.detail).join("\n") +
+            "\n\nFindings:\n" + (data.findings.length ? data.findings.map(item => item.severity.toUpperCase() + " " + item.filename + (item.line ? ":" + item.line : "") + " — " + item.message).join("\n") : "No findings.");
+    } catch (error) {
+        reviewGateSummary.innerText = "Review error: " + error;
     }
 }
 
