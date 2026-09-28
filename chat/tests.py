@@ -200,6 +200,19 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(response.json()["selected_model"], "qwen2.5-coder:1.5b")
         self.assertTrue(response.json()["candidates"])
 
+    def test_devcontainer_generator_detects_python_project(self):
+        response = self.client.post("/api/devcontainers/generate/", {
+            "project_name": "Syntax Local AI",
+            "files_json": json.dumps([
+                {"filename": "requirements.txt", "content": "Django==5.0"},
+                {"filename": "manage.py", "content": "print('ok')"},
+            ]),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["path"], ".devcontainer/devcontainer.json")
+        self.assertIn("devcontainers/python", response.json()["config"])
+        self.assertIn("pip install -r requirements.txt", response.json()["config"])
+
     def test_quality_endpoint_finds_security_issue(self):
         response = self.client.post("/api/analyze/", {
             "language": "python",

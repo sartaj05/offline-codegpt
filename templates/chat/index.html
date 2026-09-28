@@ -96,6 +96,7 @@
                     <button type="button" onclick="toggleDependencies()">Deps</button>
                     <button type="button" onclick="toggleBrowserTests()">Browser</button>
                     <button type="button" onclick="toggleModelRouter()">Router</button>
+                    <button type="button" onclick="toggleDevcontainer()">Env</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -341,6 +342,20 @@
                 <button type="button" onclick="routeLocalModel()">Recommend model</button>
             </div>
             <pre id="routerOutput" class="router-output">Model recommendation will appear here.</pre>
+        </section>
+        <section id="devcontainerPanel" class="devcontainer-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Dev Container setup</strong>
+                    <span>Generate a repeatable development environment for this project.</span>
+                </div>
+                <button type="button" onclick="toggleDevcontainer()">Close</button>
+            </div>
+            <div class="devcontainer-row">
+                <input id="devcontainerProjectName" value="Syntax Local AI" placeholder="Project name">
+                <button type="button" onclick="generateDevcontainer()">Generate devcontainer.json</button>
+            </div>
+            <pre id="devcontainerOutput" class="devcontainer-output">Dev Container configuration will appear here.</pre>
         </section>
 
         <section id="chatBox" class="chat-box">

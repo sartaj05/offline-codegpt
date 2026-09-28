@@ -47,6 +47,7 @@ from .documentation import generate_documentation
 from .dependencies import analyze_dependencies
 from .browser_testing import analyze_browser_report, generate_playwright_test
 from .model_router import route_model
+from .devcontainer import generate_devcontainer
 from .review import review_gate
 
 
@@ -1385,6 +1386,35 @@ def model_route(request):
     return JsonResponse({
         "success": True,
         **route_model(request.POST.get("task", ""), models, memory_gb, gpu),
+    })
+
+
+@login_required(login_url="/login/")
+@require_POST
+def devcontainer_generate(request):
+    project_name = request.POST.get("project_name", "Syntax Local AI")
+    files = []
+    raw_files = request.POST.get("files_json", "")
+    if raw_files:
+        try:
+            parsed = json.loads(raw_files)
+            if not isinstance(parsed, list) or len(parsed) > MAX_PROJECT_FILES:
+                raise ValueError("invalid file list")
+            files = [item for item in parsed if isinstance(item, dict)]
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return JsonResponse({"success": False, "error": "Invalid project file list."}, status=400)
+    filename = request.POST.get("filename", "")
+    if filename:
+        files.append({"filename": filename, "content": request.POST.get("code", "")})
+    return JsonResponse({
+        "success": True,
+        "config": generate_devcontainer(files, project_name),
+        "path": ".devcontainer/devcontainer.json",
+        "notes": [
+            "Review forwarded ports for your application.",
+            "Keep secrets outside the container configuration.",
+            "Use the same container definition in local development and CI.",
+        ],
     })
 
 

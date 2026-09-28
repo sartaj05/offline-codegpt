@@ -67,6 +67,9 @@ const routerTask = document.getElementById("routerTask");
 const routerMemory = document.getElementById("routerMemory");
 const routerGpu = document.getElementById("routerGpu");
 const routerOutput = document.getElementById("routerOutput");
+const devcontainerPanel = document.getElementById("devcontainerPanel");
+const devcontainerProjectName = document.getElementById("devcontainerProjectName");
+const devcontainerOutput = document.getElementById("devcontainerOutput");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -586,6 +589,31 @@ async function routeLocalModel() {
             "\n\nCandidates:\n" + data.candidates.map(item => item.model + " (" + item.score + ") — " + item.reasons.join(", ")).join("\n");
     } catch (error) {
         routerOutput.innerText = "Router error: " + error;
+    }
+}
+
+function toggleDevcontainer() {
+    if (!devcontainerPanel) return;
+    devcontainerPanel.hidden = !devcontainerPanel.hidden;
+}
+
+async function generateDevcontainer() {
+    devcontainerOutput.innerText = "Generating devcontainer.json...";
+    try {
+        const response = await fetch("/api/devcontainers/generate/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                project_name: devcontainerProjectName.value.trim(),
+                filename: editorFileName ? editorFileName.innerText : "",
+                code: codeInput ? codeInput.value : "",
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Dev Container generation failed.");
+        devcontainerOutput.innerText = data.path + "\n\n" + data.config + "\n\nNotes:\n- " + data.notes.join("\n- ");
+    } catch (error) {
+        devcontainerOutput.innerText = "Environment error: " + error;
     }
 }
 

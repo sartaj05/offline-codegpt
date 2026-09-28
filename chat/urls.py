@@ -32,6 +32,7 @@ urlpatterns = [
     path("api/browser-tests/generate/", views.browser_test_generate, name="browser_test_generate"),
     path("api/browser-tests/report/", views.browser_test_report, name="browser_test_report"),
     path("api/models/route/", views.model_route, name="model_route"),
+    path("api/devcontainers/generate/", views.devcontainer_generate, name="devcontainer_generate"),
     path("api/mcp/connectors/", views.mcp_connectors, name="mcp_connectors"),
     path("api/mcp/connectors/<int:connector_id>/", views.mcp_connector_delete, name="mcp_connector_delete"),
     path("api/mcp/", views.mcp_rpc, name="mcp_rpc"),
