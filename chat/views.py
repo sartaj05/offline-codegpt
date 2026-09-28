@@ -10,7 +10,7 @@ import subprocess
 import time
 import uuid
 from pathlib import PurePosixPath
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import requests
 
@@ -20,7 +20,7 @@ from django.contrib.auth.models import User
 from django.db.models import Count, Min, Q
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .models import (
     ChatMessage,
@@ -198,6 +198,123 @@ def git_commit(request):
     if result.returncode != 0:
         return JsonResponse({"success": False, "error": (result.stderr or result.stdout).strip()}, status=400)
     return JsonResponse({"success": True, "output": result.stdout.strip()})
+
+
+def _remote_connection(request):
+    return request.session.get("remote_git", {})
+
+
+def _remote_headers(connection):
+    token = connection.get("token", "")
+    if connection.get("provider") == "gitlab":
+        return {"PRIVATE-TOKEN": token, "Accept": "application/json"}
+    return {"Authorization": "Bearer " + token, "Accept": "application/vnd.github+json"}
+
+
+def _remote_request(request, method, url, **kwargs):
+    connection = _remote_connection(request)
+    if not connection.get("token"):
+        return None, JsonResponse({"success": False, "error": "Connect a GitHub or GitLab token first."}, status=400)
+    headers = _remote_headers(connection)
+    headers.update(kwargs.pop("headers", {}))
+    try:
+        response = requests.request(method, url, headers=headers, timeout=20, **kwargs)
+    except requests.RequestException as exc:
+        return None, JsonResponse({"success": False, "error": "Remote provider unavailable: " + str(exc)}, status=503)
+    if not response.ok:
+        return None, JsonResponse({"success": False, "error": response.text[:1000]}, status=400)
+    return response, None
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def remote_git_settings(request):
+    connection = _remote_connection(request)
+    if request.method == "POST":
+        provider = request.POST.get("provider", "").strip().lower()
+        if provider not in {"github", "gitlab"}:
+            return JsonResponse({"success": False, "error": "Choose GitHub or GitLab."}, status=400)
+        token = request.POST.get("token", "").strip()
+        if token:
+            connection["token"] = token
+        connection["provider"] = provider
+        connection["repository"] = request.POST.get("repository", "").strip()[:200]
+        request.session["remote_git"] = connection
+        request.session.modified = True
+    return JsonResponse({
+        "success": True,
+        "provider": connection.get("provider", "github"),
+        "repository": connection.get("repository", ""),
+        "token_set": bool(connection.get("token")),
+    })
+
+
+@login_required(login_url="/login/")
+@require_GET
+def remote_repositories(request):
+    connection = _remote_connection(request)
+    if connection.get("provider") == "gitlab":
+        url = "https://gitlab.com/api/v4/projects?membership=true&per_page=100"
+    else:
+        url = "https://api.github.com/user/repos?per_page=100&sort=updated"
+    response, error = _remote_request(request, "GET", url)
+    if error:
+        return error
+    items = response.json()
+    repositories = [
+        {
+            "name": item.get("full_name") or item.get("path_with_namespace"),
+            "id": item.get("id"),
+            "url": item.get("html_url") or item.get("web_url"),
+        }
+        for item in items
+    ]
+    return JsonResponse({"success": True, "repositories": repositories})
+
+
+@login_required(login_url="/login/")
+@require_GET
+def remote_issues(request):
+    connection = _remote_connection(request)
+    repository = request.GET.get("repository", connection.get("repository", "")).strip()
+    if not repository:
+        return JsonResponse({"success": False, "error": "Choose a repository first."}, status=400)
+    if connection.get("provider") == "gitlab":
+        url = "https://gitlab.com/api/v4/projects/" + quote(repository, safe="") + "/issues?state=opened&per_page=30"
+    else:
+        url = f"https://api.github.com/repos/{repository}/issues?state=open&per_page=30"
+    response, error = _remote_request(request, "GET", url)
+    if error:
+        return error
+    return JsonResponse({"success": True, "issues": [
+        {"id": item.get("iid") or item.get("number"), "title": item.get("title"), "url": item.get("html_url") or item.get("web_url")}
+        for item in response.json()
+        if not item.get("pull_request")
+    ]})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def remote_pull_request(request):
+    connection = _remote_connection(request)
+    repository = request.POST.get("repository", connection.get("repository", "")).strip()
+    title = request.POST.get("title", "").strip()
+    body = request.POST.get("body", "").strip()
+    head = request.POST.get("head", "").strip()
+    base = request.POST.get("base", "main").strip() or "main"
+    if not repository or not title or not head:
+        return JsonResponse({"success": False, "error": "Repository, title, and source branch are required."}, status=400)
+    if connection.get("provider") == "gitlab":
+        url = "https://gitlab.com/api/v4/projects/" + quote(repository, safe="") + "/merge_requests"
+        payload = {"source_branch": head, "target_branch": base, "title": title, "description": body}
+    else:
+        url = f"https://api.github.com/repos/{repository}/pulls"
+        payload = {"head": head, "base": base, "title": title, "body": body, "draft": True}
+    response, error = _remote_request(request, "POST", url, json=payload)
+    if error:
+        return error
+    data = response.json()
+    return JsonResponse({"success": True, "url": data.get("html_url") or data.get("web_url"), "number": data.get("number") or data.get("iid")})
 
 
 def _user_ollama_settings(user):

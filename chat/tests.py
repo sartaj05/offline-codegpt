@@ -386,6 +386,35 @@ class ChatFeatureTests(TestCase):
         self.assertIn("unpinned-dependency", rules)
         self.assertEqual(payload["sbom"]["bomFormat"], "SPDX")
 
+    @patch("chat.views.requests.request")
+    def test_remote_git_connects_lists_issues_and_creates_draft(self, mock_request):
+        response = lambda payload: SimpleNamespace(ok=True, text="", json=lambda: payload)
+        mock_request.side_effect = [
+            response([{"full_name": "demo/project", "id": 1, "html_url": "https://github.com/demo/project"}]),
+            response([{"number": 7, "title": "Fix bug", "html_url": "https://github.com/demo/project/issues/7"}]),
+            response({"number": 8, "html_url": "https://github.com/demo/project/pull/8"}),
+        ]
+        connected = self.client.post(
+            "/api/remote/settings/",
+            {"provider": "github", "token": "ghp_example_token", "repository": "demo/project"},
+        )
+        self.assertTrue(connected.json()["token_set"])
+        repositories = self.client.get("/api/remote/repositories/")
+        self.assertEqual(repositories.json()["repositories"][0]["name"], "demo/project")
+        issues = self.client.get("/api/remote/issues/")
+        self.assertEqual(issues.json()["issues"][0]["id"], 7)
+        pull_request = self.client.post(
+            "/api/remote/pull-request/",
+            {
+                "title": "Fix bug",
+                "head": "fix/bug",
+                "base": "main",
+                "body": "Summary",
+            },
+        )
+        self.assertTrue(pull_request.json()["success"])
+        self.assertEqual(pull_request.json()["number"], 8)
+
     def test_rag_results_include_source_line_ranges(self):
         source = "first" + chr(10) + "needle = True" + chr(10) + "last"
         document = KnowledgeDocument.objects.create(

@@ -14,6 +14,15 @@ const ollamaTopP = document.getElementById("ollamaTopP");
 const ollamaContextLength = document.getElementById("ollamaContextLength");
 const ollamaModelName = document.getElementById("ollamaModelName");
 const ollamaSettingsStatus = document.getElementById("ollamaSettingsStatus");
+const remoteIntegrationPanel = document.getElementById("remoteIntegrationPanel");
+const remoteProvider = document.getElementById("remoteProvider");
+const remoteRepository = document.getElementById("remoteRepository");
+const remoteToken = document.getElementById("remoteToken");
+const remoteOutput = document.getElementById("remoteOutput");
+const remotePrTitle = document.getElementById("remotePrTitle");
+const remotePrHead = document.getElementById("remotePrHead");
+const remotePrBase = document.getElementById("remotePrBase");
+const remotePrBody = document.getElementById("remotePrBody");
 const agentGoal = document.getElementById("agentGoal");
 const agentStatus = document.getElementById("agentStatus");
 const agentPlan = document.getElementById("agentPlan");
@@ -143,6 +152,98 @@ async function manageOllamaModel(action) {
         ollamaSettingsStatus.innerText = action === "pull" ? "Model pulled." : "Model deleted.";
     } catch (error) {
         ollamaSettingsStatus.innerText = String(error);
+    }
+}
+
+function toggleRemoteIntegration() {
+    if (!remoteIntegrationPanel) return;
+    remoteIntegrationPanel.hidden = !remoteIntegrationPanel.hidden;
+    if (!remoteIntegrationPanel.hidden && !remoteRepository.value) loadRemoteSettings();
+}
+
+async function loadRemoteSettings() {
+    try {
+        const response = await fetch("/api/remote/settings/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load remote settings.");
+        remoteProvider.value = data.provider;
+        remoteRepository.value = data.repository;
+        remoteOutput.innerText = data.token_set ? "Connected. Token is stored in this local session." : "Remote integration is not connected.";
+    } catch (error) {
+        remoteOutput.innerText = String(error);
+    }
+}
+
+async function saveRemoteSettings() {
+    remoteOutput.innerText = "Connecting...";
+    try {
+        const response = await fetch("/api/remote/settings/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({
+                provider: remoteProvider.value,
+                repository: remoteRepository.value.trim(),
+                token: remoteToken.value.trim(),
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Connection failed.");
+        remoteToken.value = "";
+        remoteOutput.innerText = "Connected. Token is stored in this local session.";
+    } catch (error) {
+        remoteOutput.innerText = String(error);
+    }
+}
+
+async function loadRemoteRepositories() {
+    remoteOutput.innerText = "Loading repositories...";
+    try {
+        const response = await fetch("/api/remote/repositories/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load repositories.");
+        remoteOutput.innerText = data.repositories.map(item => item.name).join("\n") || "No repositories found.";
+    } catch (error) {
+        remoteOutput.innerText = String(error);
+    }
+}
+
+async function loadRemoteIssues() {
+    remoteOutput.innerText = "Loading issues...";
+    try {
+        const response = await fetch("/api/remote/issues/?repository=" + encodeURIComponent(remoteRepository.value.trim()));
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load issues.");
+        remoteOutput.innerText = data.issues.map(item => "#" + item.id + " " + item.title).join("\n") || "No open issues found.";
+    } catch (error) {
+        remoteOutput.innerText = String(error);
+    }
+}
+
+async function createRemotePullRequest() {
+    remoteOutput.innerText = "Creating draft pull request...";
+    try {
+        const response = await fetch("/api/remote/pull-request/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({
+                repository: remoteRepository.value.trim(),
+                title: remotePrTitle.value.trim(),
+                head: remotePrHead.value.trim(),
+                base: remotePrBase.value.trim(),
+                body: remotePrBody.value,
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Pull request failed.");
+        remoteOutput.innerText = "Draft pull request created: " + (data.url || "success");
+    } catch (error) {
+        remoteOutput.innerText = String(error);
     }
 }
 

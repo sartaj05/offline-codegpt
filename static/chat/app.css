@@ -228,6 +228,15 @@ button { cursor: pointer; }
 .topbar-actions button:hover, .topbar-link:hover { background: var(--surface-3); }
 .topbar-primary { border-color: var(--accent-strong); background: var(--accent-strong); color: #071319; font-weight: 800; }
 .ollama-settings-panel { position: absolute; z-index: 5; top: 76px; right: clamp(24px, 5vw, 68px); width: min(560px, calc(100% - 48px)); padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: rgba(21,25,34,.98); box-shadow: 0 18px 50px rgba(0,0,0,.35); }
+.remote-integration-panel { position: absolute; z-index: 6; top: 76px; right: clamp(24px, 5vw, 68px); width: min(600px, calc(100% - 48px)); padding: 16px; border: 1px solid rgba(126,147,255,.35); border-radius: 12px; background: rgba(21,25,34,.99); box-shadow: 0 18px 50px rgba(0,0,0,.4); }
+.remote-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.remote-actions button, .remote-pr-button { padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); color: var(--text); font-size: 10px; }
+.remote-actions button:first-child, .remote-pr-button { border-color: #697ee5; background: #34448d; color: #f0f3ff; }
+.remote-pr-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 6px; margin-top: 10px; }
+.remote-pr-grid input, .remote-pr-body { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 7px; outline: 0; background: var(--surface-2); color: var(--text); font-size: 10px; }
+.remote-pr-body { min-height: 65px; margin-top: 6px; resize: vertical; }
+.remote-pr-button { margin-top: 6px; }
+.remote-output { max-height: 120px; overflow: auto; margin: 8px 0 0; padding: 8px; border: 1px solid var(--border); border-radius: 7px; background: #0d1016; color: #c9d3e4; font-family: Consolas, monospace; font-size: 10px; white-space: pre-wrap; }
 .settings-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .settings-heading strong, .settings-heading span { display: block; }
 .settings-heading strong { color: var(--text); font-size: 13px; }
