@@ -7,6 +7,7 @@ const modelInput = document.getElementById("model");
 const languageInput = document.getElementById("language");
 const fileInput = document.getElementById("fileInput");
 const folderInput = document.getElementById("folderInput");
+const imageInput = document.getElementById("imageInput");
 const sendBtn = document.getElementById("sendBtn");
 const searchInput = document.getElementById("searchInput");
 const searchResults = document.getElementById("searchResults");
@@ -149,8 +150,9 @@ function newChat() {
         </div>`;
     promptInput.value = "";
     codeInput.value = "";
-    fileInput.value = "";
-    folderInput.value = "";
+    if (fileInput) fileInput.value = "";
+    if (folderInput) folderInput.value = "";
+    if (imageInput) imageInput.value = "";
 }
 
 function addMessage(role, content) {
@@ -219,10 +221,14 @@ async function readStream(response, output) {
 async function sendMessage() {
     const prompt = promptInput.value.trim();
     const code = codeInput.value.trim();
-    const files = [...fileInput.files, ...folderInput.files];
+    const files = [
+        ...(fileInput ? fileInput.files : []),
+        ...(folderInput ? folderInput.files : []),
+    ];
+    const images = imageInput ? [...imageInput.files] : [];
 
-    if (!prompt && !code && files.length === 0) {
-        alert("Please enter prompt, paste code, or upload one or more files.");
+    if (!prompt && !code && files.length === 0 && images.length === 0) {
+        alert("Please enter a prompt, paste code, or choose an upload.");
         return;
     }
 
@@ -230,6 +236,10 @@ async function sendMessage() {
     if (files.length > 0) {
         userText += "\n\nUploaded Files:\n";
         userText += files.map(file => file.webkitRelativePath || file.name).join("\n");
+    }
+    if (images.length > 0) {
+        userText += "\n\nUploaded Images:\n";
+        userText += images.map(image => image.name).join("\n");
     }
     if (code) userText += "\n\nCode:\n" + code.substring(0, 2000);
 
@@ -250,6 +260,7 @@ async function sendMessage() {
         formData.append("files", file, relativePath);
         formData.append("file_paths", relativePath);
     });
+    images.forEach(image => formData.append("images", image, image.name));
 
     try {
         const response = await fetch("/api/ask-code/", {
@@ -260,7 +271,9 @@ async function sendMessage() {
 
         if (!response.ok) {
             const data = await response.json();
-            output.innerText = "Error:\n" + (data.error || "Request failed.");
+            output.innerText = data.login_required
+                ? "Sign in to unlock uploads and image analysis."
+                : "Error:\n" + (data.error || "Request failed.");
         } else {
             await readStream(response, output);
         }
@@ -271,7 +284,6 @@ async function sendMessage() {
         sendBtn.innerText = "Send";
     }
 }
-
 async function runCode() {
     const code = codeInput.value.trim();
     if (!code) {
@@ -398,7 +410,7 @@ async function searchProject() {
     }
 }
 
-searchInput.addEventListener("keydown", function (event) {
+if (searchInput) searchInput.addEventListener("keydown", function (event) {
     if (event.key === "Enter") searchProject();
 });
 

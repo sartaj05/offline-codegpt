@@ -3,84 +3,99 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Offline CodeGPT</title>
     <link rel="stylesheet" href="{% static 'chat/app.css' %}">
 </head>
-<body>
-
+<body class="app-page">
 <div class="app">
-
-    <!-- Sidebar -->
     <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-mark">✦</div>
+            <div>
+                <strong>Offline CodeGPT</strong>
+                <span>Local coding workspace</span>
+            </div>
+        </div>
+
         <div class="sidebar-header">
-            <button class="new-chat-btn" onclick="newChat()">+ New Chat</button>
+            <button class="new-chat-btn" onclick="newChat()">＋ New chat</button>
         </div>
 
-        <div class="history-title">Recent Chats</div>
-
+        <div class="history-title">{% if request.user.is_authenticated %}Your recent chats{% else %}Free mode{% endif %}</div>
         <div class="history-list">
-            {% for session in sessions %}
-                <button class="history-item" onclick="loadSession('{{ session.id }}')">
-                    {{ session.title }}
-                </button>
-            {% empty %}
-                <div class="no-history">No chat history</div>
-            {% endfor %}
+            {% if request.user.is_authenticated %}
+                {% for session in sessions %}
+                    <button class="history-item" onclick="loadSession('{{ session.id }}')">{{ session.title }}</button>
+                {% empty %}
+                    <div class="no-history">Your saved chats will appear here.</div>
+                {% endfor %}
+            {% else %}
+                <div class="guest-card">
+                    <span class="guest-card-icon">◌</span>
+                    <strong>Try it without an account</strong>
+                    <p>Ask questions and paste code for free. Sign in when you want private history and uploads.</p>
+                    <a href="{% url 'signup' %}">Create a free account →</a>
+                </div>
+            {% endif %}
         </div>
 
+        {% if request.user.is_authenticated %}
         <div class="project-search">
-            <div class="history-title">Search Project</div>
+            <div class="history-title">Project search</div>
             <div class="search-row">
                 <input id="searchInput" type="search" placeholder="Find code...">
-                <button id="searchBtn" type="button" onclick="searchProject()">Search</button>
+                <button id="searchBtn" type="button" onclick="searchProject()">⌕</button>
             </div>
             <div id="searchResults" class="search-results"></div>
         </div>
+        {% endif %}
 
         <div class="sidebar-footer">
-            <div class="model-name">Model: <span id="activeModel">{{ default_model }}</span></div>
-            <div class="offline-badge">Offline Mode</div>
+            <div class="model-name">Model <span id="activeModel">{{ default_model }}</span></div>
+            <div class="status-row"><span class="status-dot"></span> Local and private</div>
         </div>
     </aside>
 
-    <!-- Main Chat Area -->
     <main class="main">
-
         <header class="topbar">
             <div>
-                <h2>Offline CodeGPT</h2>
-                <p>Upload code, ask prompt, get local AI output</p>
+                <div class="eyebrow">{% if request.user.is_authenticated %}PRIVATE WORKSPACE{% else %}FREE PREVIEW{% endif %}</div>
+                <h1>Build better code, locally.</h1>
+                <p>Ask, inspect, and improve code with your local Ollama model.</p>
             </div>
             <div class="topbar-actions">
-                <button type="button" onclick="exportChat('markdown')">MD</button>
-                <button type="button" onclick="exportChat('json')">JSON</button>
-                <button type="button" onclick="exportChat('pdf')">PDF</button>
-                <form method="post" action="{% url 'logout' %}">
-                    {% csrf_token %}
-                    <button type="submit">Log out {{ request.user.username }}</button>
-                </form>
+                {% if request.user.is_authenticated %}
+                    <button type="button" onclick="exportChat('markdown')">MD</button>
+                    <button type="button" onclick="exportChat('json')">JSON</button>
+                    <button type="button" onclick="exportChat('pdf')">PDF</button>
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button type="submit">Log out</button>
+                    </form>
+                {% else %}
+                    <a class="topbar-link" href="{% url 'login' %}">Sign in</a>
+                    <a class="topbar-primary" href="{% url 'signup' %}">Create free account</a>
+                {% endif %}
             </div>
         </header>
 
         <section id="chatBox" class="chat-box">
             <div class="welcome">
-                <h1>How can I help with your code?</h1>
-                <p>This works locally using Django + Ollama. No internet required after setup.</p>
-
+                <div class="welcome-badge">✦ Local AI coding assistant</div>
+                <h2>What are you working on?</h2>
+                <p>{% if request.user.is_authenticated %}Your workspace is ready for files, images, project search, and quality checks.{% else %}Start free with a prompt or pasted code. No account is needed for basic chat.{% endif %}</p>
                 <div class="sample-grid">
-                    <button onclick="setPrompt('Explain this code step by step')">Explain code</button>
-                    <button onclick="setPrompt('Find bugs and give corrected code')">Find bugs</button>
-                    <button onclick="setPrompt('Optimize this code for performance')">Optimize</button>
-                    <button onclick="setPrompt('Convert this code into clean production code')">Refactor</button>
+                    <button onclick="setPrompt('Explain this code step by step')"><span>01</span>Explain code</button>
+                    <button onclick="setPrompt('Find bugs and give corrected code')"><span>02</span>Find bugs</button>
+                    <button onclick="setPrompt('Optimize this code for performance')"><span>03</span>Optimize</button>
+                    <button onclick="setPrompt('Convert this code into clean production code')"><span>04</span>Refactor</button>
                 </div>
             </div>
         </section>
 
-        <!-- Composer -->
         <section class="composer">
-
             <input type="hidden" id="csrfToken" value="{{ csrf_token }}">
-
             <div class="code-panel">
                 <div class="form-row">
                     <select id="model" aria-label="Ollama model">
@@ -88,8 +103,8 @@
                             <option value="{{ model }}" {% if model == default_model %}selected{% endif %}>{{ model }}</option>
                         {% endfor %}
                     </select>
-                    <select id="language">
-                        <option value="auto">Auto Detect</option>
+                    <select id="language" aria-label="Code language">
+                        <option value="auto">Auto detect</option>
                         <option value="csharp">C#</option>
                         <option value="python">Python</option>
                         <option value="javascript">JavaScript</option>
@@ -99,38 +114,42 @@
                         <option value="html">HTML</option>
                         <option value="css">CSS</option>
                     </select>
-
-                    <input type="file" id="fileInput" multiple>
-                    <input type="file" id="folderInput" webkitdirectory directory multiple aria-label="Upload project folder">
-                    <button id="runBtn" type="button" onclick="runCode()">Check / Run SQL</button>
+                    {% if request.user.is_authenticated %}
+                        <label class="file-picker">＋ Code files<input type="file" id="fileInput" multiple></label>
+                        <label class="file-picker">＋ Project folder<input type="file" id="folderInput" webkitdirectory directory multiple></label>
+                        <label class="file-picker image-picker">＋ Image<input type="file" id="imageInput" accept="image/*" multiple></label>
+                    {% endif %}
                 </div>
 
-                <textarea id="codeInput" placeholder="Paste code here, or upload a file..."></textarea>
-                <pre id="executionOutput" class="execution-output">Safe mode: Python and JavaScript are syntax-checked; SQL runs in memory.</pre>
-                <div class="quality-row">
-                    <select id="qualityMode" aria-label="Quality check type">
-                        <option value="all">All quality checks</option>
-                        <option value="lint">Lint</option>
-                        <option value="security">Security scan</option>
-                        <option value="bugs">Bug heuristics</option>
-                        <option value="tests">Generate tests</option>
-                    </select>
-                    <button type="button" onclick="analyzeQuality()">Analyze code</button>
-                </div>
-                <div id="qualityOutput" class="quality-output">Quality findings will appear here.</div>
+                <textarea id="codeInput" placeholder="Paste code here, or choose an upload above..."></textarea>
+
+                {% if request.user.is_authenticated %}
+                    <pre id="executionOutput" class="execution-output">Safe mode: Python and JavaScript are syntax-checked; SQL runs in memory.</pre>
+                    <div class="quality-row">
+                        <select id="qualityMode" aria-label="Quality check type">
+                            <option value="all">All quality checks</option>
+                            <option value="lint">Lint</option>
+                            <option value="security">Security scan</option>
+                            <option value="bugs">Bug heuristics</option>
+                            <option value="tests">Generate tests</option>
+                        </select>
+                        <button id="runBtn" type="button" onclick="runCode()">Check / Run SQL</button>
+                        <button type="button" onclick="analyzeQuality()">Analyze code</button>
+                    </div>
+                    <div id="qualityOutput" class="quality-output">Quality findings will appear here.</div>
+                {% else %}
+                    <div class="guest-tool-note">Free chat is ready. <a href="{% url 'signup' %}">Create a free account</a> to upload code files, images, folders, search projects, export chats, and run quality tools.</div>
+                {% endif %}
             </div>
 
             <div class="prompt-bar">
-                <textarea id="promptInput" placeholder="Ask anything about your code..."></textarea>
-                <button id="sendBtn" onclick="sendMessage()">Send</button>
+                <textarea id="promptInput" placeholder="Ask anything about your code..." aria-label="Prompt"></textarea>
+                <button id="sendBtn" onclick="sendMessage()">Send <span>↗</span></button>
             </div>
-
+            <div class="composer-hint">Local model · Your code stays on this machine</div>
         </section>
-
     </main>
-
 </div>
-
 <script src="{% static 'chat/app.js' %}"></script>
 </body>
 </html>
