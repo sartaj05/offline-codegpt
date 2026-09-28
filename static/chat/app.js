@@ -6,6 +6,14 @@ const chatBox = document.getElementById("chatBox");
 const promptInput = document.getElementById("promptInput");
 const codeInput = document.getElementById("codeInput");
 const modelInput = document.getElementById("model");
+const ollamaSettingsPanel = document.getElementById("ollamaSettingsPanel");
+const ollamaServerUrl = document.getElementById("ollamaServerUrl");
+const ollamaDefaultModel = document.getElementById("ollamaDefaultModel");
+const ollamaTemperature = document.getElementById("ollamaTemperature");
+const ollamaTopP = document.getElementById("ollamaTopP");
+const ollamaContextLength = document.getElementById("ollamaContextLength");
+const ollamaModelName = document.getElementById("ollamaModelName");
+const ollamaSettingsStatus = document.getElementById("ollamaSettingsStatus");
 const languageInput = document.getElementById("language");
 const fileInput = document.getElementById("fileInput");
 const folderInput = document.getElementById("folderInput");
@@ -45,6 +53,93 @@ let codeBeforePatch = "";
 function updateActiveModel() {
     const activeModel = document.getElementById("activeModel");
     if (activeModel && modelInput) activeModel.innerText = modelInput.value;
+}
+
+function toggleOllamaSettings() {
+    if (ollamaSettingsPanel) ollamaSettingsPanel.hidden = !ollamaSettingsPanel.hidden;
+}
+
+function renderOllamaModels(models, selected) {
+    [modelInput, ollamaDefaultModel].forEach(select => {
+        if (!select) return;
+        select.innerHTML = "";
+        models.forEach(name => {
+            const option = document.createElement("option");
+            option.value = name;
+            option.innerText = name;
+            option.selected = name === selected;
+            select.appendChild(option);
+        });
+    });
+    updateActiveModel();
+}
+
+async function loadOllamaSettings() {
+    if (!ollamaSettingsPanel) return;
+    try {
+        const response = await fetch("/api/ollama/settings/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load settings.");
+        const settings = data.settings;
+        ollamaServerUrl.value = settings.server_url;
+        ollamaTemperature.value = settings.temperature;
+        ollamaTopP.value = settings.top_p;
+        ollamaContextLength.value = settings.max_context_chars;
+        renderOllamaModels(data.models, settings.default_model);
+    } catch (error) {
+        ollamaSettingsStatus.innerText = String(error);
+    }
+}
+
+async function saveOllamaSettings() {
+    try {
+        const response = await fetch("/api/ollama/settings/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({
+                server_url: ollamaServerUrl.value.trim(),
+                default_model: ollamaDefaultModel.value,
+                temperature: ollamaTemperature.value,
+                top_p: ollamaTopP.value,
+                max_context_chars: ollamaContextLength.value,
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to save settings.");
+        renderOllamaModels(data.models, data.settings.default_model);
+        ollamaSettingsStatus.innerText = "Saved. New chats use these settings.";
+    } catch (error) {
+        ollamaSettingsStatus.innerText = String(error);
+    }
+}
+
+async function manageOllamaModel(action) {
+    const name = ollamaModelName.value.trim();
+    if (!name) {
+        ollamaSettingsStatus.innerText = "Enter a model name first.";
+        return;
+    }
+    if (action === "delete" && !confirm("Delete local model " + name + "?")) return;
+    ollamaSettingsStatus.innerText = action === "pull" ? "Pulling model..." : "Deleting model...";
+    try {
+        const response = await fetch("/api/ollama/models/action/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({ action, name }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Model action failed.");
+        renderOllamaModels(data.models, modelInput.value);
+        ollamaSettingsStatus.innerText = action === "pull" ? "Model pulled." : "Model deleted.";
+    } catch (error) {
+        ollamaSettingsStatus.innerText = String(error);
+    }
 }
 
 function escapeHtml(value) {
@@ -1087,4 +1182,5 @@ renderEditorTabs();
 syncEditorPreview();
 if (projectFiles) loadProjectWorkspace();
 if (gitFiles) loadGitStatus();
+if (ollamaSettingsPanel) loadOllamaSettings();
 if (chatHistory) loadChatHistory();

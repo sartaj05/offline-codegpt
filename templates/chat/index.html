@@ -85,6 +85,7 @@
             </div>
             <div class="topbar-actions">
                 {% if request.user.is_authenticated %}
+                    <button type="button" onclick="toggleOllamaSettings()">Ollama</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -98,6 +99,32 @@
                 {% endif %}
             </div>
         </header>
+
+        {% if request.user.is_authenticated %}
+        <section id="ollamaSettingsPanel" class="ollama-settings-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Ollama settings</strong>
+                    <span>Local server and generation controls</span>
+                </div>
+                <button type="button" onclick="toggleOllamaSettings()">Close</button>
+            </div>
+            <div class="settings-grid">
+                <label>Server URL<input id="ollamaServerUrl" type="url" value="{{ ollama_settings.server_url }}"></label>
+                <label>Default model<select id="ollamaDefaultModel"></select></label>
+                <label>Temperature<input id="ollamaTemperature" type="number" min="0" max="2" step="0.1" value="{{ ollama_settings.temperature }}"></label>
+                <label>Top-p<input id="ollamaTopP" type="number" min="0" max="1" step="0.05" value="{{ ollama_settings.top_p }}"></label>
+                <label>Context length<input id="ollamaContextLength" type="number" min="4000" step="1000" value="{{ ollama_settings.max_context_chars }}"></label>
+            </div>
+            <div class="model-manager-row">
+                <input id="ollamaModelName" placeholder="Model name, e.g. qwen2.5-coder:1.5b">
+                <button type="button" onclick="manageOllamaModel('pull')">Pull model</button>
+                <button type="button" onclick="manageOllamaModel('delete')">Delete model</button>
+            </div>
+            <div id="ollamaSettingsStatus" class="settings-status"></div>
+            <button type="button" class="settings-save-button" onclick="saveOllamaSettings()">Save settings</button>
+        </section>
+        {% endif %}
 
         <section id="chatBox" class="chat-box">
             <div class="welcome">

@@ -276,6 +276,34 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(committed.json()["success"])
         self.assertEqual(mock_run.call_args_list[-1].args[0][-2:], ["-m", "Add files"])
 
+    @patch("chat.views.requests.get")
+    def test_ollama_settings_save_and_validate_local_server(self, mock_get):
+        mock_get.return_value = SimpleNamespace(
+            ok=True,
+            json=lambda: {"models": [{"name": "deepseek-coder:latest"}]},
+        )
+        initial = self.client.get("/api/ollama/settings/")
+        self.assertEqual(initial.json()["settings"]["server_url"], "http://127.0.0.1:11434")
+        invalid = self.client.post(
+            "/api/ollama/settings/",
+            {"server_url": "https://example.com:11434"},
+        )
+        self.assertEqual(invalid.status_code, 400)
+        saved = self.client.post(
+            "/api/ollama/settings/",
+            {
+                "server_url": "http://localhost:11434/",
+                "default_model": "deepseek-coder:latest",
+                "temperature": "0.7",
+                "top_p": "0.8",
+                "max_context_chars": "32000",
+            },
+        )
+        self.assertTrue(saved.json()["success"])
+        self.assertEqual(saved.json()["settings"]["server_url"], "http://localhost:11434")
+        self.assertEqual(saved.json()["settings"]["temperature"], 0.7)
+        self.assertIn("deepseek-coder:latest", saved.json()["models"])
+
     def test_rag_results_include_source_line_ranges(self):
         source = "first" + chr(10) + "needle = True" + chr(10) + "last"
         document = KnowledgeDocument.objects.create(

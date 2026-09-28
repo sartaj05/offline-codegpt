@@ -10,6 +10,7 @@ import subprocess
 import time
 import uuid
 from pathlib import PurePosixPath
+from urllib.parse import urlparse
 
 import requests
 
@@ -28,6 +29,7 @@ from .models import (
     KnowledgeChunk,
     KnowledgeDocument,
     LocalModelConfig,
+    UserOllamaSettings,
 )
 from .quality import analyze_code_quality
 from .sandbox import run_sandboxed_code
@@ -133,7 +135,20 @@ def git_commit(request):
     return JsonResponse({"success": True, "output": result.stdout.strip()})
 
 
-def _available_models():
+def _user_ollama_settings(user):
+    return UserOllamaSettings.objects.get_or_create(user=user)[0]
+
+
+def _safe_ollama_url(value):
+    parsed = urlparse(str(value or "").strip())
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return None
+    if parsed.hostname not in ("127.0.0.1", "localhost", "::1"):
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+
+def _available_models(base_url=OLLAMA_BASE_URL):
     names = list(
         LocalModelConfig.objects.filter(is_active=True)
         .order_by("-is_default", "name")
@@ -146,7 +161,7 @@ def _available_models():
         names.append(VISION_MODEL)
 
     try:
-        response = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=3)
+        response = requests.get(f"{base_url}/api/tags", timeout=3)
         if response.ok:
             for item in response.json().get("models", []):
                 name = item.get("name")
@@ -308,19 +323,93 @@ def index(request):
         if request.user.is_authenticated
         else ChatSession.objects.none()
     )
+    user_settings = _user_ollama_settings(request.user) if request.user.is_authenticated else None
+    server_url = user_settings.server_url if user_settings else OLLAMA_BASE_URL
+    default_model = user_settings.default_model if user_settings else DEFAULT_MODEL
     return render(request, "chat/index.html", {
         "sessions": sessions,
-        "models": _available_models(),
-        "default_model": DEFAULT_MODEL,
+        "models": _available_models(server_url),
+        "default_model": default_model,
+        "ollama_settings": user_settings,
     })
 
 
 def model_list(request):
+    user_settings = _user_ollama_settings(request.user) if request.user.is_authenticated else None
+    server_url = user_settings.server_url if user_settings else OLLAMA_BASE_URL
+    default_model = user_settings.default_model if user_settings else DEFAULT_MODEL
     return JsonResponse({
         "success": True,
-        "models": _available_models(),
-        "default_model": DEFAULT_MODEL,
+        "models": _available_models(server_url),
+        "default_model": default_model,
     })
+
+
+def _ollama_settings_payload(settings):
+    return {
+        "server_url": settings.server_url,
+        "default_model": settings.default_model,
+        "temperature": settings.temperature,
+        "top_p": settings.top_p,
+        "max_context_chars": settings.max_context_chars,
+    }
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def ollama_settings(request):
+    settings = _user_ollama_settings(request.user)
+    if request.method == "POST":
+        server_url = _safe_ollama_url(request.POST.get("server_url", settings.server_url))
+        if not server_url:
+            return JsonResponse({"success": False, "error": "Use a local Ollama URL such as http://127.0.0.1:11434."}, status=400)
+        try:
+            temperature = min(max(float(request.POST.get("temperature", settings.temperature)), 0), 2)
+            top_p = min(max(float(request.POST.get("top_p", settings.top_p)), 0), 1)
+            max_context_chars = min(max(int(request.POST.get("max_context_chars", settings.max_context_chars)), 4000), 100000)
+        except (TypeError, ValueError):
+            return JsonResponse({"success": False, "error": "Temperature, top-p, and context must be valid numbers."}, status=400)
+        settings.server_url = server_url
+        settings.default_model = request.POST.get("default_model", settings.default_model).strip()[:100] or DEFAULT_MODEL
+        settings.temperature = temperature
+        settings.top_p = top_p
+        settings.max_context_chars = max_context_chars
+        settings.save()
+    return JsonResponse({
+        "success": True,
+        "settings": _ollama_settings_payload(settings),
+        "models": _available_models(settings.server_url),
+    })
+
+
+@login_required(login_url="/login/")
+@require_POST
+def ollama_model_action(request):
+    settings = _user_ollama_settings(request.user)
+    action = request.POST.get("action", "").strip().lower()
+    name = request.POST.get("name", "").strip()
+    if not name or len(name) > 100:
+        return JsonResponse({"success": False, "error": "Enter a valid model name."}, status=400)
+    try:
+        if action == "pull":
+            response = requests.post(
+                f"{settings.server_url}/api/pull",
+                json={"name": name, "stream": False},
+                timeout=(10, 300),
+            )
+        elif action == "delete":
+            response = requests.delete(
+                f"{settings.server_url}/api/delete",
+                json={"name": name},
+                timeout=(10, 30),
+            )
+        else:
+            return JsonResponse({"success": False, "error": "Use pull or delete."}, status=400)
+    except requests.RequestException as exc:
+        return JsonResponse({"success": False, "error": "Ollama is unavailable: " + str(exc)}, status=503)
+    if not response.ok:
+        return JsonResponse({"success": False, "error": response.text}, status=400)
+    return JsonResponse({"success": True, "models": _available_models(settings.server_url)})
 
 
 @login_required(login_url="/login/")
@@ -784,10 +873,13 @@ def ask_code(request):
         }, status=400)
 
     owner = request.user if request.user.is_authenticated else None
+    user_settings = _user_ollama_settings(request.user) if owner else None
+    ollama_base_url = user_settings.server_url if user_settings else OLLAMA_BASE_URL
+    configured_default_model = user_settings.default_model if user_settings else DEFAULT_MODEL
     revision_branch_id = None
     if session_id:
         session = get_object_or_404(ChatSession, id=session_id, owner=owner)
-        model_name = requested_model or session.model_name or DEFAULT_MODEL
+        model_name = requested_model or session.model_name or configured_default_model
         if image_data and model_name == DEFAULT_MODEL:
             model_name = VISION_MODEL
         if session.model_name != model_name:
@@ -797,7 +889,7 @@ def ask_code(request):
         title = prompt[:60] if prompt else (
             uploaded_filenames[0][:60] if uploaded_filenames else "New Chat"
         )
-        model_name = requested_model or DEFAULT_MODEL
+        model_name = requested_model or configured_default_model
         if image_data and model_name == DEFAULT_MODEL:
             model_name = VISION_MODEL
         session = ChatSession.objects.create(
@@ -896,11 +988,16 @@ Instructions:
 
     try:
         response = requests.post(
-            OLLAMA_URL,
+            f"{ollama_base_url}/api/generate",
             json={
                 "model": model_name,
                 "prompt": full_prompt,
                 "stream": True,
+                "options": {
+                    "temperature": user_settings.temperature if user_settings else 0.2,
+                    "top_p": user_settings.top_p if user_settings else 0.9,
+                    "num_ctx": max(512, (user_settings.max_context_chars if user_settings else 24000) // 4),
+                },
                 **({"images": image_data} if image_data else {}),
             },
             timeout=(10, 300),

@@ -27,6 +27,19 @@ class LocalModelConfig(models.Model):
         return self.display_name or self.name
 
 
+class UserOllamaSettings(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="ollama_settings")
+    server_url = models.URLField(default="http://127.0.0.1:11434", max_length=300)
+    default_model = models.CharField(max_length=100, default="qwen2.5-coder:1.5b")
+    temperature = models.FloatField(default=0.2)
+    top_p = models.FloatField(default=0.9)
+    max_context_chars = models.IntegerField(default=24000)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Ollama settings for {self.user.username}"
+
+
 class ChatSession(models.Model):
     owner = models.ForeignKey(
         User,
