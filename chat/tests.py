@@ -7,6 +7,7 @@ from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
 from .models import ChatMessage, ChatSession, KnowledgeChunk, KnowledgeDocument
+from .views import _search_knowledge
 
 
 class ChatFeatureTests(TestCase):
@@ -170,3 +171,25 @@ class ChatFeatureTests(TestCase):
         deleted = self.client.delete(f"/api/project/{document.id}/")
         self.assertEqual(deleted.status_code, 200)
         self.assertFalse(KnowledgeDocument.objects.filter(id=document.id).exists())
+
+    def test_rag_results_include_source_line_ranges(self):
+        source = "first" + chr(10) + "needle = True" + chr(10) + "last"
+        document = KnowledgeDocument.objects.create(
+            owner=self.user,
+            title="source.py",
+            filename="source.py",
+            language="python",
+            original_text=source,
+            file_size_bytes=len(source),
+        )
+        KnowledgeChunk.objects.create(
+            document=document,
+            chunk_index=0,
+            content=source,
+            language="python",
+        )
+
+        results = _search_knowledge("needle", owner=self.user)
+        self.assertEqual(results[0]["filename"], "source.py")
+        self.assertEqual(results[0]["line_start"], 1)
+        self.assertEqual(results[0]["line_end"], 3)

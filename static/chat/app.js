@@ -137,6 +137,33 @@ function addAssistantActions(element) {
     element.parentElement.appendChild(actions);
 }
 
+function addSourceCitations(element, sources) {
+    if (!sources || !sources.length) return;
+    const citations = document.createElement("div");
+    citations.className = "source-citations";
+    const label = document.createElement("span");
+    label.className = "source-citations-label";
+    label.innerText = "Sources";
+    citations.appendChild(label);
+    sources.forEach(source => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "source-citation";
+        button.innerText = source.filename + ":" + source.line_start;
+        button.title = "Open retrieved project context";
+        button.onclick = () => {
+            codeInput.value = source.content;
+            if (languageInput && [...languageInput.options].some(option => option.value === source.language)) {
+                languageInput.value = source.language;
+            }
+            codeInput.focus();
+            codeInput.scrollIntoView({ behavior: "smooth", block: "center" });
+        };
+        citations.appendChild(button);
+    });
+    element.appendChild(citations);
+}
+
 function restoreFileSelection(input, files) {
     if (!input) return;
     input.value = "";
@@ -326,6 +353,7 @@ async function readStream(response, output, userWrapper) {
                 userWrapper.dataset.messageId = event.user_message_id;
             }
             renderMessageContent(output, event.answer);
+            addSourceCitations(output, event.sources);
         } else if (event.type === "error") {
             output.innerText = "Error:\n" + event.error;
         }
@@ -560,7 +588,7 @@ async function searchProject() {
             const item = document.createElement("button");
             item.type = "button";
             item.className = "search-result";
-            item.innerText = `${result.filename} · chunk ${result.chunk_index + 1}`;
+            item.innerText = result.filename + ":" + result.line_start + "-" + result.line_end;
             item.title = result.content;
             item.onclick = () => {
                 codeInput.value = result.content;

@@ -143,7 +143,7 @@ def _search_knowledge(query, limit=8, owner=None):
         if score:
             matches.append((score, chunk))
 
-    matches.sort(key=lambda item: item[0], reverse=True)
+        matches.sort(key=lambda item: item[0], reverse=True)
     return [
         {
             "filename": chunk.document.filename,
@@ -151,6 +151,18 @@ def _search_knowledge(query, limit=8, owner=None):
             "chunk_index": chunk.chunk_index,
             "content": chunk.content,
             "score": score,
+            "line_start": (
+                chunk.document.original_text[:max(
+                    chunk.document.original_text.find(chunk.content),
+                    0,
+                )].count("\n") + 1
+            ),
+            "line_end": (
+                chunk.document.original_text[:max(
+                    chunk.document.original_text.find(chunk.content),
+                    0,
+                )].count("\n") + chunk.content.count("\n") + 1
+            ),
         }
         for score, chunk in matches[:limit]
     ]
@@ -682,7 +694,7 @@ def ask_code(request):
 
     relevant_chunks = _search_knowledge(prompt or code, owner=owner)
     knowledge_context = "\n\n".join(
-        f"===== PROJECT CONTEXT: {item['filename']} (chunk {item['chunk_index']}) =====\n"
+        f"===== PROJECT CONTEXT: {item['filename']}:{item['line_start']}-{item['line_end']} =====\n"
         f"{item['content']}"
         for item in relevant_chunks
     )
@@ -761,6 +773,16 @@ Instructions:
                     "model": model_name,
                     "user_message_id": user_message.id,
                     "revision_branch_id": str(revision_branch_id) if revision_branch_id else "",
+                    "sources": [
+                        {
+                            "filename": item["filename"],
+                            "language": item["language"],
+                            "line_start": item["line_start"],
+                            "line_end": item["line_end"],
+                            "content": item["content"],
+                        }
+                        for item in relevant_chunks
+                    ],
                     "answer": answer,
                 })
             except Exception as ex:

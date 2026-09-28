@@ -275,6 +275,10 @@ select { padding: 0 10px; }
 .code-actions, .message-actions { display: flex; gap: 7px; margin-top: 7px; }
 .code-copy-button, .message-actions button { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--muted); font-size: 11px; }
 .code-copy-button:hover, .message-actions button:hover { color: var(--text); background: var(--surface-3); }
+.source-citations { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--border); }
+.source-citations-label { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+.source-citation { padding: 5px 8px; border: 1px solid rgba(99,230,190,.3); border-radius: 999px; background: rgba(99,230,190,.08); color: var(--accent); font-family: Consolas, monospace; font-size: 10px; cursor: pointer; }
+.source-citation:hover { background: rgba(99,230,190,.16); }
 
 /* Authentication */
 .auth-page { display: grid; min-height: 100vh; place-items: center; padding: 28px; background: radial-gradient(circle at 15% 20%, #1a3953 0, transparent 32%), radial-gradient(circle at 85% 85%, #173e39 0, transparent 28%), var(--bg); }
