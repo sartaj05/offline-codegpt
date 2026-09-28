@@ -98,6 +98,7 @@
                     <button type="button" onclick="toggleModelRouter()">Router</button>
                     <button type="button" onclick="toggleDevcontainer()">Env</button>
                     <button type="button" onclick="toggleIncident()">Incident</button>
+                    <button type="button" onclick="toggleArchitecture()">Arch</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -373,6 +374,18 @@
             </div>
             <button type="button" onclick="analyzeIncident()">Analyze incident</button>
             <pre id="incidentOutput" class="incident-output">Incident findings will appear here.</pre>
+        </section>
+        <section id="architecturePanel" class="architecture-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Architecture intelligence</strong>
+                    <span>Map modules, imports, routes, symbols, and change impact.</span>
+                </div>
+                <button type="button" onclick="toggleArchitecture()">Close</button>
+            </div>
+            <textarea id="architectureFiles" class="architecture-files" placeholder='Paste project files as JSON: [{"filename":"app.py","content":"..."}]'></textarea>
+            <button type="button" onclick="analyzeArchitecture()">Analyze architecture</button>
+            <pre id="architectureOutput" class="architecture-output">Architecture findings will appear here.</pre>
         </section>
 
         <section id="chatBox" class="chat-box">

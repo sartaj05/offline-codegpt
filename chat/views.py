@@ -49,6 +49,7 @@ from .browser_testing import analyze_browser_report, generate_playwright_test
 from .model_router import route_model
 from .devcontainer import generate_devcontainer
 from .incident import analyze_incident
+from .architecture import analyze_architecture
 from .review import review_gate
 
 
@@ -1430,6 +1431,23 @@ def incident_analyze(request):
             request.POST.get("metrics", "")[:20_000],
         ),
     })
+
+
+@login_required(login_url="/login/")
+@require_POST
+def architecture_analyze(request):
+    raw_files = request.POST.get("files_json", "")
+    try:
+        files = json.loads(raw_files or "[]")
+        if not isinstance(files, list) or len(files) > MAX_PROJECT_FILES:
+            raise ValueError("invalid architecture file list")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "files_json must be a JSON array."}, status=400)
+    files = [
+        {"filename": _safe_filename(item.get("filename", "untitled")), "content": str(item.get("content", ""))}
+        for item in files if isinstance(item, dict)
+    ]
+    return JsonResponse({"success": True, **analyze_architecture(files)})
 
 
 def _mcp_tools():

@@ -225,6 +225,19 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(payload["suspected_causes"])
         self.assertIn("postmortem", payload["postmortem"])
 
+    def test_architecture_graph_detects_relationships_and_symbols(self):
+        response = self.client.post("/api/architecture/analyze/", {
+            "files_json": json.dumps([
+                {"filename": "app.py", "content": "from services import run\n\ndef main():\n    return run()\n"},
+                {"filename": "services.py", "content": "from app import main\n\ndef run():\n    return True\n"},
+            ]),
+        })
+        payload = response.json()
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(len(payload["edges"]), 2)
+        self.assertTrue(payload["symbols"])
+        self.assertTrue(payload["cycles"])
+
     def test_quality_endpoint_finds_security_issue(self):
         response = self.client.post("/api/analyze/", {
             "language": "python",

@@ -233,6 +233,9 @@ button { cursor: pointer; }
 .incident-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin: 12px 0; }
 .incident-grid textarea { min-height: 120px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); font-family: Consolas, monospace; font-size: 11px; resize: vertical; }
 .incident-output { max-height: 360px; margin: 12px 0 0; padding: 12px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: rgba(10,12,18,.55); color: #dbe4f1; font-size: 11px; line-height: 1.55; white-space: pre-wrap; }
+.architecture-panel { margin: 12px 24px 0; padding: 16px; border: 1px solid rgba(126,167,255,.3); border-radius: 12px; background: linear-gradient(145deg, rgba(32,42,67,.98), rgba(24,29,40,.98)); }
+.architecture-files { width: 100%; min-height: 150px; margin: 12px 0; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); font-family: Consolas, monospace; font-size: 11px; resize: vertical; }
+.architecture-output { max-height: 330px; margin: 12px 0 0; padding: 11px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: rgba(10,12,18,.55); color: #dbe4f1; font-size: 11px; line-height: 1.55; white-space: pre-wrap; }
 .git-file { display: flex; align-items: center; gap: 5px; margin-top: 5px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); }
 .git-file-status { flex: 0 0 22px; color: var(--accent); font-family: Consolas, monospace; font-size: 9px; }
 .git-file-path { min-width: 0; flex: 1; overflow: hidden; color: var(--muted); font-family: Consolas, monospace; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }

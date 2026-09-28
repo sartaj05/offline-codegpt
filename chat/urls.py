@@ -34,6 +34,7 @@ urlpatterns = [
     path("api/models/route/", views.model_route, name="model_route"),
     path("api/devcontainers/generate/", views.devcontainer_generate, name="devcontainer_generate"),
     path("api/incidents/analyze/", views.incident_analyze, name="incident_analyze"),
+    path("api/architecture/analyze/", views.architecture_analyze, name="architecture_analyze"),
     path("api/mcp/connectors/", views.mcp_connectors, name="mcp_connectors"),
     path("api/mcp/connectors/<int:connector_id>/", views.mcp_connector_delete, name="mcp_connector_delete"),
     path("api/mcp/", views.mcp_rpc, name="mcp_rpc"),

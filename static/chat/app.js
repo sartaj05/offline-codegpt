@@ -75,6 +75,9 @@ const incidentLogs = document.getElementById("incidentLogs");
 const incidentTraces = document.getElementById("incidentTraces");
 const incidentMetrics = document.getElementById("incidentMetrics");
 const incidentOutput = document.getElementById("incidentOutput");
+const architecturePanel = document.getElementById("architecturePanel");
+const architectureFiles = document.getElementById("architectureFiles");
+const architectureOutput = document.getElementById("architectureOutput");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -646,6 +649,30 @@ async function analyzeIncident() {
             "\n\nPostmortem draft:\n" + data.postmortem;
     } catch (error) {
         incidentOutput.innerText = "Incident error: " + error;
+    }
+}
+
+function toggleArchitecture() {
+    if (!architecturePanel) return;
+    architecturePanel.hidden = !architecturePanel.hidden;
+}
+
+async function analyzeArchitecture() {
+    architectureOutput.innerText = "Building architecture graph...";
+    try {
+        const response = await fetch("/api/architecture/analyze/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ files_json: architectureFiles.value }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Architecture analysis failed.");
+        architectureOutput.innerText = data.summary + "\n" + data.warnings.join("\n") +
+            "\n\nRelationships:\n" + (data.edges.length ? data.edges.map(edge => edge.from + " -> " + edge.to).join("\n") : "No local relationships detected.") +
+            "\n\nRoutes:\n" + (data.routes.length ? data.routes.map(route => route.file + " " + route.route).join("\n") : "No routes detected.") +
+            "\n\nCycles:\n" + (data.cycles.length ? data.cycles.map(cycle => cycle.join(" -> ")).join("\n") : "None");
+    } catch (error) {
+        architectureOutput.innerText = "Architecture error: " + error;
     }
 }
 
