@@ -556,12 +556,37 @@ body {
 }
 
 .message-content pre {
+    position: relative;
     margin: 14px 0;
     padding: 14px;
     overflow-x: auto;
     background: #202123;
     border: 1px solid #565869;
     border-radius: 8px;
+}
+
+.code-actions,
+.message-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.code-copy-button,
+.message-actions button {
+    border: 1px solid #565869;
+    border-radius: 6px;
+    background: #343541;
+    color: #c5c5d2;
+    cursor: pointer;
+    padding: 5px 9px;
+    font-size: 12px;
+}
+
+.code-copy-button:hover,
+.message-actions button:hover {
+    color: #fff;
+    background: #4d4e5c;
 }
 
 .message-content code {

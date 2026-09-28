@@ -54,6 +54,7 @@ function renderMessageContent(element, content) {
     let cursor = 0;
     let match;
     element.innerHTML = "";
+    element.dataset.rawContent = content;
 
     while ((match = fence.exec(content)) !== null) {
         if (match.index > cursor) {
@@ -65,6 +66,15 @@ function renderMessageContent(element, content) {
         code.className = `language-${match[1] || "text"}`;
         code.innerHTML = highlightCode(match[2].replace(/\n$/, ""), match[1]);
         pre.appendChild(code);
+        const copyCodeButton = document.createElement("button");
+        copyCodeButton.type = "button";
+        copyCodeButton.className = "code-copy-button";
+        copyCodeButton.innerText = "Copy code";
+        copyCodeButton.onclick = () => copyText(match[2].replace(/\n$/, ""), copyCodeButton);
+        const codeActions = document.createElement("div");
+        codeActions.className = "code-actions";
+        codeActions.appendChild(copyCodeButton);
+        pre.appendChild(codeActions);
         element.appendChild(pre);
         cursor = fence.lastIndex;
     }
@@ -74,6 +84,45 @@ function renderMessageContent(element, content) {
     } else if (cursor < content.length) {
         element.appendChild(document.createTextNode(content.slice(cursor)));
     }
+}
+
+async function copyText(text, button) {
+    try {
+        await navigator.clipboard.writeText(text);
+        const original = button.innerText;
+        button.innerText = "Copied";
+        setTimeout(() => { button.innerText = original; }, 1200);
+    } catch (error) {
+        alert("Unable to copy text: " + error);
+    }
+}
+
+function downloadText(filename, text) {
+    const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
+function addAssistantActions(element) {
+    const actions = document.createElement("div");
+    actions.className = "message-actions";
+
+    const copyButton = document.createElement("button");
+    copyButton.type = "button";
+    copyButton.innerText = "Copy answer";
+    copyButton.onclick = () => copyText(element.dataset.rawContent || element.innerText, copyButton);
+
+    const downloadButton = document.createElement("button");
+    downloadButton.type = "button";
+    downloadButton.innerText = "Download .md";
+    downloadButton.onclick = () => downloadText("offline-codegpt-answer.md", element.dataset.rawContent || element.innerText);
+
+    actions.append(copyButton, downloadButton);
+    element.parentElement.appendChild(actions);
 }
 function clearWelcome() {
     const welcome = document.querySelector(".welcome");
@@ -121,6 +170,7 @@ function addMessage(role, content) {
     body.className = "message-content";
     if (role === "assistant") {
         renderMessageContent(body, content);
+        addAssistantActions(body);
     } else {
         body.innerText = content;
     }
