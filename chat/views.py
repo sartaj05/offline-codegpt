@@ -1,6 +1,8 @@
+import json
+
 import requests
 
-from django.http import JsonResponse
+from django.http import JsonResponse, StreamingHttpResponse
 from django.shortcuts import render, get_object_or_404
 from django.views.decorators.http import require_POST
 
@@ -9,6 +11,11 @@ from .models import ChatSession, ChatMessage
 
 OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
 MODEL_NAME = "qwen2.5-coder:1.5b"
+
+
+def _event(payload):
+    """Serialize one newline-delimited JSON event for the chat client."""
+    return json.dumps(payload, ensure_ascii=False) + "\n"
 
 
 def index(request):
@@ -167,9 +174,10 @@ Instructions:
             json={
                 "model": MODEL_NAME,
                 "prompt": full_prompt,
-                "stream": False
+                "stream": True
             },
-            timeout=300
+            timeout=(10, 300),
+            stream=True,
         )
 
         if response.status_code != 200:
@@ -178,8 +186,49 @@ Instructions:
                 "error": response.text
             }, status=500)
 
-        data = response.json()
-        answer = data.get("response", "").strip()
+        def stream_answer():
+            answer_parts = []
+
+            try:
+                for raw_line in response.iter_lines(decode_unicode=True):
+                    if not raw_line:
+                        continue
+
+                    data = json.loads(raw_line)
+                    token = data.get("response", "")
+                    if token:
+                        answer_parts.append(token)
+                        yield _event({"type": "token", "token": token})
+
+                    if data.get("done"):
+                        break
+
+                answer = "".join(answer_parts).strip()
+                ChatMessage.objects.create(
+                    session=session,
+                    role="assistant",
+                    content=answer,
+                    model_name=MODEL_NAME,
+                )
+                session.save(update_fields=["updated_at"])
+                yield _event({
+                    "type": "complete",
+                    "session_id": session.id,
+                    "title": session.title,
+                    "answer": answer,
+                })
+            except Exception as ex:
+                yield _event({
+                    "type": "error",
+                    "error": f"Unable to read the model stream: {str(ex)}",
+                })
+
+        streaming_response = StreamingHttpResponse(
+            stream_answer(),
+            content_type="application/x-ndjson",
+        )
+        streaming_response["Cache-Control"] = "no-cache"
+        return streaming_response
 
     except requests.exceptions.ConnectionError:
         return JsonResponse({
@@ -199,18 +248,3 @@ Instructions:
             "error": f"Unexpected error: {str(ex)}"
         }, status=500)
 
-    ChatMessage.objects.create(
-        session=session,
-        role="assistant",
-        content=answer
-    )
-
-    # Updates updated_at field
-    session.save()
-
-    return JsonResponse({
-        "success": True,
-        "session_id": session.id,
-        "title": session.title,
-        "answer": answer
-    })
