@@ -193,3 +193,39 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(results[0]["filename"], "source.py")
         self.assertEqual(results[0]["line_start"], 1)
         self.assertEqual(results[0]["line_end"], 3)
+
+    def test_chat_management_supports_search_rename_tags_pin_archive_and_delete(self):
+        matching = ChatSession.objects.create(owner=self.user, title="Bug review")
+        other = ChatSession.objects.create(owner=self.user, title="Release notes")
+
+        listing = self.client.get("/api/sessions/?q=bug")
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual([item["id"] for item in listing.json()["sessions"]], [matching.id])
+
+        renamed = self.client.post(
+            f"/api/session/{matching.id}/manage/",
+            {"action": "rename", "title": "Important bug review"},
+        )
+        self.assertEqual(renamed.json()["title"], "Important bug review")
+        tagged = self.client.post(
+            f"/api/session/{matching.id}/manage/",
+            {"action": "tag", "tags": "backend, urgent, backend"},
+        )
+        self.assertEqual(tagged.json()["tags"], ["backend", "urgent"])
+        pinned = self.client.post(
+            f"/api/session/{matching.id}/manage/",
+            {"action": "pin"},
+        )
+        self.assertTrue(pinned.json()["is_pinned"])
+        archived = self.client.post(
+            f"/api/session/{matching.id}/manage/",
+            {"action": "archive"},
+        )
+        self.assertTrue(archived.json()["success"])
+        self.assertEqual(self.client.get("/api/sessions/?q=bug").json()["sessions"], [])
+
+        deleted = self.client.post(
+            f"/api/session/{other.id}/manage/",
+            {"action": "delete"},
+        )
+        self.assertTrue(deleted.json()["deleted"])

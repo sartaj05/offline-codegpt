@@ -22,6 +22,8 @@ const searchInput = document.getElementById("searchInput");
 const searchResults = document.getElementById("searchResults");
 const projectStats = document.getElementById("projectStats");
 const projectFiles = document.getElementById("projectFiles");
+const chatSearch = document.getElementById("chatSearch");
+const chatHistory = document.getElementById("chatHistory");
 const csrfToken = document.getElementById("csrfToken").value;
 
 function updateActiveModel() {
@@ -354,6 +356,7 @@ async function readStream(response, output, userWrapper) {
             }
             renderMessageContent(output, event.answer);
             addSourceCitations(output, event.sources);
+            if (chatHistory) loadChatHistory();
         } else if (event.type === "error") {
             output.innerText = "Error:\n" + event.error;
         }
@@ -558,6 +561,103 @@ async function loadSession(sessionId) {
     }
 }
 
+function renderChatHistory(sessions) {
+    if (!chatHistory) return;
+    chatHistory.innerHTML = "";
+    if (!sessions.length) {
+        chatHistory.innerText = "No matching chats.";
+        return;
+    }
+
+    sessions.forEach(session => {
+        const row = document.createElement("div");
+        row.className = "history-row";
+
+        const loadButton = document.createElement("button");
+        loadButton.type = "button";
+        loadButton.className = "history-item";
+        loadButton.innerText = (session.is_pinned ? "Pinned | " : "") + session.title;
+        loadButton.title = session.title + " | " + session.updated_at;
+        loadButton.onclick = () => loadSession(session.id);
+        row.appendChild(loadButton);
+
+        if (session.tags.length) {
+            const tags = document.createElement("span");
+            tags.className = "history-tags";
+            tags.innerText = session.tags.join(", ");
+            row.appendChild(tags);
+        }
+
+        const actions = document.createElement("div");
+        actions.className = "history-actions";
+        [
+            ["Rename", "rename"],
+            ["Tag", "tag"],
+            [session.is_pinned ? "Unpin" : "Pin", "pin"],
+            ["Archive", "archive"],
+            ["Delete", "delete"],
+        ].forEach(([label, action]) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.innerText = label;
+            button.title = label + " chat";
+            button.onclick = event => {
+                event.stopPropagation();
+                manageChatSession(session, action);
+            };
+            actions.appendChild(button);
+        });
+        row.appendChild(actions);
+        chatHistory.appendChild(row);
+    });
+}
+
+async function loadChatHistory() {
+    if (!chatHistory) return;
+    const query = chatSearch ? chatSearch.value.trim() : "";
+    chatHistory.innerText = "Loading chats...";
+    try {
+        const response = await fetch("/api/sessions/?q=" + encodeURIComponent(query));
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load chats.");
+        renderChatHistory(data.sessions);
+    } catch (error) {
+        chatHistory.innerText = "Chat history unavailable.";
+    }
+}
+
+async function manageChatSession(session, action) {
+    const values = { action };
+    if (action === "rename") {
+        const title = prompt("Rename chat", session.title);
+        if (!title) return;
+        values.title = title;
+    }
+    if (action === "tag") {
+        const tags = prompt("Tags separated by commas", session.tags.join(", "));
+        if (tags === null) return;
+        values.tags = tags;
+    }
+    if (action === "delete" && !confirm("Delete this chat permanently?")) return;
+
+    try {
+        const response = await fetch("/api/session/" + session.id + "/manage/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams(values),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Chat update failed.");
+        if (action === "delete" && currentSessionId === session.id) newChat();
+        await loadChatHistory();
+    } catch (error) {
+        alert("Chat update failed: " + error);
+    }
+}
+
 function exportChat(format) {
     if (!currentSessionId) {
         alert("Send or open a chat before exporting it.");
@@ -683,6 +783,10 @@ if (searchInput) searchInput.addEventListener("keydown", function (event) {
     if (event.key === "Enter") searchProject();
 });
 
+if (chatSearch) chatSearch.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") loadChatHistory();
+});
+
 promptInput.addEventListener("keydown", function (event) {
     if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
@@ -693,3 +797,4 @@ promptInput.addEventListener("keydown", function (event) {
 modelInput.addEventListener("change", updateActiveModel);
 updateActiveModel();
 if (projectFiles) loadProjectWorkspace();
+if (chatHistory) loadChatHistory();

@@ -42,6 +42,8 @@ class ChatSession(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     is_pinned = models.BooleanField(default=False)
+    is_archived = models.BooleanField(default=False)
+    tags = models.CharField(max_length=300, blank=True, default="")
 
     def __str__(self):
         return self.title

@@ -25,11 +25,11 @@
         <div class="history-title">{% if request.user.is_authenticated %}Your recent chats{% else %}Free mode{% endif %}</div>
         <div class="history-list">
             {% if request.user.is_authenticated %}
-                {% for session in sessions %}
-                    <button class="history-item" onclick="loadSession('{{ session.id }}')">{{ session.title }}</button>
-                {% empty %}
-                    <div class="no-history">Your saved chats will appear here.</div>
-                {% endfor %}
+                <div class="chat-history-tools">
+                    <input id="chatSearch" type="search" placeholder="Search chats...">
+                    <button type="button" onclick="loadChatHistory()">Search</button>
+                </div>
+                <div id="chatHistory"><div class="no-history">Loading chats...</div></div>
             {% else %}
                 <div class="guest-card">
                     <span class="guest-card-icon">◌</span>

@@ -14,7 +14,7 @@ import requests
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.db.models import Count, Min
+from django.db.models import Count, Min, Q
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods, require_POST
@@ -211,7 +211,8 @@ def logout_view(request):
 
 def index(request):
     sessions = (
-        ChatSession.objects.filter(owner=request.user).order_by("-updated_at")[:30]
+        ChatSession.objects.filter(owner=request.user, is_archived=False)
+        .order_by("-is_pinned", "-updated_at")[:30]
         if request.user.is_authenticated
         else ChatSession.objects.none()
     )
@@ -227,6 +228,69 @@ def model_list(request):
         "success": True,
         "models": _available_models(),
         "default_model": DEFAULT_MODEL,
+    })
+
+
+@login_required(login_url="/login/")
+def session_list(request):
+    query = request.GET.get("q", "").strip()
+    sessions = ChatSession.objects.filter(
+        owner=request.user,
+        is_archived=False,
+    )
+    if query:
+        sessions = sessions.filter(
+            Q(title__icontains=query) | Q(messages__content__icontains=query)
+        ).distinct()
+    sessions = sessions.order_by("-is_pinned", "-updated_at")[:100]
+    return JsonResponse({
+        "success": True,
+        "sessions": [
+            {
+                "id": session.id,
+                "title": session.title,
+                "is_pinned": session.is_pinned,
+                "tags": [tag.strip() for tag in session.tags.split(",") if tag.strip()],
+                "updated_at": session.updated_at.strftime("%d-%m-%Y %H:%M"),
+            }
+            for session in sessions
+        ],
+    })
+
+
+@login_required(login_url="/login/")
+@require_POST
+def manage_session(request, session_id):
+    session = get_object_or_404(ChatSession, id=session_id, owner=request.user)
+    action = request.POST.get("action", "").strip().lower()
+
+    if action == "rename":
+        title = request.POST.get("title", "").strip()[:200]
+        if not title:
+            return JsonResponse({"success": False, "error": "A chat title is required."}, status=400)
+        session.title = title
+    elif action == "tag":
+        tags = request.POST.get("tags", "")
+        session.tags = ",".join(dict.fromkeys(
+            tag.strip()[:40] for tag in tags.split(",") if tag.strip()
+        ))[:300]
+    elif action == "pin":
+        session.is_pinned = not session.is_pinned
+    elif action == "archive":
+        session.is_archived = True
+    elif action == "delete":
+        session.delete()
+        return JsonResponse({"success": True, "deleted": True})
+    else:
+        return JsonResponse({"success": False, "error": "Unsupported chat action."}, status=400)
+
+    session.save()
+    return JsonResponse({
+        "success": True,
+        "id": session.id,
+        "title": session.title,
+        "is_pinned": session.is_pinned,
+        "tags": [tag.strip() for tag in session.tags.split(",") if tag.strip()],
     })
 
 
