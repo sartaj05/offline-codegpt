@@ -415,6 +415,23 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(pull_request.json()["success"])
         self.assertEqual(pull_request.json()["number"], 8)
 
+    def test_local_cli_endpoint_streams_without_csrf(self):
+        class FakeResponse:
+            status_code = 200
+            text = ""
+
+            def iter_lines(self, decode_unicode=True):
+                return [
+                    json.dumps({"response": "CLI answer"}).encode(),
+                    json.dumps({"done": True}).encode(),
+                ]
+
+        with patch("chat.views.requests.post", return_value=FakeResponse()):
+            response = self.client.post("/api/cli/ask/", {"prompt": "Explain this", "code": "print('hi')"})
+            output = b"".join(response.streaming_content).decode()
+        self.assertIn('"type": "token"', output)
+        self.assertIn("CLI answer", output)
+
     def test_rag_results_include_source_line_ranges(self):
         source = "first" + chr(10) + "needle = True" + chr(10) + "last"
         document = KnowledgeDocument.objects.create(

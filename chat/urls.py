@@ -33,6 +33,7 @@ urlpatterns = [
     path("api/remote/repositories/", views.remote_repositories, name="remote_repositories"),
     path("api/remote/issues/", views.remote_issues, name="remote_issues"),
     path("api/remote/pull-request/", views.remote_pull_request, name="remote_pull_request"),
+    path("api/cli/ask/", views.cli_ask, name="cli_ask"),
     path("api/session/<int:session_id>/", views.session_messages, name="session_messages"),
     path("api/session/<int:session_id>/revisions/", views.session_revisions, name="session_revisions"),
     path("api/session/<int:session_id>/export/", views.export_session, name="export_session"),

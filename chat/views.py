@@ -21,6 +21,7 @@ from django.db.models import Count, Min, Q
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
+from django.views.decorators.csrf import csrf_exempt
 
 from .models import (
     ChatMessage,
@@ -315,6 +316,14 @@ def remote_pull_request(request):
         return error
     data = response.json()
     return JsonResponse({"success": True, "url": data.get("html_url") or data.get("web_url"), "number": data.get("number") or data.get("iid")})
+
+
+@csrf_exempt
+@require_POST
+def cli_ask(request):
+    if request.META.get("REMOTE_ADDR") not in {"127.0.0.1", "::1", "localhost"}:
+        return JsonResponse({"success": False, "error": "CLI access is limited to the local machine."}, status=403)
+    return ask_code(request)
 
 
 def _user_ollama_settings(user):

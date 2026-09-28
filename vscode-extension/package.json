@@ -1,0 +1,38 @@
+{
+  "name": "syntax-local-ai",
+  "displayName": "Syntax Local AI",
+  "description": "Use your local Syntax Local AI server inside VS Code.",
+  "version": "0.1.0",
+  "publisher": "syntax-local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onCommand:syntaxLocalAI.askSelection",
+    "onCommand:syntaxLocalAI.reviewFile"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "syntaxLocalAI.askSelection",
+        "title": "Syntax Local AI: Ask About Selection"
+      },
+      {
+        "command": "syntaxLocalAI.reviewFile",
+        "title": "Syntax Local AI: Review Current File"
+      }
+    ],
+    "configuration": {
+      "title": "Syntax Local AI",
+      "properties": {
+        "syntaxLocalAI.serverUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8000",
+          "description": "Local Syntax Local AI server URL."
+        }
+      }
+    }
+  }
+}
