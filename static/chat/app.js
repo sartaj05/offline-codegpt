@@ -29,6 +29,13 @@ const mcpOutput = document.getElementById("mcpOutput");
 const observabilityPanel = document.getElementById("observabilityPanel");
 const observabilityStats = document.getElementById("observabilityStats");
 const observabilityOutput = document.getElementById("observabilityOutput");
+const workspacePanel = document.getElementById("workspacePanel");
+const workspaceName = document.getElementById("workspaceName");
+const workspaceMember = document.getElementById("workspaceMember");
+const workspaceRole = document.getElementById("workspaceRole");
+const workspaceSummary = document.getElementById("workspaceSummary");
+const workspaceMembers = document.getElementById("workspaceMembers");
+const workspaceAudit = document.getElementById("workspaceAudit");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -290,6 +297,64 @@ async function loadObservability() {
             : "No AI activity recorded yet.";
     } catch (error) {
         observabilityOutput.innerText = "Metrics error: " + error;
+    }
+}
+
+function toggleWorkspace() {
+    if (!workspacePanel) return;
+    workspacePanel.hidden = !workspacePanel.hidden;
+    if (!workspacePanel.hidden) loadWorkspace();
+}
+
+function renderWorkspace(workspace) {
+    workspaceSummary.innerText = workspace.name + " · owner " + workspace.owner;
+    workspaceMembers.innerText = "Members\n\n" + workspace.members.map(member => member.username + " · " + member.role).join("\n");
+    workspaceAudit.innerText = "Recent audit events\n\n" + (workspace.audit.length
+        ? workspace.audit.map(event => event.created_at + " · " + event.event_type + " · " + event.actor).join("\n")
+        : "No audit events yet.");
+}
+
+async function workspaceRequest(values) {
+    const response = await fetch("/api/workspace/", {
+        method: "POST",
+        headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(values),
+    });
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error || "Workspace action failed.");
+    renderWorkspace(data.workspace);
+}
+
+async function loadWorkspace() {
+    if (!workspaceSummary) return;
+    workspaceSummary.innerText = "Loading workspace...";
+    try {
+        const response = await fetch("/api/workspace/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load workspace.");
+        renderWorkspace(data.workspace);
+    } catch (error) {
+        workspaceSummary.innerText = "Workspace error: " + error;
+    }
+}
+
+async function createWorkspace() {
+    if (!workspaceName.value.trim()) return;
+    try {
+        await workspaceRequest({ action: "create", name: workspaceName.value.trim() });
+        workspaceName.value = "";
+    } catch (error) {
+        workspaceSummary.innerText = "Workspace error: " + error;
+    }
+}
+
+async function addWorkspaceMember() {
+    if (!workspaceMember.value.trim()) return;
+    try {
+        await workspaceRequest({ action: "add_member", username: workspaceMember.value.trim(), role: workspaceRole.value });
+        workspaceMember.value = "";
+    } catch (error) {
+        workspaceSummary.innerText = "Workspace error: " + error;
     }
 }
 

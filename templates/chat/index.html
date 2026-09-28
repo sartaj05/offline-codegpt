@@ -89,6 +89,7 @@
                     <button type="button" onclick="toggleRemoteIntegration()">Remote</button>
                     <button type="button" onclick="toggleMcpPanel()">Tools</button>
                     <button type="button" onclick="toggleObservability()">Metrics</button>
+                    <button type="button" onclick="toggleWorkspace()">Team</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -195,6 +196,32 @@
             </div>
             <div id="observabilityStats" class="observability-stats"></div>
             <pre id="observabilityOutput" class="observability-output">Open Metrics to load your local AI activity.</pre>
+        </section>
+        <section id="workspacePanel" class="workspace-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Team workspace</strong>
+                    <span>Roles, member access, and governance audit history.</span>
+                </div>
+                <div class="panel-actions">
+                    <button type="button" onclick="loadWorkspace()">Refresh</button>
+                    <button type="button" onclick="toggleWorkspace()">Close</button>
+                </div>
+            </div>
+            <div class="workspace-create-row">
+                <input id="workspaceName" placeholder="New workspace name">
+                <button type="button" onclick="createWorkspace()">Create workspace</button>
+            </div>
+            <div class="workspace-member-row">
+                <input id="workspaceMember" placeholder="Username to add">
+                <select id="workspaceRole"><option value="developer">Developer</option><option value="reviewer">Reviewer</option><option value="viewer">Viewer</option><option value="admin">Admin</option></select>
+                <button type="button" onclick="addWorkspaceMember()">Add member</button>
+            </div>
+            <div id="workspaceSummary" class="workspace-summary">Loading workspace...</div>
+            <div class="workspace-columns">
+                <pre id="workspaceMembers" class="workspace-output"></pre>
+                <pre id="workspaceAudit" class="workspace-output"></pre>
+            </div>
         </section>
 
         <section id="chatBox" class="chat-box">

@@ -23,6 +23,7 @@ urlpatterns = [
     path("api/agent/task/<int:task_id>/run/", views.agent_run, name="agent_run"),
     path("api/agent/task/<int:task_id>/control/", views.agent_control, name="agent_control"),
     path("api/observability/", views.ai_observability, name="ai_observability"),
+    path("api/workspace/", views.workspace_api, name="workspace_api"),
     path("api/mcp/connectors/", views.mcp_connectors, name="mcp_connectors"),
     path("api/mcp/connectors/<int:connector_id>/", views.mcp_connector_delete, name="mcp_connector_delete"),
     path("api/mcp/", views.mcp_rpc, name="mcp_rpc"),

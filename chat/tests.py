@@ -7,7 +7,7 @@ from django.test import TestCase
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import AiEvent, ChatMessage, ChatSession, KnowledgeChunk, KnowledgeDocument
+from .models import AiEvent, AuditEvent, ChatMessage, ChatSession, KnowledgeChunk, KnowledgeDocument, WorkspaceMembership
 from .views import _search_knowledge
 
 
@@ -83,6 +83,33 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(dashboard.status_code, 200)
         self.assertEqual(dashboard.json()["summary"]["events"], 1)
         self.assertEqual(dashboard.json()["summary"]["success_rate"], 100.0)
+
+    def test_workspace_roles_and_audit_log(self):
+        created = self.client.post("/api/workspace/", {"action": "create", "name": "Core team"})
+        self.assertEqual(created.status_code, 200)
+        workspace = created.json()["workspace"]
+        member_user = User.objects.create_user(username="reviewer", password="review-password-123")
+
+        added = self.client.post("/api/workspace/", {
+            "action": "add_member",
+            "username": member_user.username,
+            "role": "reviewer",
+        })
+        self.assertEqual(added.status_code, 200)
+        self.assertEqual(
+            WorkspaceMembership.objects.get(workspace_id=workspace["id"], user=member_user).role,
+            "reviewer",
+        )
+        self.assertGreaterEqual(AuditEvent.objects.filter(workspace_id=workspace["id"]).count(), 2)
+
+        self.client.logout()
+        self.client.login(username=member_user.username, password="review-password-123")
+        denied = self.client.post("/api/workspace/", {
+            "action": "add_member",
+            "username": self.user.username,
+            "role": "viewer",
+        })
+        self.assertEqual(denied.status_code, 403)
 
     def test_quality_endpoint_finds_security_issue(self):
         response = self.client.post("/api/analyze/", {

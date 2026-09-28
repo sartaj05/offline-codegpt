@@ -113,6 +113,39 @@ class AiEvent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class Workspace(models.Model):
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="owned_workspaces")
+    name = models.CharField(max_length=120)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class WorkspaceMembership(models.Model):
+    ROLE_CHOICES = (
+        ("admin", "Admin"),
+        ("developer", "Developer"),
+        ("reviewer", "Reviewer"),
+        ("viewer", "Viewer"),
+    )
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="memberships")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="workspace_memberships")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="developer")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["workspace", "user"], name="unique_workspace_member"),
+        ]
+
+
+class AuditEvent(models.Model):
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="audit_events")
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="audit_events")
+    event_type = models.CharField(max_length=80)
+    details = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class ChatSession(models.Model):
     owner = models.ForeignKey(
         User,

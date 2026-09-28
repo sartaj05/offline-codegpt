@@ -34,7 +34,10 @@ from .models import (
     McpToolCall,
     AgentTask,
     AiEvent,
+    AuditEvent,
     UserOllamaSettings,
+    Workspace,
+    WorkspaceMembership,
 )
 from .quality import analyze_code_quality
 from .sandbox import run_sandboxed_code
@@ -1105,6 +1108,140 @@ def ai_observability(request):
             for event in events
         ],
     })
+
+
+def _workspace_for_user(user):
+    membership = (
+        WorkspaceMembership.objects.filter(user=user)
+        .select_related("workspace")
+        .order_by("workspace_id")
+        .first()
+    )
+    if membership:
+        return membership.workspace
+    workspace = Workspace.objects.create(owner=user, name=f"{user.username}'s workspace")
+    WorkspaceMembership.objects.create(workspace=workspace, user=user, role="admin")
+    AuditEvent.objects.create(
+        actor=user,
+        workspace=workspace,
+        event_type="workspace.created",
+        details={"name": workspace.name},
+    )
+    return workspace
+
+
+def _workspace_membership(user, workspace):
+    return WorkspaceMembership.objects.filter(user=user, workspace=workspace).first()
+
+
+def _workspace_payload(workspace):
+    members = (
+        WorkspaceMembership.objects.filter(workspace=workspace)
+        .select_related("user")
+        .order_by("user__username")
+    )
+    audits = (
+        AuditEvent.objects.filter(workspace=workspace)
+        .select_related("actor")
+        .order_by("-created_at")[:50]
+    )
+    return {
+        "id": workspace.id,
+        "name": workspace.name,
+        "owner": workspace.owner.username,
+        "members": [
+            {"id": member.id, "username": member.user.username, "role": member.role}
+            for member in members
+        ],
+        "audit": [
+            {
+                "event_type": event.event_type,
+                "actor": event.actor.username if event.actor else "system",
+                "details": event.details,
+                "created_at": event.created_at.isoformat(),
+            }
+            for event in audits
+        ],
+    }
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def workspace_api(request):
+    workspace = None
+    workspace_id = (
+        request.POST.get("workspace_id")
+        or request.GET.get("workspace_id")
+        or request.session.get("workspace_id")
+    )
+    if workspace_id:
+        try:
+            candidate = get_object_or_404(Workspace, id=int(workspace_id))
+            if _workspace_membership(request.user, candidate):
+                workspace = candidate
+        except (TypeError, ValueError):
+            workspace = None
+    if workspace is None:
+        workspace = _workspace_for_user(request.user)
+    membership = _workspace_membership(request.user, workspace)
+    if not membership:
+        return JsonResponse({"success": False, "error": "You are not a workspace member."}, status=403)
+    request.session["workspace_id"] = workspace.id
+
+    if request.method == "POST":
+        action = request.POST.get("action", "").strip().lower()
+        if action == "create":
+            name = request.POST.get("name", "").strip()[:120]
+            if not name:
+                return JsonResponse({"success": False, "error": "Workspace name is required."}, status=400)
+            workspace = Workspace.objects.create(owner=request.user, name=name)
+            WorkspaceMembership.objects.create(workspace=workspace, user=request.user, role="admin")
+            AuditEvent.objects.create(actor=request.user, workspace=workspace, event_type="workspace.created", details={"name": name})
+            request.session["workspace_id"] = workspace.id
+        elif action == "add_member":
+            if membership.role != "admin":
+                return JsonResponse({"success": False, "error": "Only workspace admins can manage members."}, status=403)
+            username = request.POST.get("username", "").strip()
+            role = request.POST.get("role", "developer").strip()
+            if role not in dict(WorkspaceMembership.ROLE_CHOICES):
+                return JsonResponse({"success": False, "error": "Invalid workspace role."}, status=400)
+            target = get_object_or_404(User, username=username)
+            member, _ = WorkspaceMembership.objects.update_or_create(
+                workspace=workspace,
+                user=target,
+                defaults={"role": role},
+            )
+            AuditEvent.objects.create(
+                actor=request.user,
+                workspace=workspace,
+                event_type="member.role_changed",
+                details={"username": target.username, "role": member.role},
+            )
+        elif action == "set_role":
+            if membership.role != "admin":
+                return JsonResponse({"success": False, "error": "Only workspace admins can manage roles."}, status=403)
+            member = get_object_or_404(WorkspaceMembership, id=request.POST.get("member_id"), workspace=workspace)
+            role = request.POST.get("role", "").strip()
+            if role not in dict(WorkspaceMembership.ROLE_CHOICES):
+                return JsonResponse({"success": False, "error": "Invalid workspace role."}, status=400)
+            member.role = role
+            member.save(update_fields=["role"])
+            AuditEvent.objects.create(actor=request.user, workspace=workspace, event_type="member.role_changed", details={"username": member.user.username, "role": role})
+        elif action == "remove_member":
+            if membership.role != "admin":
+                return JsonResponse({"success": False, "error": "Only workspace admins can remove members."}, status=403)
+            member = get_object_or_404(WorkspaceMembership, id=request.POST.get("member_id"), workspace=workspace)
+            if member.user_id == workspace.owner_id:
+                return JsonResponse({"success": False, "error": "The workspace owner cannot be removed."}, status=400)
+            username = member.user.username
+            member.delete()
+            AuditEvent.objects.create(actor=request.user, workspace=workspace, event_type="member.removed", details={"username": username})
+        elif action not in {"", "switch"}:
+            return JsonResponse({"success": False, "error": "Unsupported workspace action."}, status=400)
+
+    return JsonResponse({"success": True, "workspace": _workspace_payload(workspace)})
+
+
 def _mcp_tools():
     return [
         {"name": "project.search", "description": "Search indexed project code.", "write": False},
