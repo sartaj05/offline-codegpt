@@ -1,4 +1,5 @@
 let currentSessionId = null;
+let editingMessage = null;
 
 const chatBox = document.getElementById("chatBox");
 const promptInput = document.getElementById("promptInput");
@@ -132,9 +133,108 @@ function addAssistantActions(element) {
     actions.append(copyButton, downloadButton);
     element.parentElement.appendChild(actions);
 }
+
+function restoreFileSelection(input, files) {
+    if (!input) return;
+    input.value = "";
+    if (!files || !files.length || typeof DataTransfer === "undefined") return;
+    const transfer = new DataTransfer();
+    files.forEach(file => transfer.items.add(file));
+    input.files = transfer.files;
+}
+
+function addUserDetails(column, payload) {
+    const details = document.createElement("details");
+    details.className = "message-details-panel";
+
+    const summary = document.createElement("summary");
+    summary.innerText = "View request details";
+    details.appendChild(summary);
+
+    const metadata = document.createElement("div");
+    metadata.className = "request-meta";
+    const parts = [
+        payload.model ? "Model: " + payload.model : "",
+        payload.language ? "Language: " + payload.language : "",
+        payload.prompt ? "Prompt included" : "",
+        payload.code ? payload.code.length.toLocaleString() + " code characters" : "",
+        payload.fileNames.length ? payload.fileNames.length + " file(s)" : "",
+        payload.imageNames.length ? payload.imageNames.length + " image(s)" : "",
+    ].filter(Boolean);
+    metadata.innerText = parts.join("  |  ");
+    details.appendChild(metadata);
+
+    if (payload.code) {
+        const codeLabel = document.createElement("div");
+        codeLabel.className = "detail-label";
+        codeLabel.innerText = "Full code";
+        const codeBlock = document.createElement("pre");
+        codeBlock.innerText = payload.code;
+        details.append(codeLabel, codeBlock);
+    }
+
+    if (payload.fileNames.length || payload.imageNames.length) {
+        const filesLabel = document.createElement("div");
+        filesLabel.className = "detail-label";
+        filesLabel.innerText = "Attachments";
+        const filesList = document.createElement("div");
+        filesList.className = "attachment-list";
+        filesList.innerText = [...payload.fileNames, ...payload.imageNames].join("\n");
+        details.append(filesLabel, filesList);
+    }
+
+    column.appendChild(details);
+}
+
+function addUserActions(column, wrapper, payload) {
+    const actions = document.createElement("div");
+    actions.className = "message-actions";
+
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.innerText = "Edit message";
+    editButton.onclick = () => {
+        editingMessage = wrapper;
+        wrapper.classList.add("editing-message");
+        promptInput.value = payload.prompt || "";
+        codeInput.value = payload.code || "";
+        if (modelInput && payload.model) modelInput.value = payload.model;
+        if (languageInput && payload.language) languageInput.value = payload.language;
+        restoreFileSelection(fileInput, payload.fileFiles);
+        restoreFileSelection(folderInput, payload.folderFiles);
+        restoreFileSelection(imageInput, payload.imageFiles);
+        updateActiveModel();
+        sendStatus.textContent = "Editing message - update it and press Send.";
+        promptInput.focus();
+        promptInput.scrollIntoView({ behavior: "smooth", block: "center" });
+    };
+
+    actions.appendChild(editButton);
+    column.appendChild(actions);
+}
+
 function clearWelcome() {
     const welcome = document.querySelector(".welcome");
     if (welcome) welcome.remove();
+}
+
+function parseStoredUserMessage(content, model) {
+    const promptMatch = content.match(/^Prompt:\n([\s\S]*?)(?=\n\n(?:Uploaded Files|Uploaded Images|Code):|$)/);
+    const filesMatch = content.match(/\n\nUploaded Files:\n([\s\S]*?)(?=\n\n(?:Uploaded Images|Code):|$)/);
+    const imagesMatch = content.match(/\n\nUploaded Images:\n([\s\S]*?)(?=\n\nCode:|$)/);
+    const codeMatch = content.match(/\n\nCode:\n([\s\S]*)$/);
+    const names = value => value ? value.split("\n").map(item => item.trim()).filter(Boolean) : [];
+    return {
+        prompt: promptMatch ? promptMatch[1].trim() : "",
+        code: codeMatch ? codeMatch[1] : "",
+        model: model || "",
+        language: "auto",
+        fileFiles: [],
+        folderFiles: [],
+        imageFiles: [],
+        fileNames: names(filesMatch && filesMatch[1]),
+        imageNames: names(imagesMatch && imagesMatch[1]),
+    };
 }
 
 function setPrompt(text) {
@@ -144,6 +244,8 @@ function setPrompt(text) {
 
 function newChat() {
     currentSessionId = null;
+    editingMessage = null;
+    sendStatus.textContent = "";
     chatBox.innerHTML = `
         <div class="welcome">
             <h1>How can I help with your code?</h1>
@@ -162,7 +264,7 @@ function newChat() {
     if (imageInput) imageInput.value = "";
 }
 
-function addMessage(role, content) {
+function addMessage(role, content, options = {}) {
     clearWelcome();
 
     const wrapper = document.createElement("div");
@@ -175,16 +277,23 @@ function addMessage(role, content) {
     avatar.className = "avatar " + (role === "user" ? "user-avatar" : "ai-avatar");
     avatar.innerText = role === "user" ? "U" : "AI";
 
+    const column = document.createElement("div");
+    column.className = "message-column";
     const body = document.createElement("div");
     body.className = "message-content";
     if (role === "assistant") {
         renderMessageContent(body, content);
-        addAssistantActions(body);
     } else {
         body.innerText = content;
     }
 
-    inner.append(avatar, body);
+    column.appendChild(body);
+    if (role === "assistant") addAssistantActions(body);
+    if (role === "user" && options.payload) {
+        addUserDetails(column, options.payload);
+        addUserActions(column, wrapper, options.payload);
+    }
+    inner.append(avatar, column);
     wrapper.appendChild(inner);
     chatBox.appendChild(wrapper);
     chatBox.scrollTop = chatBox.scrollHeight;
@@ -226,13 +335,15 @@ async function readStream(response, output) {
 }
 
 async function sendMessage() {
+    if (sendBtn.disabled) return;
+
     const prompt = promptInput.value.trim();
     const code = codeInput.value.trim();
-    const files = [
-        ...(fileInput ? fileInput.files : []),
-        ...(folderInput ? folderInput.files : []),
-    ];
-    const images = imageInput ? [...imageInput.files] : [];
+    const fileFiles = fileInput ? [...fileInput.files] : [];
+    const folderFiles = folderInput ? [...folderInput.files] : [];
+    const imageFiles = imageInput ? [...imageInput.files] : [];
+    const files = [...fileFiles, ...folderFiles];
+    const images = imageFiles;
 
     if (!prompt && !code && files.length === 0 && images.length === 0) {
         alert("Please enter a prompt, paste code, or choose an upload.");
@@ -250,7 +361,27 @@ async function sendMessage() {
     }
     if (code) userText += "\n\nCode:\n" + code.substring(0, 2000);
 
-    addMessage("user", userText.trim());
+    if (editingMessage) {
+        const assistantMessage = editingMessage.nextElementSibling;
+        editingMessage.remove();
+        if (assistantMessage && assistantMessage.classList.contains("assistant-message")) {
+            assistantMessage.remove();
+        }
+        editingMessage = null;
+    }
+
+    const payload = {
+        prompt,
+        code,
+        model: modelInput.value,
+        language: languageInput.value,
+        fileFiles,
+        folderFiles,
+        imageFiles,
+        fileNames: files.map(file => file.webkitRelativePath || file.name),
+        imageNames: images.map(image => image.name),
+    };
+    addMessage("user", userText.trim(), { payload });
     promptInput.value = "";
     sendBtn.disabled = true;
     sendBtn.innerText = "Generating...";
@@ -372,7 +503,12 @@ async function loadSession(sessionId) {
 
         currentSessionId = data.session_id;
         chatBox.innerHTML = "";
-        data.messages.forEach(message => addMessage(message.role, message.content));
+        data.messages.forEach(message => {
+            const options = message.role === "user"
+                ? { payload: parseStoredUserMessage(message.content, data.model) }
+                : {};
+            addMessage(message.role, message.content, options);
+        });
     } catch (error) {
         alert("Error loading chat: " + error);
     }
