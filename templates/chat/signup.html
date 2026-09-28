@@ -3,22 +3,43 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Create account · Offline CodeGPT</title>
     <link rel="stylesheet" href="{% static 'chat/app.css' %}">
 </head>
 <body class="auth-page">
-    <main class="auth-card">
-        <h1>Create account</h1>
-        <p>Your chat history and project knowledge stay scoped to your account.</p>
-        {% if error %}<div class="auth-error">{{ error }}</div>{% endif %}
-        <form method="post">
-            {% csrf_token %}
-            <label>Username<input name="username" required autofocus></label>
-            <label>Password<input name="password" type="password" minlength="8" required></label>
-            <label>Confirm password<input name="confirmation" type="password" minlength="8" required></label>
-            <button type="submit">Create account</button>
-        </form>
-        <a href="{% url 'login' %}">Already have an account?</a>
-    </main>
+    <div class="auth-shell">
+        <section class="auth-showcase">
+            <a class="auth-logo" href="{% url 'chat_home' %}"><span>✦</span> Offline CodeGPT</a>
+            <div class="showcase-copy">
+                <div class="eyebrow">A BETTER WAY TO CODE</div>
+                <h1>Start free.<br><em>Stay local.</em><br>Ship faster.</h1>
+                <p>Basic chat is free. Create an account when you are ready for richer tools that keep your code on your own machine.</p>
+            </div>
+            <div class="showcase-features">
+                <span>◉ Free basic chat</span>
+                <span>◉ Folder uploads</span>
+                <span>◉ Image understanding</span>
+            </div>
+        </section>
+        <main class="auth-card">
+            <div class="auth-card-heading">
+                <div class="auth-mobile-mark">✦</div>
+                <div class="eyebrow">GET STARTED</div>
+                <h2>Create your workspace</h2>
+                <p>Free forever for local development.</p>
+            </div>
+            {% if error %}<div class="auth-error">{{ error }}</div>{% endif %}
+            <form method="post">
+                {% csrf_token %}
+                <label>Username<input name="username" autocomplete="username" required autofocus></label>
+                <label>Password<input name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+                <label>Confirm password<input name="confirmation" type="password" autocomplete="new-password" minlength="8" required></label>
+                <button type="submit">Create free account <span>↗</span></button>
+            </form>
+            <p class="auth-switch">Already have an account? <a href="{% url 'login' %}">Sign in</a></p>
+            <a class="guest-link" href="{% url 'chat_home' %}">← Try basic chat without signing up</a>
+        </main>
+    </div>
 </body>
 </html>

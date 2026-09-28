@@ -3,21 +3,42 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Sign in · Offline CodeGPT</title>
     <link rel="stylesheet" href="{% static 'chat/app.css' %}">
 </head>
 <body class="auth-page">
-    <main class="auth-card">
-        <h1>Offline CodeGPT</h1>
-        <p>Sign in to keep your chats and project files private.</p>
-        {% if error %}<div class="auth-error">{{ error }}</div>{% endif %}
-        <form method="post">
-            {% csrf_token %}
-            <label>Username<input name="username" required autofocus></label>
-            <label>Password<input name="password" type="password" required></label>
-            <button type="submit">Sign in</button>
-        </form>
-        <a href="{% url 'signup' %}">Create an account</a>
-    </main>
+    <div class="auth-shell">
+        <section class="auth-showcase">
+            <a class="auth-logo" href="{% url 'chat_home' %}"><span>✦</span> Offline CodeGPT</a>
+            <div class="showcase-copy">
+                <div class="eyebrow">LOCAL AI WORKSPACE</div>
+                <h1>Your code.<br><em>Your machine.</em><br>Your workflow.</h1>
+                <p>Sign in to keep project memory, uploads, image analysis, and chat history organized in one private workspace.</p>
+            </div>
+            <div class="showcase-features">
+                <span>◉ Private history</span>
+                <span>◉ Project RAG</span>
+                <span>◉ Vision uploads</span>
+            </div>
+        </section>
+        <main class="auth-card">
+            <div class="auth-card-heading">
+                <div class="auth-mobile-mark">✦</div>
+                <div class="eyebrow">WELCOME BACK</div>
+                <h2>Sign in to your workspace</h2>
+                <p>Continue where you left off.</p>
+            </div>
+            {% if error %}<div class="auth-error">{{ error }}</div>{% endif %}
+            <form method="post">
+                {% csrf_token %}
+                <label>Username<input name="username" autocomplete="username" required autofocus></label>
+                <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+                <button type="submit">Sign in <span>↗</span></button>
+            </form>
+            <p class="auth-switch">New here? <a href="{% url 'signup' %}">Create a free account</a></p>
+            <a class="guest-link" href="{% url 'chat_home' %}">← Continue without an account</a>
+        </main>
+    </div>
 </body>
 </html>
