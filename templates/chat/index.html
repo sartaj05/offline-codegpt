@@ -97,6 +97,7 @@
                     <button type="button" onclick="toggleBrowserTests()">Browser</button>
                     <button type="button" onclick="toggleModelRouter()">Router</button>
                     <button type="button" onclick="toggleDevcontainer()">Env</button>
+                    <button type="button" onclick="toggleIncident()">Incident</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -356,6 +357,22 @@
                 <button type="button" onclick="generateDevcontainer()">Generate devcontainer.json</button>
             </div>
             <pre id="devcontainerOutput" class="devcontainer-output">Dev Container configuration will appear here.</pre>
+        </section>
+        <section id="incidentPanel" class="incident-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Incident response assistant</strong>
+                    <span>Correlate logs, traces, and metrics into a local incident report.</span>
+                </div>
+                <button type="button" onclick="toggleIncident()">Close</button>
+            </div>
+            <div class="incident-grid">
+                <textarea id="incidentLogs" placeholder="Paste application or server logs..."></textarea>
+                <textarea id="incidentTraces" placeholder="Paste trace/span events..."></textarea>
+                <textarea id="incidentMetrics" placeholder="Paste metric snapshots..."></textarea>
+            </div>
+            <button type="button" onclick="analyzeIncident()">Analyze incident</button>
+            <pre id="incidentOutput" class="incident-output">Incident findings will appear here.</pre>
         </section>
 
         <section id="chatBox" class="chat-box">

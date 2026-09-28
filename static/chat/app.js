@@ -70,6 +70,11 @@ const routerOutput = document.getElementById("routerOutput");
 const devcontainerPanel = document.getElementById("devcontainerPanel");
 const devcontainerProjectName = document.getElementById("devcontainerProjectName");
 const devcontainerOutput = document.getElementById("devcontainerOutput");
+const incidentPanel = document.getElementById("incidentPanel");
+const incidentLogs = document.getElementById("incidentLogs");
+const incidentTraces = document.getElementById("incidentTraces");
+const incidentMetrics = document.getElementById("incidentMetrics");
+const incidentOutput = document.getElementById("incidentOutput");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -614,6 +619,33 @@ async function generateDevcontainer() {
         devcontainerOutput.innerText = data.path + "\n\n" + data.config + "\n\nNotes:\n- " + data.notes.join("\n- ");
     } catch (error) {
         devcontainerOutput.innerText = "Environment error: " + error;
+    }
+}
+
+function toggleIncident() {
+    if (!incidentPanel) return;
+    incidentPanel.hidden = !incidentPanel.hidden;
+}
+
+async function analyzeIncident() {
+    incidentOutput.innerText = "Correlating incident signals...";
+    try {
+        const response = await fetch("/api/incidents/analyze/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                logs: incidentLogs.value,
+                traces: incidentTraces.value,
+                metrics: incidentMetrics.value,
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Incident analysis failed.");
+        incidentOutput.innerText = data.summary + "\n\nSuspected causes:\n- " + data.suspected_causes.join("\n- ") +
+            "\n\nActions:\n- " + data.recommended_actions.join("\n- ") +
+            "\n\nPostmortem draft:\n" + data.postmortem;
+    } catch (error) {
+        incidentOutput.innerText = "Incident error: " + error;
     }
 }
 

@@ -213,6 +213,18 @@ class ChatFeatureTests(TestCase):
         self.assertIn("devcontainers/python", response.json()["config"])
         self.assertIn("pip install -r requirements.txt", response.json()["config"])
 
+    def test_incident_assistant_correlates_errors_and_drafts_postmortem(self):
+        response = self.client.post("/api/incidents/analyze/", {
+            "logs": "ERROR connection refused to database\nWARNING retrying request",
+            "traces": "trace_id=abc span=db.query duration=3s",
+            "metrics": "cpu=92 memory=70",
+        })
+        payload = response.json()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(payload["errors"]), 1)
+        self.assertTrue(payload["suspected_causes"])
+        self.assertIn("postmortem", payload["postmortem"])
+
     def test_quality_endpoint_finds_security_issue(self):
         response = self.client.post("/api/analyze/", {
             "language": "python",

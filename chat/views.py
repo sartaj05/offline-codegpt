@@ -48,6 +48,7 @@ from .dependencies import analyze_dependencies
 from .browser_testing import analyze_browser_report, generate_playwright_test
 from .model_router import route_model
 from .devcontainer import generate_devcontainer
+from .incident import analyze_incident
 from .review import review_gate
 
 
@@ -1415,6 +1416,19 @@ def devcontainer_generate(request):
             "Keep secrets outside the container configuration.",
             "Use the same container definition in local development and CI.",
         ],
+    })
+
+
+@login_required(login_url="/login/")
+@require_POST
+def incident_analyze(request):
+    return JsonResponse({
+        "success": True,
+        **analyze_incident(
+            request.POST.get("logs", "")[:50_000],
+            request.POST.get("traces", "")[:30_000],
+            request.POST.get("metrics", "")[:20_000],
+        ),
     })
 
 
