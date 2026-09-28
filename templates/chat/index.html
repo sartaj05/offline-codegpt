@@ -89,6 +89,7 @@
                     <button type="button" onclick="toggleRemoteIntegration()">Remote</button>
                     <button type="button" onclick="toggleMcpPanel()">Tools</button>
                     <button type="button" onclick="toggleObservability()">Metrics</button>
+                    {% if request.user.is_authenticated %}<button type="button" onclick="toggleEvaluationLab()">Eval Lab</button>{% endif %}
                     <button type="button" onclick="toggleWorkspace()">Team</button>
                     <button type="button" onclick="toggleDevops()">DevOps</button>
                     <button type="button" onclick="toggleDocumentation()">Docs</button>
@@ -140,6 +141,34 @@
             <div id="ollamaSettingsStatus" class="settings-status"></div>
             <button type="button" class="settings-save-button" onclick="saveOllamaSettings()">Save settings</button>
         </section>
+        {% if request.user.is_authenticated %}
+        <section id="evaluationPanel" class="evaluation-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Evaluation Lab</strong>
+                    <span>Create reusable coding tasks for local model quality checks.</span>
+                </div>
+                <div class="panel-actions">
+                    <button type="button" onclick="loadEvaluationTasks()">Refresh</button>
+                    <button type="button" onclick="toggleEvaluationLab()">Close</button>
+                </div>
+            </div>
+            <div class="evaluation-task-form">
+                <input id="evaluationTaskName" placeholder="Task name, e.g. Python bug fix">
+                <select id="evaluationTaskLanguage">
+                    <option value="auto">Auto detect</option><option value="python">Python</option>
+                    <option value="javascript">JavaScript</option><option value="sql">SQL</option>
+                </select>
+                <input id="evaluationTaskTags" placeholder="Tags, comma separated">
+                <textarea id="evaluationTaskPrompt" placeholder="What should the model do?"></textarea>
+                <textarea id="evaluationTaskCode" placeholder="Optional code fixture..."></textarea>
+                <textarea id="evaluationTaskExpected" placeholder="Optional expected answer or behavior..."></textarea>
+                <button type="button" onclick="createEvaluationTask()">Add evaluation task</button>
+            </div>
+            <div id="evaluationTaskStatus" class="evaluation-status">No evaluation tasks loaded.</div>
+            <div id="evaluationTaskList" class="evaluation-task-list"></div>
+        </section>
+        {% endif %}
         {% endif %}
 
         <section id="remoteIntegrationPanel" class="remote-integration-panel" hidden>

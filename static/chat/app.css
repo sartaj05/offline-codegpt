@@ -521,3 +521,16 @@ select { padding: 0 10px; }
     .showcase-copy h1 { font-size: 44px; }
     .auth-card { padding: 34px 24px; }
 }
+
+.evaluation-panel { margin: 18px auto; max-width: 1080px; padding: 20px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.evaluation-task-form { display: grid; grid-template-columns: 1.3fr .8fr 1fr; gap: 10px; margin-top: 16px; }
+.evaluation-task-form textarea { min-height: 86px; resize: vertical; }
+.evaluation-task-form textarea:first-of-type { grid-column: 1 / -1; }
+.evaluation-task-form button { justify-self: start; }
+.evaluation-status { margin-top: 14px; color: var(--muted); }
+.evaluation-task-list { display: grid; gap: 10px; margin-top: 12px; }
+.evaluation-task-card { border: 1px solid var(--border); border-radius: 10px; padding: 14px; background: var(--panel); }
+.evaluation-task-heading { display: flex; justify-content: space-between; gap: 12px; }
+.evaluation-task-heading span { color: var(--muted); font-size: .85rem; }
+.evaluation-task-card p { color: var(--muted); white-space: pre-wrap; }
+@media (max-width: 760px) { .evaluation-task-form { grid-template-columns: 1fr; } .evaluation-task-form textarea:first-of-type { grid-column: 1; } }

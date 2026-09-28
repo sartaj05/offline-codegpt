@@ -39,6 +39,7 @@ from .models import (
     Workspace,
     WorkspaceMembership,
     WorkspacePolicy,
+    EvaluationTask,
 )
 from .quality import analyze_code_quality
 from .sandbox import run_sandboxed_code
@@ -1120,6 +1121,64 @@ def ai_observability(request):
             for event in events
         ],
     })
+
+
+def _evaluation_task_payload(task):
+    return {
+        "id": task.id,
+        "name": task.name,
+        "prompt": task.prompt,
+        "code": task.code,
+        "expected_output": task.expected_output,
+        "language": task.language,
+        "tags": [tag.strip() for tag in task.tags.split(",") if tag.strip()],
+        "is_active": task.is_active,
+        "created_at": task.created_at.isoformat(),
+        "updated_at": task.updated_at.isoformat(),
+    }
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def evaluation_tasks(request):
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()[:160]
+        prompt = request.POST.get("prompt", "").strip()
+        if not name or not prompt:
+            return JsonResponse({"success": False, "error": "Task name and prompt are required."}, status=400)
+        task = EvaluationTask.objects.create(
+            owner=request.user,
+            name=name,
+            prompt=prompt,
+            code=request.POST.get("code", ""),
+            expected_output=request.POST.get("expected_output", ""),
+            language=request.POST.get("language", "auto").strip()[:50] or "auto",
+            tags=request.POST.get("tags", "").strip()[:300],
+        )
+        return JsonResponse({"success": True, "task": _evaluation_task_payload(task)}, status=201)
+    query = request.GET.get("q", "").strip()
+    tasks = EvaluationTask.objects.filter(owner=request.user)
+    if query:
+        tasks = tasks.filter(Q(name__icontains=query) | Q(prompt__icontains=query) | Q(tags__icontains=query))
+    return JsonResponse({"success": True, "tasks": [_evaluation_task_payload(task) for task in tasks[:100]]})
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["POST", "DELETE"])
+def evaluation_task_detail(request, task_id):
+    task = get_object_or_404(EvaluationTask, id=task_id, owner=request.user)
+    if request.method == "DELETE":
+        task.delete()
+        return JsonResponse({"success": True, "deleted": task_id})
+    task.name = request.POST.get("name", task.name).strip()[:160] or task.name
+    task.prompt = request.POST.get("prompt", task.prompt).strip() or task.prompt
+    task.code = request.POST.get("code", task.code)
+    task.expected_output = request.POST.get("expected_output", task.expected_output)
+    task.language = request.POST.get("language", task.language).strip()[:50] or "auto"
+    task.tags = request.POST.get("tags", task.tags).strip()[:300]
+    task.is_active = request.POST.get("is_active", "true").lower() not in {"false", "0", "off"}
+    task.save()
+    return JsonResponse({"success": True, "task": _evaluation_task_payload(task)})
 
 
 def _workspace_for_user(user):

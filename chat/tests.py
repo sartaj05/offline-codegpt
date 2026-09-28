@@ -22,6 +22,23 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "FREE PREVIEW")
 
+    def test_evaluation_tasks_can_be_created_listed_and_deleted(self):
+        created = self.client.post("/api/evaluations/tasks/", {
+            "name": "Fix add function",
+            "prompt": "Find and fix the bug.",
+            "code": "def add(a, b): return a - b",
+            "expected_output": "The function should add values.",
+            "language": "python",
+            "tags": "python, bug-fix",
+        })
+        self.assertEqual(created.status_code, 201)
+        task = created.json()["task"]
+        self.assertEqual(task["tags"], ["python", "bug-fix"])
+        listing = self.client.get("/api/evaluations/tasks/?q=add")
+        self.assertEqual(listing.json()["tasks"][0]["id"], task["id"])
+        deleted = self.client.delete(f"/api/evaluations/tasks/{task['id']}/")
+        self.assertTrue(deleted.json()["deleted"])
+
     def test_guest_upload_requires_free_account(self):
         self.client.logout()
         image = SimpleUploadedFile("diagram.png", b"fake-image", content_type="image/png")

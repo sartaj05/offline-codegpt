@@ -27,6 +27,15 @@ const mcpConnectorList = document.getElementById("mcpConnectorList");
 const mcpSearchQuery = document.getElementById("mcpSearchQuery");
 const mcpOutput = document.getElementById("mcpOutput");
 const observabilityPanel = document.getElementById("observabilityPanel");
+const evaluationPanel = document.getElementById("evaluationPanel");
+const evaluationTaskName = document.getElementById("evaluationTaskName");
+const evaluationTaskLanguage = document.getElementById("evaluationTaskLanguage");
+const evaluationTaskTags = document.getElementById("evaluationTaskTags");
+const evaluationTaskPrompt = document.getElementById("evaluationTaskPrompt");
+const evaluationTaskCode = document.getElementById("evaluationTaskCode");
+const evaluationTaskExpected = document.getElementById("evaluationTaskExpected");
+const evaluationTaskStatus = document.getElementById("evaluationTaskStatus");
+const evaluationTaskList = document.getElementById("evaluationTaskList");
 const observabilityStats = document.getElementById("observabilityStats");
 const observabilityOutput = document.getElementById("observabilityOutput");
 const workspacePanel = document.getElementById("workspacePanel");
@@ -358,6 +367,95 @@ async function loadObservability() {
             : "No AI activity recorded yet.";
     } catch (error) {
         observabilityOutput.innerText = "Metrics error: " + error;
+    }
+}
+
+function toggleEvaluationLab() {
+    if (!evaluationPanel) return;
+    evaluationPanel.hidden = !evaluationPanel.hidden;
+    if (!evaluationPanel.hidden) loadEvaluationTasks();
+}
+
+function renderEvaluationTasks(tasks) {
+    if (!evaluationTaskList) return;
+    evaluationTaskList.innerHTML = "";
+    if (!tasks.length) {
+        evaluationTaskList.innerText = "No evaluation tasks yet. Add your first reusable task above.";
+        return;
+    }
+    tasks.forEach(task => {
+        const card = document.createElement("div");
+        card.className = "evaluation-task-card";
+        const heading = document.createElement("div");
+        heading.className = "evaluation-task-heading";
+        const title = document.createElement("strong");
+        title.innerText = task.name;
+        const meta = document.createElement("span");
+        meta.innerText = task.language + (task.tags.length ? " · " + task.tags.join(", ") : "");
+        heading.append(title, meta);
+        const prompt = document.createElement("p");
+        prompt.innerText = task.prompt;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.innerText = "Delete";
+        remove.onclick = () => deleteEvaluationTask(task.id, task.name);
+        card.append(heading, prompt, remove);
+        evaluationTaskList.appendChild(card);
+    });
+}
+
+async function loadEvaluationTasks() {
+    if (!evaluationTaskList) return;
+    evaluationTaskStatus.innerText = "Loading evaluation tasks...";
+    try {
+        const response = await fetch("/api/evaluations/tasks/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load evaluation tasks.");
+        renderEvaluationTasks(data.tasks);
+        evaluationTaskStatus.innerText = data.tasks.length + " reusable task(s) ready.";
+    } catch (error) {
+        evaluationTaskStatus.innerText = "Evaluation task error: " + error;
+    }
+}
+
+async function createEvaluationTask() {
+    if (!evaluationTaskName.value.trim() || !evaluationTaskPrompt.value.trim()) {
+        evaluationTaskStatus.innerText = "Task name and prompt are required.";
+        return;
+    }
+    try {
+        const response = await fetch("/api/evaluations/tasks/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                name: evaluationTaskName.value.trim(),
+                language: evaluationTaskLanguage.value,
+                tags: evaluationTaskTags.value,
+                prompt: evaluationTaskPrompt.value,
+                code: evaluationTaskCode.value,
+                expected_output: evaluationTaskExpected.value,
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to create evaluation task.");
+        [evaluationTaskName, evaluationTaskTags, evaluationTaskPrompt, evaluationTaskCode, evaluationTaskExpected].forEach(input => input.value = "");
+        await loadEvaluationTasks();
+    } catch (error) {
+        evaluationTaskStatus.innerText = "Evaluation task error: " + error;
+    }
+}
+
+async function deleteEvaluationTask(taskId, taskName) {
+    if (!confirm("Delete evaluation task '" + taskName + "'?")) return;
+    try {
+        const response = await fetch("/api/evaluations/tasks/" + taskId + "/", {
+            method: "DELETE", headers: { "X-CSRFToken": csrfToken },
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to delete evaluation task.");
+        await loadEvaluationTasks();
+    } catch (error) {
+        evaluationTaskStatus.innerText = "Evaluation task error: " + error;
     }
 }
 

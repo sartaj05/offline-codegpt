@@ -404,3 +404,24 @@ class TrainingExample(models.Model):
 
     def __str__(self):
         return self.instruction[:80]
+
+
+class EvaluationTask(models.Model):
+    """A reusable prompt/code fixture for measuring local AI quality."""
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="evaluation_tasks")
+    name = models.CharField(max_length=160)
+    prompt = models.TextField()
+    code = models.TextField(blank=True, default="")
+    expected_output = models.TextField(blank=True, default="")
+    language = models.CharField(max_length=50, default="auto")
+    tags = models.CharField(max_length=300, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+
+    def __str__(self):
+        return self.name
