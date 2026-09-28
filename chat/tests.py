@@ -238,6 +238,17 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(payload["symbols"])
         self.assertTrue(payload["cycles"])
 
+    def test_api_contract_finds_undocumented_endpoint(self):
+        response = self.client.post("/api/contracts/analyze/", {
+            "spec": json.dumps({"paths": {"/api/users/": {"get": {}}}}),
+            "code": 'path("api/users/", views.users)\npath("api/orders/", views.orders)',
+        })
+        payload = response.json()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(payload["implemented"]), 2)
+        self.assertEqual(payload["undocumented"][0]["path"], "/api/orders")
+        self.assertIn("openapi", payload["suggested_openapi"])
+
     def test_quality_endpoint_finds_security_issue(self):
         response = self.client.post("/api/analyze/", {
             "language": "python",

@@ -99,6 +99,7 @@
                     <button type="button" onclick="toggleDevcontainer()">Env</button>
                     <button type="button" onclick="toggleIncident()">Incident</button>
                     <button type="button" onclick="toggleArchitecture()">Arch</button>
+                    <button type="button" onclick="toggleContracts()">API</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -386,6 +387,19 @@
             <textarea id="architectureFiles" class="architecture-files" placeholder='Paste project files as JSON: [{"filename":"app.py","content":"..."}]'></textarea>
             <button type="button" onclick="analyzeArchitecture()">Analyze architecture</button>
             <pre id="architectureOutput" class="architecture-output">Architecture findings will appear here.</pre>
+        </section>
+        <section id="contractsPanel" class="contracts-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>API contract testing</strong>
+                    <span>Compare OpenAPI documentation with implemented routes.</span>
+                </div>
+                <button type="button" onclick="toggleContracts()">Close</button>
+            </div>
+            <textarea id="contractSpec" class="contract-input" placeholder="Paste OpenAPI JSON..."></textarea>
+            <textarea id="contractCode" class="contract-input" placeholder="Paste route/controller code..."></textarea>
+            <button type="button" onclick="analyzeContracts()">Analyze API contract</button>
+            <pre id="contractOutput" class="contract-output">Contract findings will appear here.</pre>
         </section>
 
         <section id="chatBox" class="chat-box">

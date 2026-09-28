@@ -78,6 +78,10 @@ const incidentOutput = document.getElementById("incidentOutput");
 const architecturePanel = document.getElementById("architecturePanel");
 const architectureFiles = document.getElementById("architectureFiles");
 const architectureOutput = document.getElementById("architectureOutput");
+const contractsPanel = document.getElementById("contractsPanel");
+const contractSpec = document.getElementById("contractSpec");
+const contractCode = document.getElementById("contractCode");
+const contractOutput = document.getElementById("contractOutput");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -673,6 +677,31 @@ async function analyzeArchitecture() {
             "\n\nCycles:\n" + (data.cycles.length ? data.cycles.map(cycle => cycle.join(" -> ")).join("\n") : "None");
     } catch (error) {
         architectureOutput.innerText = "Architecture error: " + error;
+    }
+}
+
+function toggleContracts() {
+    if (!contractsPanel) return;
+    contractsPanel.hidden = !contractsPanel.hidden;
+}
+
+async function analyzeContracts() {
+    contractOutput.innerText = "Checking API contract...";
+    try {
+        const response = await fetch("/api/contracts/analyze/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ spec: contractSpec.value, code: contractCode.value }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "API contract analysis failed.");
+        contractOutput.innerText = data.summary +
+            "\n\nUndocumented:\n" + (data.undocumented.length ? data.undocumented.map(item => item.method + " " + item.path).join("\n") : "None") +
+            "\n\nStale documentation:\n" + (data.stale_documentation.length ? data.stale_documentation.map(item => item.method + " " + item.path).join("\n") : "None") +
+            "\n\nBreaking risks:\n" + (data.breaking_risks.join("\n- ") || "None") +
+            "\n\nSuggested OpenAPI:\n" + data.suggested_openapi;
+    } catch (error) {
+        contractOutput.innerText = "Contract error: " + error;
     }
 }
 

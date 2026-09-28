@@ -50,6 +50,7 @@ from .model_router import route_model
 from .devcontainer import generate_devcontainer
 from .incident import analyze_incident
 from .architecture import analyze_architecture
+from .api_contract import analyze_api_contract
 from .review import review_gate
 
 
@@ -1448,6 +1449,18 @@ def architecture_analyze(request):
         for item in files if isinstance(item, dict)
     ]
     return JsonResponse({"success": True, **analyze_architecture(files)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def api_contract_analyze(request):
+    result = analyze_api_contract(
+        request.POST.get("spec", "")[:50_000],
+        request.POST.get("code", "")[:50_000],
+    )
+    if result.get("error"):
+        return JsonResponse({"success": False, "error": result["error"]}, status=400)
+    return JsonResponse({"success": True, **result})
 
 
 def _mcp_tools():
