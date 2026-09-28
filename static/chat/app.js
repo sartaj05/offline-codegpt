@@ -287,6 +287,14 @@ async function loadSession(sessionId) {
     }
 }
 
+function exportChat(format) {
+    if (!currentSessionId) {
+        alert("Send or open a chat before exporting it.");
+        return;
+    }
+    window.location.href = `/api/session/${currentSessionId}/export/?format=${format}`;
+}
+
 async function searchProject() {
     const query = searchInput.value.trim();
     if (!query) {

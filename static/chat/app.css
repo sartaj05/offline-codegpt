@@ -114,6 +114,21 @@ body {
     display: flex;
     align-items: center;
     padding: 0 28px;
+    justify-content: space-between;
+}
+
+.topbar-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.topbar-actions button {
+    border: 1px solid #565869;
+    border-radius: 6px;
+    background: #40414f;
+    color: #ececf1;
+    cursor: pointer;
+    padding: 7px 9px;
 }
 
 .topbar h2 {

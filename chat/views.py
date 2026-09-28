@@ -5,7 +5,7 @@ from pathlib import PurePosixPath
 
 import requests
 
-from django.http import JsonResponse, StreamingHttpResponse
+from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
 
@@ -181,6 +181,94 @@ def session_messages(request, session_id):
         "model": session.model_name,
         "messages": messages,
     })
+
+
+def _session_markdown(session):
+    lines = [
+        f"# {session.title}",
+        "",
+        f"- Model: `{session.model_name}`",
+        f"- Created: {session.created_at:%Y-%m-%d %H:%M}",
+        "",
+    ]
+    for message in session.messages.order_by("created_at"):
+        label = "You" if message.role == "user" else "Offline CodeGPT"
+        lines.extend([f"## {label}", "", message.content, ""])
+    return "\\n".join(lines)
+
+
+def _pdf_escape(value):
+    return value.replace("\\", "\\\\").replace("(", "\\\\(").replace(")", "\\\\)")
+
+
+def _session_pdf(session):
+    text = _session_markdown(session).encode("latin-1", errors="replace").decode("latin-1")
+    lines = []
+    for paragraph in text.splitlines():
+        while len(paragraph) > 95:
+            lines.append(paragraph[:95])
+            paragraph = paragraph[95:]
+        lines.append(paragraph)
+
+    content_lines = ["BT", "/F1 10 Tf", "50 760 Td"]
+    for line in lines[:65]:
+        content_lines.append(f"({_pdf_escape(line)}) Tj")
+        content_lines.append("0 -11 Td")
+    content_lines.append("ET")
+    content = "\\n".join(content_lines).encode("latin-1", errors="replace")
+
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length " + str(len(content)).encode() + b" >>\\nstream\\n" + content + b"\\nendstream",
+    ]
+    pdf = b"%PDF-1.4\\n%\\xe2\\xe3\\xcf\\xd3\\n"
+    offsets = [0]
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf += f"{index} 0 obj\\n".encode() + obj + b"\\nendobj\\n"
+    xref_offset = len(pdf)
+    pdf += f"xref\\n0 {len(objects) + 1}\\n".encode()
+    pdf += b"0000000000 65535 f \\n"
+    pdf += b"".join(f"{offset:010d} 00000 n \\n".encode() for offset in offsets[1:])
+    pdf += f"trailer\\n<< /Size {len(objects) + 1} /Root 1 0 R >>\\nstartxref\\n{xref_offset}\\n%%EOF".encode()
+    return pdf
+
+
+def export_session(request, session_id):
+    session = get_object_or_404(ChatSession, id=session_id)
+    export_format = request.GET.get("format", "markdown").lower()
+    filename = f"offline-codegpt-{session.id}"
+
+    if export_format in ("md", "markdown"):
+        response = HttpResponse(_session_markdown(session), content_type="text/markdown")
+        response["Content-Disposition"] = f'attachment; filename="{filename}.md"'
+        return response
+
+    if export_format == "json":
+        payload = {
+            "session_id": session.id,
+            "title": session.title,
+            "model": session.model_name,
+            "messages": list(session.messages.order_by("created_at").values(
+                "role", "content", "filename", "model_name", "created_at"
+            )),
+        }
+        response = HttpResponse(
+            json.dumps(payload, default=str, indent=2),
+            content_type="application/json",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}.json"'
+        return response
+
+    if export_format == "pdf":
+        response = HttpResponse(_session_pdf(session), content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}.pdf"'
+        return response
+
+    return JsonResponse({"success": False, "error": "Unsupported export format."}, status=400)
 
 
 @require_POST
