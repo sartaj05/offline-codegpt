@@ -214,6 +214,11 @@ button { cursor: pointer; }
 .dependencies-row select { min-width: 210px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); }
 .dependency-content { width: 100%; min-height: 130px; margin-top: 12px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); font-family: Consolas, monospace; resize: vertical; }
 .dependency-output { max-height: 260px; margin: 12px 0 0; padding: 11px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: rgba(10,12,18,.55); color: #dbe4f1; font-size: 11px; line-height: 1.55; white-space: pre-wrap; }
+.browser-tests-panel { margin: 12px 24px 0; padding: 16px; border: 1px solid rgba(126,167,255,.3); border-radius: 12px; background: linear-gradient(145deg, rgba(32,42,67,.98), rgba(24,29,40,.98)); }
+.browser-tests-row { display: flex; gap: 8px; margin-top: 12px; }
+.browser-tests-row input { min-width: 0; flex: 1; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); }
+.browser-flow { width: 100%; min-height: 70px; margin-top: 12px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); resize: vertical; }
+.browser-test-output { max-height: 250px; margin: 12px 0 0; padding: 11px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: rgba(10,12,18,.55); color: #dbe4f1; font-size: 11px; line-height: 1.55; white-space: pre-wrap; }
 .git-file { display: flex; align-items: center; gap: 5px; margin-top: 5px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); }
 .git-file-status { flex: 0 0 22px; color: var(--accent); font-family: Consolas, monospace; font-size: 9px; }
 .git-file-path { min-width: 0; flex: 1; overflow: hidden; color: var(--muted); font-family: Consolas, monospace; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }

@@ -174,6 +174,21 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(payload["findings"])
         self.assertIn("Pin Django", payload["upgrade_plan"][0])
 
+    def test_browser_testing_generates_playwright_and_parses_report(self):
+        generated = self.client.post("/api/browser-tests/generate/", {
+            "base_url": "http://localhost:8000",
+            "flow": "Sign in and open the project workspace",
+            "snapshot_name": "workspace",
+        })
+        self.assertEqual(generated.status_code, 200)
+        self.assertIn("toHaveScreenshot", generated.json()["test_code"])
+        report = self.client.post("/api/browser-tests/report/", {
+            "report": "PASS workspace user flow\nFAIL visual snapshot changed\nScreenshot mismatch",
+        })
+        self.assertEqual(report.status_code, 200)
+        self.assertEqual(len(report.json()["failed"]), 1)
+        self.assertEqual(len(report.json()["visual_events"]), 2)
+
     def test_quality_endpoint_finds_security_issue(self):
         response = self.client.post("/api/analyze/", {
             "language": "python",

@@ -94,6 +94,7 @@
                     <button type="button" onclick="toggleDocumentation()">Docs</button>
                     <button type="button" onclick="toggleReviewGate()">Review</button>
                     <button type="button" onclick="toggleDependencies()">Deps</button>
+                    <button type="button" onclick="toggleBrowserTests()">Browser</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -304,6 +305,25 @@
             </div>
             <textarea id="dependencyContent" class="dependency-content" placeholder="Paste requirements.txt or package.json..."></textarea>
             <pre id="dependencyOutput" class="dependency-output">Dependency findings will appear here.</pre>
+        </section>
+        <section id="browserTestsPanel" class="browser-tests-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Browser testing</strong>
+                    <span>Generate Playwright flows and review visual regression reports.</span>
+                </div>
+                <button type="button" onclick="toggleBrowserTests()">Close</button>
+            </div>
+            <div class="browser-tests-row">
+                <input id="browserBaseUrl" value="http://127.0.0.1:8000" placeholder="Local app URL">
+                <input id="browserSnapshotName" value="home" placeholder="Snapshot name">
+            </div>
+            <textarea id="browserFlow" class="browser-flow" placeholder="Describe the browser flow to test..."></textarea>
+            <button type="button" onclick="generateBrowserTest()">Generate Playwright test</button>
+            <pre id="browserTestOutput" class="browser-test-output">Generated browser test will appear here.</pre>
+            <textarea id="browserReport" class="browser-flow" placeholder="Paste Playwright output or visual diff report..."></textarea>
+            <button type="button" onclick="analyzeBrowserReport()">Analyze report</button>
+            <pre id="browserReportOutput" class="browser-test-output">Browser report findings will appear here.</pre>
         </section>
 
         <section id="chatBox" class="chat-box">

@@ -45,6 +45,7 @@ from .security import scan_files
 from .devops import analyze_logs, generate_artifact
 from .documentation import generate_documentation
 from .dependencies import analyze_dependencies
+from .browser_testing import analyze_browser_report, generate_playwright_test
 from .review import review_gate
 
 
@@ -1343,6 +1344,26 @@ def dependencies_analyze(request):
         except (TypeError, ValueError, json.JSONDecodeError):
             return JsonResponse({"success": False, "error": "Invalid dependency file list."}, status=400)
     return JsonResponse({"success": True, **analyze_dependencies(files)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def browser_test_generate(request):
+    return JsonResponse({
+        "success": True,
+        "test_code": generate_playwright_test(
+            request.POST.get("base_url"),
+            request.POST.get("flow"),
+            request.POST.get("snapshot_name", "home"),
+        ),
+        "command": "npx playwright test --update-snapshots",
+    })
+
+
+@login_required(login_url="/login/")
+@require_POST
+def browser_test_report(request):
+    return JsonResponse({"success": True, **analyze_browser_report(request.POST.get("report", "")[:50_000])})
 
 
 def _mcp_tools():

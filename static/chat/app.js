@@ -55,6 +55,13 @@ const dependenciesPanel = document.getElementById("dependenciesPanel");
 const dependencyFilename = document.getElementById("dependencyFilename");
 const dependencyContent = document.getElementById("dependencyContent");
 const dependencyOutput = document.getElementById("dependencyOutput");
+const browserTestsPanel = document.getElementById("browserTestsPanel");
+const browserBaseUrl = document.getElementById("browserBaseUrl");
+const browserSnapshotName = document.getElementById("browserSnapshotName");
+const browserFlow = document.getElementById("browserFlow");
+const browserTestOutput = document.getElementById("browserTestOutput");
+const browserReport = document.getElementById("browserReport");
+const browserReportOutput = document.getElementById("browserReportOutput");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -499,6 +506,49 @@ async function analyzeDependencies() {
             "\n\n" + data.limitations;
     } catch (error) {
         dependencyOutput.innerText = "Dependency error: " + error;
+    }
+}
+
+function toggleBrowserTests() {
+    if (!browserTestsPanel) return;
+    browserTestsPanel.hidden = !browserTestsPanel.hidden;
+}
+
+async function generateBrowserTest() {
+    browserTestOutput.innerText = "Generating Playwright test...";
+    try {
+        const response = await fetch("/api/browser-tests/generate/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                base_url: browserBaseUrl.value,
+                snapshot_name: browserSnapshotName.value,
+                flow: browserFlow.value,
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Browser test generation failed.");
+        browserTestOutput.innerText = data.test_code + "\n\nRun:\n" + data.command;
+    } catch (error) {
+        browserTestOutput.innerText = "Browser test error: " + error;
+    }
+}
+
+async function analyzeBrowserReport() {
+    browserReportOutput.innerText = "Analyzing browser report...";
+    try {
+        const response = await fetch("/api/browser-tests/report/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ report: browserReport.value }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Browser report analysis failed.");
+        browserReportOutput.innerText = data.summary + "\n\n" +
+            (data.failed.length ? "Failures:\n" + data.failed.join("\n") : "No failures detected.") +
+            "\n\nNext steps:\n- " + data.next_steps.join("\n- ");
+    } catch (error) {
+        browserReportOutput.innerText = "Browser report error: " + error;
     }
 }
 
