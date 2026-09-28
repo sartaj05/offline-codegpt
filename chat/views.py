@@ -340,6 +340,50 @@ def project_document_delete(request, document_id):
 
 
 @login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def project_document_content(request, document_id):
+    document = get_object_or_404(
+        KnowledgeDocument,
+        id=document_id,
+        owner=request.user,
+    )
+    if request.method == "GET":
+        return JsonResponse({
+            "success": True,
+            "document": {
+                "id": document.id,
+                "filename": document.filename or document.title,
+                "language": document.language,
+                "content": document.original_text,
+            },
+        })
+
+    content = request.POST.get("content", "")
+    if len(content.encode("utf-8")) > MAX_FILE_BYTES:
+        return JsonResponse({"success": False, "error": "Saved files are limited to 1 MB."}, status=400)
+    document.original_text = content
+    document.file_size_bytes = len(content.encode("utf-8"))
+    document.content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    document.save(update_fields=["original_text", "file_size_bytes", "content_hash"])
+    document.chunks.all().delete()
+    KnowledgeChunk.objects.bulk_create([
+        KnowledgeChunk(
+            document=document,
+            chunk_index=index,
+            content=content[start:start + CHUNK_SIZE],
+            language=document.language,
+        )
+        for index, start in enumerate(range(0, len(content), CHUNK_SIZE))
+    ])
+    return JsonResponse({
+        "success": True,
+        "document_id": document.id,
+        "chunks": document.chunks.count(),
+        "saved_at": document.uploaded_at.strftime("%d-%m-%Y %H:%M"),
+    })
+
+
+@login_required(login_url="/login/")
 @require_POST
 def project_document_reindex(request, document_id):
     document = get_object_or_404(

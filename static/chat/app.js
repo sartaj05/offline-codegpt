@@ -24,7 +24,14 @@ const projectStats = document.getElementById("projectStats");
 const projectFiles = document.getElementById("projectFiles");
 const chatSearch = document.getElementById("chatSearch");
 const chatHistory = document.getElementById("chatHistory");
+const editorFileName = document.getElementById("editorFileName");
+const editorLanguage = document.getElementById("editorLanguage");
+const editorTabs = document.getElementById("editorTabs");
+const editorPreview = document.getElementById("editorPreview");
+const saveFileBtn = document.getElementById("saveFileBtn");
 const csrfToken = document.getElementById("csrfToken").value;
+let editorTabsState = [];
+let activeEditorDocumentId = null;
 
 function updateActiveModel() {
     const activeModel = document.getElementById("activeModel");
@@ -296,6 +303,13 @@ function newChat() {
     if (fileInput) fileInput.value = "";
     if (folderInput) folderInput.value = "";
     if (imageInput) imageInput.value = "";
+    editorTabsState = [];
+    activeEditorDocumentId = null;
+    if (editorFileName) editorFileName.innerText = "Scratch buffer";
+    if (editorLanguage) editorLanguage.innerText = "Auto detect";
+    if (saveFileBtn) saveFileBtn.disabled = true;
+    renderEditorTabs();
+    syncEditorPreview();
 }
 
 function addMessage(role, content, options = {}) {
@@ -708,6 +722,107 @@ function formatFileSize(bytes) {
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
 
+function syncEditorPreview() {
+    if (!editorPreview) return;
+    const language = languageInput.value === "auto" ? "text" : languageInput.value;
+    const code = editorPreview.querySelector("code");
+    code.innerHTML = highlightCode(codeInput.value || " ", language);
+}
+
+function syncActiveEditorTab() {
+    const active = editorTabsState.find(tab => tab.id === activeEditorDocumentId);
+    if (active) active.content = codeInput.value;
+}
+
+function renderEditorTabs() {
+    if (!editorTabs) return;
+    editorTabs.innerHTML = "";
+    const scratch = document.createElement("button");
+    scratch.type = "button";
+    scratch.className = "editor-tab" + (activeEditorDocumentId === null ? " active" : "");
+    scratch.innerText = "Scratch buffer";
+    scratch.onclick = () => selectEditorTab(null);
+    editorTabs.appendChild(scratch);
+    editorTabsState.forEach(tab => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "editor-tab" + (tab.id === activeEditorDocumentId ? " active" : "");
+        button.innerText = tab.filename;
+        button.title = tab.filename;
+        button.onclick = () => selectEditorTab(tab.id);
+        editorTabs.appendChild(button);
+    });
+}
+
+function selectEditorTab(documentId) {
+    syncActiveEditorTab();
+    if (documentId === null) {
+        activeEditorDocumentId = null;
+        codeInput.value = "";
+        if (editorFileName) editorFileName.innerText = "Scratch buffer";
+        if (editorLanguage) editorLanguage.innerText = "Auto detect";
+        if (saveFileBtn) saveFileBtn.disabled = true;
+    } else {
+        const tab = editorTabsState.find(item => item.id === documentId);
+        if (!tab) return;
+        activeEditorDocumentId = documentId;
+        codeInput.value = tab.content;
+        languageInput.value = tab.language || "auto";
+        if (editorFileName) editorFileName.innerText = tab.filename;
+        if (editorLanguage) editorLanguage.innerText = tab.language || "auto";
+        if (saveFileBtn) saveFileBtn.disabled = false;
+        updateActiveModel();
+    }
+    renderEditorTabs();
+    syncEditorPreview();
+    codeInput.focus();
+}
+
+async function openProjectFile(documentId) {
+    try {
+        const response = await fetch("/api/project/" + documentId + "/content/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to open file.");
+        const document = data.document;
+        const existing = editorTabsState.find(tab => tab.id === document.id);
+        if (existing) {
+            selectEditorTab(document.id);
+            return;
+        }
+        syncActiveEditorTab();
+        editorTabsState.push({
+            id: document.id,
+            filename: document.filename,
+            language: document.language,
+            content: document.content,
+        });
+        selectEditorTab(document.id);
+    } catch (error) {
+        alert("Unable to open project file: " + error);
+    }
+}
+
+async function saveProjectFile() {
+    if (!activeEditorDocumentId) return;
+    syncActiveEditorTab();
+    try {
+        const response = await fetch("/api/project/" + activeEditorDocumentId + "/content/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({ content: codeInput.value }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Save failed.");
+        sendStatus.textContent = "Saved and reindexed " + (editorFileName ? editorFileName.innerText : "file") + ".";
+        await loadProjectWorkspace();
+    } catch (error) {
+        alert("Unable to save file: " + error);
+    }
+}
+
 async function loadProjectWorkspace() {
     if (!projectFiles) return;
     projectFiles.innerText = "Loading indexed files...";
@@ -728,8 +843,10 @@ async function loadProjectWorkspace() {
             const info = document.createElement("div");
             info.className = "project-file-info";
             const name = document.createElement("strong");
+            name.className = "project-file-name";
             name.innerText = document.filename;
             name.title = document.filename;
+            name.onclick = () => openProjectFile(document.id);
             const meta = document.createElement("span");
             meta.innerText = document.language + " | " + formatFileSize(document.size_bytes) + " | " + document.chunks + " chunks";
             info.append(name, meta);
@@ -795,6 +912,13 @@ promptInput.addEventListener("keydown", function (event) {
 });
 
 modelInput.addEventListener("change", updateActiveModel);
+codeInput.addEventListener("input", syncEditorPreview);
+languageInput.addEventListener("change", function () {
+    if (editorLanguage && activeEditorDocumentId) editorLanguage.innerText = languageInput.value;
+    syncEditorPreview();
+});
 updateActiveModel();
+renderEditorTabs();
+syncEditorPreview();
 if (projectFiles) loadProjectWorkspace();
 if (chatHistory) loadChatHistory();

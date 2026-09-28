@@ -170,6 +170,8 @@ button { cursor: pointer; }
 .project-file-info { min-width: 0; }
 .project-file-info strong, .project-file-info span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-file-info strong { color: #dbe4f1; font-size: 10px; }
+.project-file-name { cursor: pointer; }
+.project-file-name:hover { color: var(--accent); }
 .project-file-info span { margin-top: 3px; color: var(--muted); font-size: 9px; }
 .project-file-actions { display: flex; flex: 0 0 auto; gap: 3px; }
 .project-file-actions button { padding: 4px 5px; border: 1px solid var(--border); border-radius: 5px; background: transparent; color: var(--muted); font-size: 9px; }
@@ -258,6 +260,17 @@ select { padding: 0 10px; }
 .image-picker { color: #e0bcff; }
 #codeInput { display: block; width: 100%; min-height: 112px; max-height: 260px; resize: vertical; padding: 13px; border: 1px solid var(--border); border-radius: 10px; outline: 0; background: #11141b; color: #e8eef7; font-family: Consolas, "SFMono-Regular", monospace; font-size: 13px; line-height: 1.55; }
 #codeInput:focus { border-color: var(--accent); }
+.editor-shell { overflow: hidden; border: 1px solid var(--border); border-radius: 10px; background: #11141b; }
+.editor-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.editor-toolbar strong { display: block; overflow: hidden; color: #e7edf6; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.editor-toolbar span { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
+.editor-toolbar button { padding: 6px 9px; border: 1px solid #2d997b; border-radius: 7px; background: #176a56; color: #e7fff7; font-size: 10px; }
+.editor-toolbar button:disabled { border-color: var(--border); background: var(--surface-3); color: var(--muted); }
+.editor-tabs { display: flex; gap: 4px; overflow-x: auto; padding: 7px 9px 0; background: #151922; }
+.editor-tab { max-width: 180px; overflow: hidden; padding: 6px 9px; border: 1px solid transparent; border-radius: 7px 7px 0 0; background: transparent; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.editor-tab.active { border-color: var(--border); border-bottom-color: #11141b; background: #11141b; color: var(--text); }
+.preview-label { padding: 7px 13px 0; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
+.editor-preview { max-height: 180px; margin: 0; padding: 8px 13px 13px; overflow: auto; color: #dbe6f3; font-family: Consolas, "SFMono-Regular", monospace; font-size: 12px; line-height: 1.55; white-space: pre-wrap; }
 .prompt-bar { display: flex; gap: 10px; margin-top: 10px; padding: 9px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-2); }
 #promptInput { width: 100%; min-height: 42px; resize: vertical; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 13px; line-height: 1.45; }
 #sendBtn { width: 98px; flex: 0 0 98px; align-self: stretch; border: 0; border-radius: 8px; background: var(--accent-strong); color: #071319; font-weight: 800; }

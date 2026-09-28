@@ -129,7 +129,23 @@
                     {% endif %}
                 </div>
 
-                <textarea id="codeInput" placeholder="Paste code here, or choose an upload above..."></textarea>
+                <div class="editor-shell">
+                    <div class="editor-toolbar">
+                        <div>
+                            <strong id="editorFileName">Scratch buffer</strong>
+                            <span id="editorLanguage">Auto detect</span>
+                        </div>
+                        {% if request.user.is_authenticated %}
+                            <button id="saveFileBtn" type="button" onclick="saveProjectFile()" disabled>Save file</button>
+                        {% endif %}
+                    </div>
+                    <div id="editorTabs" class="editor-tabs">
+                        <button type="button" class="editor-tab active">Scratch buffer</button>
+                    </div>
+                    <textarea id="codeInput" placeholder="Paste code here, or choose an upload above..."></textarea>
+                    <div class="preview-label">Syntax preview</div>
+                    <pre id="editorPreview" class="editor-preview"><code></code></pre>
+                </div>
 
                 {% if request.user.is_authenticated %}
                     <pre id="executionOutput" class="execution-output">Guarded sandbox: 3-second timeout, 128 MB memory limit, temporary directory, capped output, and blocked network/file APIs.</pre>

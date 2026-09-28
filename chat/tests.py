@@ -213,6 +213,28 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(deleted.status_code, 200)
         self.assertFalse(KnowledgeDocument.objects.filter(id=document.id).exists())
 
+    def test_project_editor_can_open_save_and_reindex_a_file(self):
+        document = KnowledgeDocument.objects.create(
+            owner=self.user,
+            title="editor.py",
+            filename="editor.py",
+            language="python",
+            original_text="print('old')",
+            file_size_bytes=12,
+        )
+        opened = self.client.get(f"/api/project/{document.id}/content/")
+        self.assertEqual(opened.status_code, 200)
+        self.assertEqual(opened.json()["document"]["content"], "print('old')")
+
+        saved = self.client.post(
+            f"/api/project/{document.id}/content/",
+            {"content": "print('new')"},
+        )
+        self.assertEqual(saved.status_code, 200)
+        document.refresh_from_db()
+        self.assertEqual(document.original_text, "print('new')")
+        self.assertTrue(document.chunks.exists())
+
     def test_rag_results_include_source_line_ranges(self):
         source = "first" + chr(10) + "needle = True" + chr(10) + "last"
         document = KnowledgeDocument.objects.create(

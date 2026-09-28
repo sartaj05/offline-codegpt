@@ -13,6 +13,7 @@ urlpatterns = [
     path("api/search/", views.knowledge_search, name="knowledge_search"),
     path("api/project/", views.project_documents, name="project_documents"),
     path("api/project/<int:document_id>/", views.project_document_delete, name="project_document_delete"),
+    path("api/project/<int:document_id>/content/", views.project_document_content, name="project_document_content"),
     path("api/project/<int:document_id>/reindex/", views.project_document_reindex, name="project_document_reindex"),
     path("api/execute/", views.execute_code, name="execute_code"),
     path("api/analyze/", views.quality_analyze, name="quality_analyze"),
