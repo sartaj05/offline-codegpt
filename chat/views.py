@@ -28,6 +28,7 @@ from .models import (
     LocalModelConfig,
 )
 from .quality import analyze_code_quality
+from .sandbox import run_sandboxed_code
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -524,62 +525,7 @@ def execute_code(request):
             "error": f"Code checking is limited to {MAX_EXECUTION_CHARS} characters.",
         }, status=400)
 
-    started = time.perf_counter()
-    if language in ("auto", "py", "python"):
-        try:
-            ast.parse(code)
-            return JsonResponse({
-                "success": True,
-                "stdout": "Python syntax is valid. Execution is disabled in safe local mode.",
-                "stderr": "",
-                "duration_ms": round((time.perf_counter() - started) * 1000),
-            })
-        except SyntaxError as ex:
-            return JsonResponse({
-                "success": False,
-                "stdout": "",
-                "stderr": f"Line {ex.lineno}: {ex.msg}",
-                "duration_ms": round((time.perf_counter() - started) * 1000),
-            })
-
-    if language in ("js", "javascript", "node"):
-        valid, error = _javascript_check(code)
-        return JsonResponse({
-            "success": valid,
-            "stdout": "JavaScript structure looks valid. Execution is disabled in safe local mode." if valid else "",
-            "stderr": error,
-            "duration_ms": round((time.perf_counter() - started) * 1000),
-        })
-
-    if language == "sql":
-        try:
-            connection = sqlite3.connect(":memory:")
-            cursor = connection.cursor()
-            output = []
-            for statement in (part.strip() for part in code.split(";") if part.strip()):
-                cursor.execute(statement)
-                if cursor.description:
-                    output.append(" | ".join(column[0] for column in cursor.description))
-                    output.extend(" | ".join(str(value) for value in row) for row in cursor.fetchall())
-            connection.close()
-            return JsonResponse({
-                "success": True,
-                "stdout": "\n".join(output) or "SQL completed without rows.",
-                "stderr": "",
-                "duration_ms": round((time.perf_counter() - started) * 1000),
-            })
-        except sqlite3.Error as ex:
-            return JsonResponse({
-                "success": False,
-                "stdout": "",
-                "stderr": str(ex),
-                "duration_ms": round((time.perf_counter() - started) * 1000),
-            })
-
-    return JsonResponse({
-        "success": False,
-        "error": "Safe checks support Python, JavaScript, and in-memory SQL.",
-    }, status=400)
+    return JsonResponse(run_sandboxed_code(language, code))
 
 
 @login_required(login_url="/login/")

@@ -132,7 +132,7 @@
                 <textarea id="codeInput" placeholder="Paste code here, or choose an upload above..."></textarea>
 
                 {% if request.user.is_authenticated %}
-                    <pre id="executionOutput" class="execution-output">Safe mode: Python and JavaScript are syntax-checked; SQL runs in memory.</pre>
+                    <pre id="executionOutput" class="execution-output">Guarded sandbox: 3-second timeout, 128 MB memory limit, temporary directory, capped output, and blocked network/file APIs.</pre>
                     <div class="quality-row">
                         <select id="qualityMode" aria-label="Quality check type">
                             <option value="all">All quality checks</option>

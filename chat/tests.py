@@ -77,6 +77,47 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(response.json()["success"])
         self.assertIn("Ada", response.json()["stdout"])
 
+    def test_python_runner_executes_inside_guarded_sandbox(self):
+        response = self.client.post("/api/execute/", {
+            "language": "python",
+            "code": "print('hello from sandbox')",
+        })
+        payload = response.json()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(payload["success"])
+        self.assertIn("hello from sandbox", payload["stdout"])
+        self.assertEqual(payload["sandbox"], "guarded-local")
+        self.assertEqual(payload["limits"]["timeout_seconds"], 3)
+        self.assertEqual(payload["limits"]["memory_mb"], 128)
+
+    def test_python_runner_blocks_imports(self):
+        response = self.client.post("/api/execute/", {
+            "language": "python",
+            "code": "import os; print(os.getcwd())",
+        })
+        payload = response.json()
+        self.assertFalse(payload["success"])
+        self.assertIn("imports are disabled", payload["stderr"])
+
+    def test_javascript_runner_executes_without_network_apis(self):
+        response = self.client.post("/api/execute/", {
+            "language": "javascript",
+            "code": "console.log('hello from javascript')",
+        })
+        payload = response.json()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(payload["success"])
+        self.assertIn("hello from javascript", payload["stdout"])
+
+    def test_sql_runner_blocks_file_operations(self):
+        response = self.client.post("/api/execute/", {
+            "language": "sql",
+            "code": "ATTACH DATABASE 'outside.db' AS external",
+        })
+        payload = response.json()
+        self.assertFalse(payload["success"])
+        self.assertIn("blocked", payload["stderr"])
+
     def test_export_markdown_is_downloadable(self):
         session = ChatSession.objects.create(owner=self.user, title="Export me")
         ChatMessage.objects.create(session=session, role="user", content="Hello")
