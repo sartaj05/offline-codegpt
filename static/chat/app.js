@@ -20,6 +20,8 @@ if (sendBtn) {
 }
 const searchInput = document.getElementById("searchInput");
 const searchResults = document.getElementById("searchResults");
+const projectStats = document.getElementById("projectStats");
+const projectFiles = document.getElementById("projectFiles");
 const csrfToken = document.getElementById("csrfToken").value;
 
 function updateActiveModel() {
@@ -571,6 +573,84 @@ async function searchProject() {
     }
 }
 
+function formatFileSize(bytes) {
+    if (!bytes) return "0 B";
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+async function loadProjectWorkspace() {
+    if (!projectFiles) return;
+    projectFiles.innerText = "Loading indexed files...";
+    try {
+        const response = await fetch("/api/project/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load project files.");
+        projectFiles.innerHTML = "";
+        const totalChunks = data.documents.reduce((sum, document) => sum + document.chunks, 0);
+        projectStats.innerText = data.documents.length
+            ? data.documents.length + " file(s) | " + totalChunks + " indexed chunk(s)"
+            : "No indexed files yet.";
+
+        data.documents.forEach(document => {
+            const row = document.createElement("div");
+            row.className = "project-file";
+
+            const info = document.createElement("div");
+            info.className = "project-file-info";
+            const name = document.createElement("strong");
+            name.innerText = document.filename;
+            name.title = document.filename;
+            const meta = document.createElement("span");
+            meta.innerText = document.language + " | " + formatFileSize(document.size_bytes) + " | " + document.chunks + " chunks";
+            info.append(name, meta);
+
+            const actions = document.createElement("div");
+            actions.className = "project-file-actions";
+            const reindexButton = document.createElement("button");
+            reindexButton.type = "button";
+            reindexButton.innerText = "Reindex";
+            reindexButton.onclick = () => reindexProjectFile(document.id);
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.innerText = "Delete";
+            deleteButton.onclick = () => deleteProjectFile(document.id, document.filename);
+            actions.append(reindexButton, deleteButton);
+
+            row.append(info, actions);
+            projectFiles.appendChild(row);
+        });
+    } catch (error) {
+        projectFiles.innerText = "Project workspace unavailable.";
+    }
+}
+
+async function reindexProjectFile(documentId) {
+    try {
+        await fetch("/api/project/" + documentId + "/reindex/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken },
+        });
+        await loadProjectWorkspace();
+    } catch (error) {
+        alert("Reindex failed: " + error);
+    }
+}
+
+async function deleteProjectFile(documentId, filename) {
+    if (!confirm("Delete " + filename + " from the project workspace?")) return;
+    try {
+        await fetch("/api/project/" + documentId + "/", {
+            method: "DELETE",
+            headers: { "X-CSRFToken": csrfToken },
+        });
+        await loadProjectWorkspace();
+    } catch (error) {
+        alert("Delete failed: " + error);
+    }
+}
+
 if (searchInput) searchInput.addEventListener("keydown", function (event) {
     if (event.key === "Enter") searchProject();
 });
@@ -584,3 +664,4 @@ promptInput.addEventListener("keydown", function (event) {
 
 modelInput.addEventListener("change", updateActiveModel);
 updateActiveModel();
+if (projectFiles) loadProjectWorkspace();

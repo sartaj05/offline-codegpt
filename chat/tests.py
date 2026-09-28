@@ -141,3 +141,32 @@ class ChatFeatureTests(TestCase):
         revisions = self.client.get(f"/api/session/{session.id}/revisions/").json()
         self.assertTrue(revisions["success"])
         self.assertEqual(revisions["revisions"][0]["messages"], 2)
+
+    def test_project_workspace_lists_reindexes_and_deletes_documents(self):
+        document = KnowledgeDocument.objects.create(
+            owner=self.user,
+            title="app.py",
+            filename="project/app.py",
+            language="python",
+            original_text="def greet(): return 'hello'",
+            file_size_bytes=28,
+        )
+        KnowledgeChunk.objects.create(
+            document=document,
+            chunk_index=0,
+            content=document.original_text,
+            language="python",
+        )
+
+        listing = self.client.get("/api/project/")
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(listing.json()["documents"][0]["filename"], "project/app.py")
+        self.assertEqual(listing.json()["documents"][0]["chunks"], 1)
+
+        reindex = self.client.post(f"/api/project/{document.id}/reindex/")
+        self.assertEqual(reindex.status_code, 200)
+        self.assertEqual(reindex.json()["chunks"], 1)
+
+        deleted = self.client.delete(f"/api/project/{document.id}/")
+        self.assertEqual(deleted.status_code, 200)
+        self.assertFalse(KnowledgeDocument.objects.filter(id=document.id).exists())

@@ -17,7 +17,7 @@ from django.contrib.auth.models import User
 from django.db.models import Count, Min
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 
 from .models import (
     ChatMessage,
@@ -225,6 +225,65 @@ def knowledge_search(request):
         "success": True,
         "query": query,
         "results": _search_knowledge(query, owner=request.user),
+    })
+
+
+@login_required(login_url="/login/")
+def project_documents(request):
+    documents = (
+        KnowledgeDocument.objects.filter(owner=request.user, is_active=True)
+        .order_by("filename")
+    )
+    return JsonResponse({
+        "success": True,
+        "documents": [
+            {
+                "id": document.id,
+                "filename": document.filename or document.title,
+                "language": document.language,
+                "size_bytes": document.file_size_bytes,
+                "chunks": document.chunks.count(),
+                "uploaded_at": document.uploaded_at.strftime("%d-%m-%Y %H:%M"),
+            }
+            for document in documents
+        ],
+    })
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["DELETE"])
+def project_document_delete(request, document_id):
+    document = get_object_or_404(
+        KnowledgeDocument,
+        id=document_id,
+        owner=request.user,
+    )
+    document.delete()
+    return JsonResponse({"success": True, "deleted_id": document_id})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def project_document_reindex(request, document_id):
+    document = get_object_or_404(
+        KnowledgeDocument,
+        id=document_id,
+        owner=request.user,
+    )
+    document.chunks.all().delete()
+    KnowledgeChunk.objects.bulk_create([
+        KnowledgeChunk(
+            document=document,
+            chunk_index=index,
+            content=document.original_text[start:start + CHUNK_SIZE],
+            language=document.language,
+        )
+        for index, start in enumerate(range(0, len(document.original_text), CHUNK_SIZE))
+    ])
+    return JsonResponse({
+        "success": True,
+        "document_id": document.id,
+        "chunks": document.chunks.count(),
     })
 
 
