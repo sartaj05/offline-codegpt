@@ -19,6 +19,13 @@ const remoteProvider = document.getElementById("remoteProvider");
 const remoteRepository = document.getElementById("remoteRepository");
 const remoteToken = document.getElementById("remoteToken");
 const remoteOutput = document.getElementById("remoteOutput");
+const mcpPanel = document.getElementById("mcpPanel");
+const mcpConnectorName = document.getElementById("mcpConnectorName");
+const mcpConnectorType = document.getElementById("mcpConnectorType");
+const mcpConnectorConfig = document.getElementById("mcpConnectorConfig");
+const mcpConnectorList = document.getElementById("mcpConnectorList");
+const mcpSearchQuery = document.getElementById("mcpSearchQuery");
+const mcpOutput = document.getElementById("mcpOutput");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -244,6 +251,104 @@ async function createRemotePullRequest() {
         remoteOutput.innerText = "Draft pull request created: " + (data.url || "success");
     } catch (error) {
         remoteOutput.innerText = String(error);
+    }
+}
+
+function toggleMcpPanel() {
+    if (!mcpPanel) return;
+    mcpPanel.hidden = !mcpPanel.hidden;
+    if (!mcpPanel.hidden) loadMcpConnectors();
+}
+
+function renderMcpConnectors(connectors) {
+    if (!mcpConnectorList) return;
+    mcpConnectorList.innerHTML = "";
+    if (!connectors.length) {
+        mcpConnectorList.innerText = "No custom connectors yet.";
+        return;
+    }
+    connectors.forEach(connector => {
+        const row = document.createElement("div");
+        row.className = "mcp-connector";
+        const label = document.createElement("span");
+        label.innerText = connector.name + " · " + connector.connector_type + (connector.allow_write ? " · write enabled" : " · read only");
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.innerText = "Remove";
+        remove.onclick = () => deleteMcpConnector(connector.id);
+        row.append(label, remove);
+        mcpConnectorList.appendChild(row);
+    });
+}
+
+async function loadMcpConnectors() {
+    try {
+        const response = await fetch("/api/mcp/connectors/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load MCP connectors.");
+        renderMcpConnectors(data.connectors);
+        mcpOutput.innerText = "Available tools:\n" + data.tools.map(tool => tool.name + (tool.write ? " [write approval]" : " [read-only]")).join("\n");
+    } catch (error) {
+        mcpOutput.innerText = String(error);
+    }
+}
+
+async function saveMcpConnector() {
+    try {
+        const response = await fetch("/api/mcp/connectors/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({
+                name: mcpConnectorName.value.trim(),
+                connector_type: mcpConnectorType.value,
+                config: mcpConnectorConfig.value.trim() || "{}",
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to save connector.");
+        mcpConnectorName.value = "";
+        mcpConnectorConfig.value = "";
+        await loadMcpConnectors();
+    } catch (error) {
+        mcpOutput.innerText = String(error);
+    }
+}
+
+async function deleteMcpConnector(id) {
+    try {
+        await fetch("/api/mcp/connectors/" + id + "/", {
+            method: "DELETE",
+            headers: { "X-CSRFToken": csrfToken },
+        });
+        await loadMcpConnectors();
+    } catch (error) {
+        mcpOutput.innerText = String(error);
+    }
+}
+
+async function callMcpSearch() {
+    try {
+        const response = await fetch("/api/mcp/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                jsonrpc: "2.0",
+                id: Date.now(),
+                method: "tools/call",
+                params: { name: "project.search", arguments: { query: mcpSearchQuery.value.trim() } },
+            }),
+        });
+        const data = await response.json();
+        if (data.error) throw new Error(data.error.message);
+        mcpOutput.innerText = JSON.stringify(data.result, null, 2);
+    } catch (error) {
+        mcpOutput.innerText = String(error);
     }
 }
 

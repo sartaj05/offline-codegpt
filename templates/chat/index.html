@@ -87,6 +87,7 @@
                 {% if request.user.is_authenticated %}
                     <button type="button" onclick="toggleOllamaSettings()">Ollama</button>
                     <button type="button" onclick="toggleRemoteIntegration()">Remote</button>
+                    <button type="button" onclick="toggleMcpPanel()">Tools</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -153,6 +154,32 @@
             <textarea id="remotePrBody" class="remote-pr-body" placeholder="Pull request summary..."></textarea>
             <button type="button" class="remote-pr-button" onclick="createRemotePullRequest()">Create draft pull request</button>
             <pre id="remoteOutput" class="remote-output">Remote integration is not connected.</pre>
+        </section>
+        <section id="mcpPanel" class="mcp-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>MCP tools and connectors</strong>
+                    <span>Read-only tools are available by default. Write tools require approval.</span>
+                </div>
+                <button type="button" onclick="toggleMcpPanel()">Close</button>
+            </div>
+            <div class="mcp-connector-grid">
+                <input id="mcpConnectorName" placeholder="Connector name">
+                <select id="mcpConnectorType">
+                    <option value="local_folder">Local folder</option>
+                    <option value="documentation">Documentation</option>
+                    <option value="database">Database</option>
+                    <option value="custom">Custom</option>
+                </select>
+                <input id="mcpConnectorConfig" placeholder='Config JSON, e.g. {"path":"./docs"}'>
+            </div>
+            <button type="button" class="mcp-save-button" onclick="saveMcpConnector()">Add connector</button>
+            <div id="mcpConnectorList" class="mcp-connector-list"></div>
+            <div class="mcp-tool-row">
+                <input id="mcpSearchQuery" placeholder="Search project with project.search">
+                <button type="button" onclick="callMcpSearch()">Run read-only search</button>
+            </div>
+            <pre id="mcpOutput" class="mcp-output">MCP tools are ready.</pre>
         </section>
 
         <section id="chatBox" class="chat-box">

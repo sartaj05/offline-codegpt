@@ -60,6 +60,37 @@ class AgentTask(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class McpConnector(models.Model):
+    CONNECTOR_TYPES = (
+        ("local_folder", "Local folder"),
+        ("documentation", "Documentation"),
+        ("database", "Database"),
+        ("custom", "Custom"),
+    )
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="mcp_connectors")
+    name = models.CharField(max_length=120)
+    connector_type = models.CharField(max_length=30, choices=CONNECTOR_TYPES, default="custom")
+    config = models.JSONField(default=dict)
+    enabled = models.BooleanField(default=True)
+    allow_write = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+
+class McpToolCall(models.Model):
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="mcp_tool_calls")
+    tool_name = models.CharField(max_length=120)
+    arguments = models.JSONField(default=dict)
+    success = models.BooleanField(default=False)
+    error = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class ChatSession(models.Model):
     owner = models.ForeignKey(
         User,

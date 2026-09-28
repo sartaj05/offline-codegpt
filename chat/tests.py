@@ -432,6 +432,50 @@ class ChatFeatureTests(TestCase):
         self.assertIn('"type": "token"', output)
         self.assertIn("CLI answer", output)
 
+    def test_mcp_connectors_tools_and_write_approval(self):
+        created = self.client.post(
+            "/api/mcp/connectors/",
+            {
+                "name": "Project docs",
+                "connector_type": "documentation",
+                "config": json.dumps({"path": "./docs"}),
+            },
+        )
+        self.assertTrue(created.json()["success"])
+        listing = self.client.get("/api/mcp/connectors/")
+        self.assertEqual(listing.json()["connectors"][0]["name"], "Project docs")
+        self.assertTrue(any(tool["name"] == "project.search" for tool in listing.json()["tools"]))
+
+        tools = self.client.post(
+            "/api/mcp/",
+            data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}),
+            content_type="application/json",
+        )
+        self.assertTrue(any(tool["name"] == "git.commit" for tool in tools.json()["result"]["tools"]))
+
+        search = self.client.post(
+            "/api/mcp/",
+            data=json.dumps({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {"name": "project.search", "arguments": {"query": "missing"}},
+            }),
+            content_type="application/json",
+        )
+        self.assertIn("content", search.json()["result"])
+        blocked = self.client.post(
+            "/api/mcp/",
+            data=json.dumps({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {"name": "git.commit", "arguments": {"message": "No approval"}},
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(blocked.status_code, 400)
+
     def test_rag_results_include_source_line_ranges(self):
         source = "first" + chr(10) + "needle = True" + chr(10) + "last"
         document = KnowledgeDocument.objects.create(

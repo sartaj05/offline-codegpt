@@ -30,6 +30,8 @@ from .models import (
     KnowledgeChunk,
     KnowledgeDocument,
     LocalModelConfig,
+    McpConnector,
+    McpToolCall,
     AgentTask,
     UserOllamaSettings,
 )
@@ -1001,6 +1003,154 @@ def agent_task(request, task_id):
         return JsonResponse({"success": False, "error": "Use approve, reject, complete, or undo."}, status=400)
     task.save(update_fields=["plan", "current_step", "status", "result", "updated_at"])
     return JsonResponse({"success": True, "task": _agent_payload(task)})
+
+
+def _mcp_tools():
+    return [
+        {"name": "project.search", "description": "Search indexed project code.", "write": False},
+        {"name": "git.status", "description": "Read local Git status.", "write": False},
+        {"name": "git.diff", "description": "Read the local Git diff.", "write": False},
+        {"name": "sandbox.run", "description": "Run code in the guarded sandbox.", "write": False, "approval_required": True},
+        {"name": "git.stage", "description": "Stage selected local Git paths.", "write": True, "approval_required": True},
+        {"name": "git.commit", "description": "Create a local Git commit.", "write": True, "approval_required": True},
+    ]
+
+
+def _mcp_call(user, tool_name, arguments):
+    tool = next((item for item in _mcp_tools() if item["name"] == tool_name), None)
+    if not tool:
+        return False, {}, "Unknown MCP tool."
+    if tool.get("approval_required") and not arguments.get("approved"):
+        return False, {}, "This tool requires explicit approved=true."
+    try:
+        if tool_name == "project.search":
+            return True, {"results": _search_knowledge(str(arguments.get("query", "")), owner=user)}, ""
+        if tool_name == "sandbox.run":
+            result = run_sandboxed_code(
+                str(arguments.get("language", "python")),
+                str(arguments.get("code", "")),
+            )
+            return result["success"], result, result.get("stderr", "")
+        if tool_name == "git.status":
+            result = _run_git(["status", "--short"])
+            if isinstance(result, tuple):
+                return False, {}, result[1]
+            return result.returncode == 0, {"raw": result.stdout}, result.stderr.strip()
+        if tool_name == "git.diff":
+            result = _run_git(["diff", "HEAD", "--"])
+            if isinstance(result, tuple):
+                return False, {}, result[1]
+            return result.returncode == 0, {"diff": result.stdout[:MAX_GIT_OUTPUT_CHARS]}, result.stderr.strip()
+        if tool_name == "git.stage":
+            paths = arguments.get("paths") or []
+            if not isinstance(paths, list) or any(not _git_path_is_safe(path) for path in paths):
+                return False, {}, "Invalid Git paths."
+            result = _run_git(["add", "--", *paths] if paths else ["add", "-A"])
+            if isinstance(result, tuple):
+                return False, {}, result[1]
+            return result.returncode == 0, {"staged": paths or ["all changes"]}, result.stderr.strip()
+        if tool_name == "git.commit":
+            message = str(arguments.get("message", "")).strip()
+            if not message or len(message) > 200:
+                return False, {}, "Commit message is required and limited to 200 characters."
+            result = _run_git(["commit", "-m", message])
+            if isinstance(result, tuple):
+                return False, {}, result[1]
+            return result.returncode == 0, {"output": result.stdout}, (result.stderr or result.stdout).strip()
+    except (TypeError, ValueError) as exc:
+        return False, {}, str(exc)
+    return False, {}, "MCP tool is not implemented."
+
+
+def _mcp_log(user, tool_name, arguments, success, error):
+    McpToolCall.objects.create(
+        owner=user,
+        tool_name=tool_name,
+        arguments=arguments,
+        success=success,
+        error=error[:2000],
+    )
+
+
+def _mcp_connector_payload(connector):
+    return {
+        "id": connector.id,
+        "name": connector.name,
+        "connector_type": connector.connector_type,
+        "config": connector.config,
+        "enabled": connector.enabled,
+        "allow_write": connector.allow_write,
+    }
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def mcp_connectors(request):
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()
+        connector_type = request.POST.get("connector_type", "custom").strip()
+        if not name or connector_type not in dict(McpConnector.CONNECTOR_TYPES):
+            return JsonResponse({"success": False, "error": "Connector name and type are required."}, status=400)
+        try:
+            config = json.loads(request.POST.get("config", "{}"))
+            if not isinstance(config, dict):
+                raise ValueError
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return JsonResponse({"success": False, "error": "Connector config must be a JSON object."}, status=400)
+        connector = McpConnector.objects.create(
+            owner=request.user,
+            name=name[:120],
+            connector_type=connector_type,
+            config=config,
+            allow_write=request.POST.get("allow_write") == "true",
+        )
+        return JsonResponse({"success": True, "connector": _mcp_connector_payload(connector)})
+    return JsonResponse({
+        "success": True,
+        "connectors": [
+            _mcp_connector_payload(item)
+            for item in McpConnector.objects.filter(owner=request.user).order_by("name")
+        ],
+        "tools": _mcp_tools(),
+        "recent_calls": list(
+            McpToolCall.objects.filter(owner=request.user).order_by("-created_at")[:20].values(
+                "tool_name", "success", "error", "created_at"
+            )
+        ),
+    })
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["DELETE"])
+def mcp_connector_delete(request, connector_id):
+    connector = get_object_or_404(McpConnector, id=connector_id, owner=request.user)
+    connector.delete()
+    return JsonResponse({"success": True, "deleted_id": connector_id})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def mcp_rpc(request):
+    try:
+        payload = json.loads(request.body or "{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"jsonrpc": "2.0", "error": {"code": -32700, "message": "Invalid JSON."}}, status=400)
+    request_id = payload.get("id")
+    method = payload.get("method")
+    if method == "tools/list":
+        result = {"tools": _mcp_tools()}
+    elif method == "tools/call":
+        params = payload.get("params") or {}
+        tool_name = params.get("name", "")
+        arguments = params.get("arguments") or {}
+        success, result, error = _mcp_call(request.user, tool_name, arguments)
+        _mcp_log(request.user, tool_name, arguments, success, error)
+        if not success:
+            return JsonResponse({"jsonrpc": "2.0", "id": request_id, "error": {"code": -32000, "message": error}}, status=400)
+        result = {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}]}
+    else:
+        return JsonResponse({"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": "Method not found."}}, status=400)
+    return JsonResponse({"jsonrpc": "2.0", "id": request_id, "result": result})
 
 
 @login_required(login_url="/login/")
