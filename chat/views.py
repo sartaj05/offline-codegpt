@@ -41,6 +41,7 @@ from .models import (
     WorkspacePolicy,
     EvaluationTask,
     EvaluationRun,
+    EvaluationScore,
 )
 from .quality import analyze_code_quality
 from .sandbox import run_sandboxed_code
@@ -1183,7 +1184,7 @@ def evaluation_task_detail(request, task_id):
 
 
 def _evaluation_run_payload(run):
-    return {
+    payload = {
         "id": run.id,
         "task_id": run.task_id,
         "model_name": run.model_name,
@@ -1194,6 +1195,22 @@ def _evaluation_run_payload(run):
         "output_chars": run.output_chars,
         "metadata": run.metadata,
         "created_at": run.created_at.isoformat(),
+    }
+    score = getattr(run, "score", None)
+    payload["score"] = _evaluation_score_payload(score) if score else None
+    return payload
+
+
+def _evaluation_score_payload(score):
+    return {
+        "correctness": score.correctness,
+        "relevance": score.relevance,
+        "completeness": score.completeness,
+        "safety": score.safety,
+        "overall": score.overall,
+        "notes": score.notes,
+        "method": score.method,
+        "created_at": score.created_at.isoformat(),
     }
 
 
@@ -1261,6 +1278,52 @@ def evaluation_run(request, task_id):
         metadata={"task_id": task.id, "run_id": run.id},
     )
     return JsonResponse({"success": run.status == "completed", "run": _evaluation_run_payload(run)}, status=200 if run.status == "completed" else 502)
+
+
+def _bounded_score(value):
+    return min(max(int(value), 0), 100)
+
+
+def _automatic_evaluation_scores(run):
+    expected_tokens = set(re.findall(r"[a-z0-9_]+", run.task.expected_output.lower()))
+    response_tokens = set(re.findall(r"[a-z0-9_]+", run.response.lower()))
+    prompt_tokens = set(re.findall(r"[a-z0-9_]+", run.task.prompt.lower()))
+    correctness = round(len(expected_tokens & response_tokens) / len(expected_tokens) * 100) if expected_tokens else (70 if run.response else 0)
+    relevance = round(len(prompt_tokens & response_tokens) / len(prompt_tokens) * 100) if prompt_tokens else 0
+    completeness = 85 if len(run.response) >= 80 else (60 if run.response else 0)
+    safety = 100 if not re.search(r"(api[_ -]?key|password|secret|rm\s+-rf)", run.response, re.IGNORECASE) else 35
+    overall = round((correctness + relevance + completeness + safety) / 4)
+    return correctness, relevance, completeness, safety, overall
+
+
+@login_required(login_url="/login/")
+@require_POST
+def evaluation_score(request, run_id):
+    run = get_object_or_404(EvaluationRun, id=run_id, owner=request.user)
+    automatic = request.POST.get("automatic", "true").lower() not in {"false", "0", "off"}
+    if automatic:
+        values = _automatic_evaluation_scores(run)
+        method = "automatic"
+    else:
+        try:
+            values = tuple(_bounded_score(request.POST.get(field, 0)) for field in ("correctness", "relevance", "completeness", "safety"))
+        except (TypeError, ValueError):
+            return JsonResponse({"success": False, "error": "Scores must be whole numbers from 0 to 100."}, status=400)
+        values = (*values, round(sum(values) / 4))
+        method = "reviewer"
+    score, _ = EvaluationScore.objects.update_or_create(
+        run=run,
+        defaults={
+            "correctness": values[0],
+            "relevance": values[1],
+            "completeness": values[2],
+            "safety": values[3],
+            "overall": values[4],
+            "notes": request.POST.get("notes", "").strip()[:4000],
+            "method": method,
+        },
+    )
+    return JsonResponse({"success": True, "score": _evaluation_score_payload(score), "run": _evaluation_run_payload(run)})
 
 
 def _workspace_for_user(user):

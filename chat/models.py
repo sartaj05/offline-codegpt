@@ -450,3 +450,18 @@ class EvaluationRun(models.Model):
 
     def __str__(self):
         return f"{self.task.name} · {self.model_name}"
+
+
+class EvaluationScore(models.Model):
+    run = models.OneToOneField(EvaluationRun, on_delete=models.CASCADE, related_name="score")
+    correctness = models.PositiveIntegerField(default=0)
+    relevance = models.PositiveIntegerField(default=0)
+    completeness = models.PositiveIntegerField(default=0)
+    safety = models.PositiveIntegerField(default=0)
+    overall = models.PositiveIntegerField(default=0)
+    notes = models.TextField(blank=True, default="")
+    method = models.CharField(max_length=30, default="automatic")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Score for run {self.run_id}: {self.overall}/100"

@@ -62,6 +62,29 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(response.json()["run"]["response"], "Use a + b.")
         self.assertEqual(AiEvent.objects.get(event_type="evaluation").output_chars, len("Use a + b."))
 
+    @patch("chat.views.requests.post")
+    def test_evaluation_response_gets_automatic_rubric_score(self, mock_post):
+        class FakeResponse:
+            ok = True
+            status_code = 200
+            text = ""
+
+            def json(self):
+                return {"response": "Return a + b to add the values.", "done": True}
+
+        mock_post.return_value = FakeResponse()
+        task = EvaluationTask.objects.create(
+            owner=self.user,
+            name="Score addition",
+            prompt="Explain addition",
+            expected_output="Return a + b to add the values.",
+        )
+        run = self.client.post(f"/api/evaluations/tasks/{task.id}/run/", {}).json()["run"]
+        scored = self.client.post(f"/api/evaluations/runs/{run['id']}/score/", {"automatic": "true"})
+        self.assertTrue(scored.json()["success"])
+        self.assertEqual(scored.json()["score"]["correctness"], 100)
+        self.assertGreater(scored.json()["score"]["overall"], 0)
+
     def test_guest_upload_requires_free_account(self):
         self.client.logout()
         image = SimpleUploadedFile("diagram.png", b"fake-image", content_type="image/png")

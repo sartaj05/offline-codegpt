@@ -427,8 +427,30 @@ async function runEvaluationTask(task) {
         const data = await response.json();
         if (!data.success) throw new Error(data.error || data.run?.response || "Evaluation run failed.");
         output.innerText = data.run.model_name + " · " + data.run.duration_ms + " ms\n\n" + data.run.response;
+        const scoreButton = document.createElement("button");
+        scoreButton.type = "button";
+        scoreButton.innerText = "Score response";
+        scoreButton.onclick = () => scoreEvaluationRun(data.run.id, output);
+        output.parentElement.appendChild(scoreButton);
     } catch (error) {
         output.innerText = "Run error: " + error;
+    }
+}
+
+async function scoreEvaluationRun(runId, output) {
+    try {
+        const response = await fetch("/api/evaluations/runs/" + runId + "/score/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ automatic: "true" }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to score response.");
+        output.innerText += "\n\nAutomatic score: " + data.score.overall + "/100" +
+            "\nCorrectness " + data.score.correctness + " · Relevance " + data.score.relevance +
+            " · Completeness " + data.score.completeness + " · Safety " + data.score.safety;
+    } catch (error) {
+        output.innerText += "\n\nScore error: " + error;
     }
 }
 
