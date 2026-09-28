@@ -3,10 +3,16 @@ let currentSessionId = null;
 const chatBox = document.getElementById("chatBox");
 const promptInput = document.getElementById("promptInput");
 const codeInput = document.getElementById("codeInput");
+const modelInput = document.getElementById("model");
 const languageInput = document.getElementById("language");
 const fileInput = document.getElementById("fileInput");
 const sendBtn = document.getElementById("sendBtn");
 const csrfToken = document.getElementById("csrfToken").value;
+
+function updateActiveModel() {
+    const activeModel = document.getElementById("activeModel");
+    if (activeModel && modelInput) activeModel.innerText = modelInput.value;
+}
 
 function clearWelcome() {
     const welcome = document.querySelector(".welcome");
@@ -120,6 +126,7 @@ async function sendMessage() {
     const formData = new FormData();
     formData.append("prompt", prompt);
     formData.append("code", code);
+    formData.append("model", modelInput.value);
     formData.append("language", languageInput.value);
     if (currentSessionId) formData.append("session_id", currentSessionId);
     Array.from(files).forEach(file => formData.append("files", file));
@@ -168,3 +175,6 @@ promptInput.addEventListener("keydown", function (event) {
         sendMessage();
     }
 });
+
+modelInput.addEventListener("change", updateActiveModel);
+updateActiveModel();

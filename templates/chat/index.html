@@ -29,7 +29,7 @@
         </div>
 
         <div class="sidebar-footer">
-            <div class="model-name">Model: qwen2.5-coder:1.5b</div>
+            <div class="model-name">Model: <span id="activeModel">{{ default_model }}</span></div>
             <div class="offline-badge">Offline Mode</div>
         </div>
     </aside>
@@ -65,6 +65,11 @@
 
             <div class="code-panel">
                 <div class="form-row">
+                    <select id="model" aria-label="Ollama model">
+                        {% for model in models %}
+                            <option value="{{ model }}" {% if model == default_model %}selected{% endif %}>{{ model }}</option>
+                        {% endfor %}
+                    </select>
                     <select id="language">
                         <option value="auto">Auto Detect</option>
                         <option value="csharp">C#</option>

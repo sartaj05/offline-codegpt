@@ -6,11 +6,35 @@ from django.http import JsonResponse, StreamingHttpResponse
 from django.shortcuts import render, get_object_or_404
 from django.views.decorators.http import require_POST
 
-from .models import ChatSession, ChatMessage
+from .models import ChatSession, ChatMessage, LocalModelConfig
 
 
-OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
-MODEL_NAME = "qwen2.5-coder:1.5b"
+OLLAMA_BASE_URL = "http://127.0.0.1:11434"
+OLLAMA_URL = f"{OLLAMA_BASE_URL}/api/generate"
+DEFAULT_MODEL = "qwen2.5-coder:1.5b"
+
+
+def _available_models():
+    names = list(
+        LocalModelConfig.objects.filter(is_active=True)
+        .order_by("-is_default", "name")
+        .values_list("name", flat=True)
+    )
+
+    if DEFAULT_MODEL not in names:
+        names.insert(0, DEFAULT_MODEL)
+
+    try:
+        response = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=3)
+        if response.ok:
+            for item in response.json().get("models", []):
+                name = item.get("name")
+                if name and name not in names:
+                    names.append(name)
+    except (requests.RequestException, ValueError):
+        pass
+
+    return names
 
 
 def _event(payload):
@@ -22,7 +46,17 @@ def index(request):
     sessions = ChatSession.objects.order_by("-updated_at")[:30]
 
     return render(request, "chat/index.html", {
-        "sessions": sessions
+        "sessions": sessions,
+        "models": _available_models(),
+        "default_model": DEFAULT_MODEL,
+    })
+
+
+def model_list(request):
+    return JsonResponse({
+        "success": True,
+        "models": _available_models(),
+        "default_model": DEFAULT_MODEL,
     })
 
 
@@ -53,6 +87,7 @@ def ask_code(request):
     language = request.POST.get("language", "auto").strip()
     code = request.POST.get("code", "").strip()
     session_id = request.POST.get("session_id", "").strip()
+    requested_model = request.POST.get("model", "").strip()
 
     uploaded_files = request.FILES.getlist("files")
 
@@ -98,6 +133,10 @@ def ask_code(request):
     # Create new session or use existing session
     if session_id:
         session = get_object_or_404(ChatSession, id=session_id)
+        model_name = requested_model or session.model_name or DEFAULT_MODEL
+        if session.model_name != model_name:
+            session.model_name = model_name
+            session.save(update_fields=["model_name", "updated_at"])
     else:
         if prompt:
             title = prompt[:60]
@@ -106,7 +145,8 @@ def ask_code(request):
         else:
             title = "New Chat"
 
-        session = ChatSession.objects.create(title=title)
+        model_name = requested_model or DEFAULT_MODEL
+        session = ChatSession.objects.create(title=title, model_name=model_name)
 
     user_message_parts = []
 
@@ -172,7 +212,7 @@ Instructions:
         response = requests.post(
             OLLAMA_URL,
             json={
-                "model": MODEL_NAME,
+                "model": model_name,
                 "prompt": full_prompt,
                 "stream": True
             },
@@ -208,13 +248,14 @@ Instructions:
                     session=session,
                     role="assistant",
                     content=answer,
-                    model_name=MODEL_NAME,
+                    model_name=model_name,
                 )
                 session.save(update_fields=["updated_at"])
                 yield _event({
                     "type": "complete",
                     "session_id": session.id,
                     "title": session.title,
+                    "model": model_name,
                     "answer": answer,
                 })
             except Exception as ex:
