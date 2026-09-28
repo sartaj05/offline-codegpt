@@ -1,0 +1,99 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Offline CodeGPT</title>
+    <link rel="stylesheet" href="{% static 'chat/app.css' %}">
+</head>
+<body>
+
+<div class="app">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <button class="new-chat-btn" onclick="newChat()">+ New Chat</button>
+        </div>
+
+        <div class="history-title">Recent Chats</div>
+
+        <div class="history-list">
+            {% for session in sessions %}
+                <button class="history-item" onclick="loadSession('{{ session.id }}')">
+                    {{ session.title }}
+                </button>
+            {% empty %}
+                <div class="no-history">No chat history</div>
+            {% endfor %}
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="model-name">Model: qwen2.5-coder:1.5b</div>
+            <div class="offline-badge">Offline Mode</div>
+        </div>
+    </aside>
+
+    <!-- Main Chat Area -->
+    <main class="main">
+
+        <header class="topbar">
+            <div>
+                <h2>Offline CodeGPT</h2>
+                <p>Upload code, ask prompt, get local AI output</p>
+            </div>
+        </header>
+
+        <section id="chatBox" class="chat-box">
+            <div class="welcome">
+                <h1>How can I help with your code?</h1>
+                <p>This works locally using Django + Ollama. No internet required after setup.</p>
+
+                <div class="sample-grid">
+                    <button onclick="setPrompt('Explain this code step by step')">Explain code</button>
+                    <button onclick="setPrompt('Find bugs and give corrected code')">Find bugs</button>
+                    <button onclick="setPrompt('Optimize this code for performance')">Optimize</button>
+                    <button onclick="setPrompt('Convert this code into clean production code')">Refactor</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Composer -->
+        <section class="composer">
+
+            <input type="hidden" id="csrfToken" value="{{ csrf_token }}">
+
+            <div class="code-panel">
+                <div class="form-row">
+                    <select id="language">
+                        <option value="auto">Auto Detect</option>
+                        <option value="csharp">C#</option>
+                        <option value="python">Python</option>
+                        <option value="javascript">JavaScript</option>
+                        <option value="sql">SQL</option>
+                        <option value="php">PHP</option>
+                        <option value="java">Java</option>
+                        <option value="html">HTML</option>
+                        <option value="css">CSS</option>
+                    </select>
+
+                    <input type="file" id="fileInput" multiple>
+                </div>
+
+                <textarea id="codeInput" placeholder="Paste code here, or upload a file..."></textarea>
+            </div>
+
+            <div class="prompt-bar">
+                <textarea id="promptInput" placeholder="Ask anything about your code..."></textarea>
+                <button id="sendBtn" onclick="sendMessage()">Send</button>
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+<script src="{% static 'chat/app.js' %}"></script>
+</body>
+</html>
