@@ -95,6 +95,24 @@ class McpToolCall(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class AiEvent(models.Model):
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="ai_events",
+        blank=True,
+        null=True,
+    )
+    event_type = models.CharField(max_length=60, default="chat")
+    model_name = models.CharField(max_length=100, blank=True, default="")
+    duration_ms = models.PositiveIntegerField(default=0)
+    input_chars = models.PositiveIntegerField(default=0)
+    output_chars = models.PositiveIntegerField(default=0)
+    success = models.BooleanField(default=True)
+    metadata = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class ChatSession(models.Model):
     owner = models.ForeignKey(
         User,

@@ -179,6 +179,15 @@ button { cursor: pointer; }
 .git-workspace { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
 .git-files { max-height: 170px; overflow-y: auto; }
 .git-stage-all, .git-commit-button { width: 100%; padding: 6px 8px; border: 1px solid rgba(99,230,190,.3); border-radius: 6px; background: rgba(99,230,190,.1); color: var(--accent); font-size: 10px; cursor: pointer; }
+
+.observability-panel { margin: 12px 24px 0; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: linear-gradient(145deg, rgba(34,39,53,.98), rgba(24,29,40,.98)); }
+.panel-actions { display: flex; gap: 6px; }
+.observability-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.observability-stats div { padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
+.observability-stats strong, .observability-stats span { display: block; }
+.observability-stats strong { color: var(--accent); font-size: 16px; }
+.observability-stats span { margin-top: 4px; color: var(--muted); font-size: 10px; }
+.observability-output { max-height: 180px; margin: 12px 0 0; padding: 11px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: rgba(10,12,18,.55); color: #cbd5e1; font-size: 11px; line-height: 1.55; white-space: pre-wrap; }
 .git-file { display: flex; align-items: center; gap: 5px; margin-top: 5px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); }
 .git-file-status { flex: 0 0 22px; color: var(--accent); font-family: Consolas, monospace; font-size: 9px; }
 .git-file-path { min-width: 0; flex: 1; overflow: hidden; color: var(--muted); font-family: Consolas, monospace; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }

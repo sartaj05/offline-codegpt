@@ -88,6 +88,7 @@
                     <button type="button" onclick="toggleOllamaSettings()">Ollama</button>
                     <button type="button" onclick="toggleRemoteIntegration()">Remote</button>
                     <button type="button" onclick="toggleMcpPanel()">Tools</button>
+                    <button type="button" onclick="toggleObservability()">Metrics</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -180,6 +181,20 @@
                 <button type="button" onclick="callMcpSearch()">Run read-only search</button>
             </div>
             <pre id="mcpOutput" class="mcp-output">MCP tools are ready.</pre>
+        </section>
+        <section id="observabilityPanel" class="observability-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>AI observability</strong>
+                    <span>Local response timing, usage, errors, and model activity.</span>
+                </div>
+                <div class="panel-actions">
+                    <button type="button" onclick="loadObservability()">Refresh</button>
+                    <button type="button" onclick="toggleObservability()">Close</button>
+                </div>
+            </div>
+            <div id="observabilityStats" class="observability-stats"></div>
+            <pre id="observabilityOutput" class="observability-output">Open Metrics to load your local AI activity.</pre>
         </section>
 
         <section id="chatBox" class="chat-box">

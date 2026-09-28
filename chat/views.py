@@ -33,6 +33,7 @@ from .models import (
     McpConnector,
     McpToolCall,
     AgentTask,
+    AiEvent,
     UserOllamaSettings,
 )
 from .quality import analyze_code_quality
@@ -1069,6 +1070,41 @@ def agent_control(request, task_id):
     task.logs = [*(task.logs or []), {"message": task.result, "level": "warning" if action in {"pause", "cancel"} else "info"}][-50:]
     task.save(update_fields=["control_state", "status", "result", "logs", "updated_at"])
     return JsonResponse({"success": True, "task": _agent_payload(task)})
+
+
+@login_required(login_url="/login/")
+@require_GET
+def ai_observability(request):
+    events = list(AiEvent.objects.filter(owner=request.user).order_by("-created_at")[:100])
+    total = len(events)
+    successful = sum(1 for event in events if event.success)
+    durations = [event.duration_ms for event in events if event.duration_ms]
+    return JsonResponse({
+        "success": True,
+        "summary": {
+            "events": total,
+            "successful": successful,
+            "failed": total - successful,
+            "success_rate": round((successful / total) * 100, 1) if total else 0,
+            "average_duration_ms": round(sum(durations) / len(durations)) if durations else 0,
+            "input_chars": sum(event.input_chars for event in events),
+            "output_chars": sum(event.output_chars for event in events),
+        },
+        "events": [
+            {
+                "id": event.id,
+                "type": event.event_type,
+                "model": event.model_name,
+                "duration_ms": event.duration_ms,
+                "input_chars": event.input_chars,
+                "output_chars": event.output_chars,
+                "success": event.success,
+                "metadata": event.metadata,
+                "created_at": event.created_at.isoformat(),
+            }
+            for event in events
+        ],
+    })
 def _mcp_tools():
     return [
         {"name": "project.search", "description": "Search indexed project code.", "write": False},
@@ -1505,7 +1541,15 @@ Instructions:
 7. Do not say you need internet.
 """
 
+    ai_event = None
+    event_started = time.perf_counter()
     try:
+        ai_event = AiEvent.objects.create(
+            owner=owner,
+            event_type="chat",
+            model_name=model_name,
+            input_chars=len(full_prompt),
+        )
         response = requests.post(
             f"{ollama_base_url}/api/generate",
             json={
@@ -1523,6 +1567,10 @@ Instructions:
             stream=True,
         )
         if response.status_code != 200:
+            ai_event.success = False
+            ai_event.duration_ms = round((time.perf_counter() - event_started) * 1000)
+            ai_event.metadata = {"status_code": response.status_code, "error": response.text[:500]}
+            ai_event.save(update_fields=["success", "duration_ms", "metadata"])
             return JsonResponse({"success": False, "error": response.text}, status=500)
 
         def stream_answer():
@@ -1546,6 +1594,14 @@ Instructions:
                     content=answer,
                     model_name=model_name,
                 )
+                ai_event.duration_ms = round((time.perf_counter() - event_started) * 1000)
+                ai_event.output_chars = len(answer)
+                ai_event.metadata = {
+                    "sources": len(relevant_chunks),
+                    "images": len(image_data),
+                    "session_id": session.id,
+                }
+                ai_event.save(update_fields=["duration_ms", "output_chars", "metadata"])
                 session.save(update_fields=["updated_at"])
                 yield _event({
                     "type": "complete",
@@ -1567,6 +1623,11 @@ Instructions:
                     "answer": answer,
                 })
             except Exception as ex:
+                if ai_event:
+                    ai_event.success = False
+                    ai_event.duration_ms = round((time.perf_counter() - event_started) * 1000)
+                    ai_event.metadata = {"error": str(ex)[:500]}
+                    ai_event.save(update_fields=["success", "duration_ms", "metadata"])
                 yield _event({"type": "error", "error": str(ex)})
 
         streaming_response = StreamingHttpResponse(
@@ -1576,14 +1637,29 @@ Instructions:
         streaming_response["Cache-Control"] = "no-cache"
         return streaming_response
     except requests.exceptions.ConnectionError:
+        if ai_event:
+            ai_event.success = False
+            ai_event.duration_ms = round((time.perf_counter() - event_started) * 1000)
+            ai_event.metadata = {"error": "Ollama is not running"}
+            ai_event.save(update_fields=["success", "duration_ms", "metadata"])
         return JsonResponse({
             "success": False,
             "error": "Ollama is not running. Start Ollama first.",
         }, status=500)
     except requests.exceptions.Timeout:
+        if ai_event:
+            ai_event.success = False
+            ai_event.duration_ms = round((time.perf_counter() - event_started) * 1000)
+            ai_event.metadata = {"error": "Model response timeout"}
+            ai_event.save(update_fields=["success", "duration_ms", "metadata"])
         return JsonResponse({
             "success": False,
             "error": "Model response timeout. Try smaller files or a smaller prompt.",
         }, status=500)
     except Exception as ex:
+        if ai_event:
+            ai_event.success = False
+            ai_event.duration_ms = round((time.perf_counter() - event_started) * 1000)
+            ai_event.metadata = {"error": str(ex)[:500]}
+            ai_event.save(update_fields=["success", "duration_ms", "metadata"])
         return JsonResponse({"success": False, "error": str(ex)}, status=500)

@@ -7,7 +7,7 @@ from django.test import TestCase
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import ChatMessage, ChatSession, KnowledgeChunk, KnowledgeDocument
+from .models import AiEvent, ChatMessage, ChatSession, KnowledgeChunk, KnowledgeDocument
 from .views import _search_knowledge
 
 
@@ -58,6 +58,31 @@ class ChatFeatureTests(TestCase):
         payload = post.call_args.kwargs["json"]
         self.assertEqual(payload["model"], "llava:latest")
         self.assertEqual(len(payload["images"]), 1)
+
+    def test_observability_records_completed_chat_metrics(self):
+        class FakeResponse:
+            status_code = 200
+            text = ""
+
+            def iter_lines(self, decode_unicode=True):
+                return [
+                    json.dumps({"response": "Tracked answer"}).encode(),
+                    json.dumps({"done": True}).encode(),
+                ]
+
+        with patch("chat.views.requests.post", return_value=FakeResponse()):
+            response = self.client.post("/api/ask-code/", {"prompt": "Track this request"})
+            list(response.streaming_content)
+
+        event = AiEvent.objects.get(owner=self.user)
+        self.assertTrue(event.success)
+        self.assertEqual(event.event_type, "chat")
+        self.assertEqual(event.output_chars, len("Tracked answer"))
+
+        dashboard = self.client.get("/api/observability/")
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertEqual(dashboard.json()["summary"]["events"], 1)
+        self.assertEqual(dashboard.json()["summary"]["success_rate"], 100.0)
 
     def test_quality_endpoint_finds_security_issue(self):
         response = self.client.post("/api/analyze/", {

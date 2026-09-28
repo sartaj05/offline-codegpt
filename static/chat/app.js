@@ -26,6 +26,9 @@ const mcpConnectorConfig = document.getElementById("mcpConnectorConfig");
 const mcpConnectorList = document.getElementById("mcpConnectorList");
 const mcpSearchQuery = document.getElementById("mcpSearchQuery");
 const mcpOutput = document.getElementById("mcpOutput");
+const observabilityPanel = document.getElementById("observabilityPanel");
+const observabilityStats = document.getElementById("observabilityStats");
+const observabilityOutput = document.getElementById("observabilityOutput");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -259,6 +262,35 @@ function toggleMcpPanel() {
     if (!mcpPanel) return;
     mcpPanel.hidden = !mcpPanel.hidden;
     if (!mcpPanel.hidden) loadMcpConnectors();
+}
+
+function toggleObservability() {
+    if (!observabilityPanel) return;
+    observabilityPanel.hidden = !observabilityPanel.hidden;
+    if (!observabilityPanel.hidden) loadObservability();
+}
+
+async function loadObservability() {
+    if (!observabilityOutput) return;
+    observabilityOutput.innerText = "Loading local AI metrics...";
+    try {
+        const response = await fetch("/api/observability/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load metrics.");
+        const summary = data.summary;
+        observabilityStats.innerHTML = [
+            ["Requests", summary.events],
+            ["Success rate", summary.success_rate + "%"],
+            ["Avg. latency", summary.average_duration_ms + " ms"],
+            ["Input chars", summary.input_chars],
+            ["Output chars", summary.output_chars],
+        ].map(item => "<div><strong>" + item[1] + "</strong><span>" + item[0] + "</span></div>").join("");
+        observabilityOutput.innerText = data.events.length
+            ? data.events.map(event => event.created_at + " | " + (event.success ? "ok" : "failed") + " | " + (event.model || "local model") + " | " + event.duration_ms + " ms | in " + event.input_chars + " / out " + event.output_chars).join("\n")
+            : "No AI activity recorded yet.";
+    } catch (error) {
+        observabilityOutput.innerText = "Metrics error: " + error;
+    }
 }
 
 function renderMcpConnectors(connectors) {
