@@ -1,0 +1,23 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sign in · Offline CodeGPT</title>
+    <link rel="stylesheet" href="{% static 'chat/app.css' %}">
+</head>
+<body class="auth-page">
+    <main class="auth-card">
+        <h1>Offline CodeGPT</h1>
+        <p>Sign in to keep your chats and project files private.</p>
+        {% if error %}<div class="auth-error">{{ error }}</div>{% endif %}
+        <form method="post">
+            {% csrf_token %}
+            <label>Username<input name="username" required autofocus></label>
+            <label>Password<input name="password" type="password" required></label>
+            <button type="submit">Sign in</button>
+        </form>
+        <a href="{% url 'signup' %}">Create an account</a>
+    </main>
+</body>
+</html>

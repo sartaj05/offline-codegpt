@@ -8,8 +8,11 @@ from pathlib import PurePosixPath
 
 import requests
 
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .models import (
@@ -81,9 +84,10 @@ def _language_for_filename(filename):
     }.get(extension, "auto")
 
 
-def _save_knowledge_document(filename, file_text, source_type):
+def _save_knowledge_document(filename, file_text, source_type, owner):
     content_hash = hashlib.sha256(file_text.encode("utf-8")).hexdigest()
     document, _ = KnowledgeDocument.objects.update_or_create(
+        owner=owner,
         content_hash=content_hash,
         defaults={
             "title": PurePosixPath(filename).name,
@@ -109,7 +113,7 @@ def _save_knowledge_document(filename, file_text, source_type):
     return document
 
 
-def _search_knowledge(query, limit=8):
+def _search_knowledge(query, limit=8, owner=None):
     terms = list(dict.fromkeys(re.findall(r"[a-zA-Z0-9_]{2,}", query.lower())))
     if not terms:
         return []
@@ -117,6 +121,7 @@ def _search_knowledge(query, limit=8):
     matches = []
     chunks = KnowledgeChunk.objects.filter(
         document__is_active=True,
+        document__owner=owner,
     ).select_related("document")
 
     for chunk in chunks:
@@ -140,8 +145,50 @@ def _search_knowledge(query, limit=8):
     ]
 
 
+def signup(request):
+    if request.user.is_authenticated:
+        return redirect("chat_home")
+    if request.method == "POST":
+        username = request.POST.get("username", "").strip()
+        password = request.POST.get("password", "")
+        confirmation = request.POST.get("confirmation", "")
+        if not username or not password:
+            return render(request, "chat/signup.html", {"error": "Username and password are required."})
+        if password != confirmation:
+            return render(request, "chat/signup.html", {"error": "Passwords do not match."})
+        if User.objects.filter(username=username).exists():
+            return render(request, "chat/signup.html", {"error": "That username is already in use."})
+        user = User.objects.create_user(username=username, password=password)
+        login(request, user)
+        return redirect("chat_home")
+    return render(request, "chat/signup.html")
+
+
+def login_view(request):
+    if request.user.is_authenticated:
+        return redirect("chat_home")
+    if request.method == "POST":
+        user = authenticate(
+            request,
+            username=request.POST.get("username", "").strip(),
+            password=request.POST.get("password", ""),
+        )
+        if user is not None:
+            login(request, user)
+            return redirect("chat_home")
+        return render(request, "chat/login.html", {"error": "Invalid username or password."})
+    return render(request, "chat/login.html")
+
+
+@require_POST
+def logout_view(request):
+    logout(request)
+    return redirect("login")
+
+
+@login_required(login_url="/login/")
 def index(request):
-    sessions = ChatSession.objects.order_by("-updated_at")[:30]
+    sessions = ChatSession.objects.filter(owner=request.user).order_by("-updated_at")[:30]
     return render(request, "chat/index.html", {
         "sessions": sessions,
         "models": _available_models(),
@@ -149,6 +196,7 @@ def index(request):
     })
 
 
+@login_required(login_url="/login/")
 def model_list(request):
     return JsonResponse({
         "success": True,
@@ -157,17 +205,19 @@ def model_list(request):
     })
 
 
+@login_required(login_url="/login/")
 def knowledge_search(request):
     query = request.GET.get("q", "").strip()
     return JsonResponse({
         "success": True,
         "query": query,
-        "results": _search_knowledge(query),
+        "results": _search_knowledge(query, owner=request.user),
     })
 
 
+@login_required(login_url="/login/")
 def session_messages(request, session_id):
-    session = get_object_or_404(ChatSession, id=session_id)
+    session = get_object_or_404(ChatSession, id=session_id, owner=request.user)
     messages = [
         {
             "role": msg.role,
@@ -240,8 +290,9 @@ def _session_pdf(session):
     return pdf
 
 
+@login_required(login_url="/login/")
 def export_session(request, session_id):
-    session = get_object_or_404(ChatSession, id=session_id)
+    session = get_object_or_404(ChatSession, id=session_id, owner=request.user)
     export_format = request.GET.get("format", "markdown").lower()
     filename = f"offline-codegpt-{session.id}"
 
@@ -288,6 +339,7 @@ def _javascript_check(code):
     return (not stack), "Unbalanced JavaScript brackets." if stack else ""
 
 
+@login_required(login_url="/login/")
 @require_POST
 def execute_code(request):
     language = request.POST.get("language", "python").strip().lower()
@@ -358,6 +410,7 @@ def execute_code(request):
     }, status=400)
 
 
+@login_required(login_url="/login/")
 @require_POST
 def ask_code(request):
     prompt = request.POST.get("prompt", "").strip()
@@ -398,7 +451,7 @@ def ask_code(request):
                 continue
 
             source_type = "project" if "/" in filename else "upload"
-            _save_knowledge_document(filename, file_text, source_type)
+            _save_knowledge_document(filename, file_text, source_type, request.user)
             uploaded_code_parts.append(
                 f"\n\n===== FILE: {filename} =====\n{file_text}"
             )
@@ -418,7 +471,7 @@ def ask_code(request):
         }, status=400)
 
     if session_id:
-        session = get_object_or_404(ChatSession, id=session_id)
+        session = get_object_or_404(ChatSession, id=session_id, owner=request.user)
         model_name = requested_model or session.model_name or DEFAULT_MODEL
         if session.model_name != model_name:
             session.model_name = model_name
@@ -426,7 +479,11 @@ def ask_code(request):
     else:
         title = prompt[:60] if prompt else uploaded_filenames[0][:60]
         model_name = requested_model or DEFAULT_MODEL
-        session = ChatSession.objects.create(title=title, model_name=model_name)
+        session = ChatSession.objects.create(
+            owner=request.user,
+            title=title,
+            model_name=model_name,
+        )
 
     user_message_parts = []
     if prompt:
@@ -450,7 +507,7 @@ def ask_code(request):
         final_code = final_code[:max_code_chars]
         truncated_note = "\n\nNote: the uploaded code was truncated for the local model."
 
-    relevant_chunks = _search_knowledge(prompt or code)
+    relevant_chunks = _search_knowledge(prompt or code, owner=request.user)
     knowledge_context = "\n\n".join(
         f"===== PROJECT CONTEXT: {item['filename']} (chunk {item['chunk_index']}) =====\n"
         f"{item['content']}"

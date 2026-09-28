@@ -1,0 +1,24 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create account · Offline CodeGPT</title>
+    <link rel="stylesheet" href="{% static 'chat/app.css' %}">
+</head>
+<body class="auth-page">
+    <main class="auth-card">
+        <h1>Create account</h1>
+        <p>Your chat history and project knowledge stay scoped to your account.</p>
+        {% if error %}<div class="auth-error">{{ error }}</div>{% endif %}
+        <form method="post">
+            {% csrf_token %}
+            <label>Username<input name="username" required autofocus></label>
+            <label>Password<input name="password" type="password" minlength="8" required></label>
+            <label>Confirm password<input name="confirmation" type="password" minlength="8" required></label>
+            <button type="submit">Create account</button>
+        </form>
+        <a href="{% url 'login' %}">Already have an account?</a>
+    </main>
+</body>
+</html>

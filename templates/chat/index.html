@@ -55,6 +55,10 @@
                 <button type="button" onclick="exportChat('markdown')">MD</button>
                 <button type="button" onclick="exportChat('json')">JSON</button>
                 <button type="button" onclick="exportChat('pdf')">PDF</button>
+                <form method="post" action="{% url 'logout' %}">
+                    {% csrf_token %}
+                    <button type="submit">Log out {{ request.user.username }}</button>
+                </form>
             </div>
         </header>
 

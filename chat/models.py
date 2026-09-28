@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import User
 
 
 class LocalModelConfig(models.Model):
@@ -25,6 +26,13 @@ class LocalModelConfig(models.Model):
 
 
 class ChatSession(models.Model):
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="chat_sessions",
+        blank=True,
+        null=True,
+    )
     title = models.CharField(max_length=200, default="New Chat")
     model_name = models.CharField(max_length=100, default="qwen2.5-coder:1.5b")
 
@@ -79,6 +87,13 @@ class KnowledgeDocument(models.Model):
         ("project", "Project Folder"),
     )
 
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="knowledge_documents",
+        blank=True,
+        null=True,
+    )
     title = models.CharField(max_length=300)
     filename = models.CharField(max_length=300, blank=True, null=True)
     file_extension = models.CharField(max_length=30, blank=True, null=True)
