@@ -270,6 +270,33 @@ async function sendMessage() {
     }
 }
 
+async function runCode() {
+    const code = codeInput.value.trim();
+    if (!code) {
+        alert("Paste code before checking it.");
+        return;
+    }
+
+    const output = document.getElementById("executionOutput");
+    output.innerText = "Checking locally...";
+    try {
+        const response = await fetch("/api/execute/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({ code, language: languageInput.value }),
+        });
+        const data = await response.json();
+        output.innerText = data.success
+            ? (data.stdout || "Completed without output.")
+            : (data.stderr || data.error || "Check failed.");
+    } catch (error) {
+        output.innerText = "Check error: " + error;
+    }
+}
+
 async function loadSession(sessionId) {
     try {
         const response = await fetch(`/api/session/${sessionId}/`);

@@ -98,9 +98,11 @@
 
                     <input type="file" id="fileInput" multiple>
                     <input type="file" id="folderInput" webkitdirectory directory multiple aria-label="Upload project folder">
+                    <button id="runBtn" type="button" onclick="runCode()">Check / Run SQL</button>
                 </div>
 
                 <textarea id="codeInput" placeholder="Paste code here, or upload a file..."></textarea>
+                <pre id="executionOutput" class="execution-output">Safe mode: Python and JavaScript are syntax-checked; SQL runs in memory.</pre>
             </div>
 
             <div class="prompt-bar">

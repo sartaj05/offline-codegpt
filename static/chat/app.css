@@ -570,6 +570,28 @@ body {
     display: none;
 }
 
+#runBtn {
+    border: 1px solid #565869;
+    border-radius: 8px;
+    background: #2563eb;
+    color: #fff;
+    cursor: pointer;
+    padding: 0 12px;
+}
+
+.execution-output {
+    min-height: 40px;
+    max-height: 150px;
+    overflow: auto;
+    margin: 8px 0 0;
+    padding: 10px;
+    background: #202123;
+    border: 1px solid #565869;
+    border-radius: 8px;
+    color: #c5c5d2;
+    white-space: pre-wrap;
+}
+
 .message-content pre {
     position: relative;
     margin: 14px 0;
