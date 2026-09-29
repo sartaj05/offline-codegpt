@@ -1475,9 +1475,44 @@ def agent_control(request, task_id):
 @require_GET
 def ai_observability(request):
     events = list(AiEvent.objects.filter(owner=request.user).order_by("-created_at")[:100])
+    tasks = list(AgentTask.objects.filter(owner=request.user).order_by("-updated_at")[:30])
+    teams = list(AgentTeam.objects.filter(owner=request.user).order_by("-updated_at")[:20])
+    jobs = list(AgentJob.objects.filter(owner=request.user).select_related("task").order_by("-updated_at")[:30])
     total = len(events)
     successful = sum(1 for event in events if event.success)
     durations = [event.duration_ms for event in events if event.duration_ms]
+    timeline = []
+    for task in tasks:
+        for item in (task.logs or [])[-10:]:
+            timeline.append({
+                "kind": "task",
+                "name": task.title,
+                "status": task.status,
+                "message": item.get("message", str(item)) if isinstance(item, dict) else str(item),
+                "level": item.get("level", "info") if isinstance(item, dict) else "info",
+                "created_at": task.updated_at.isoformat(),
+            })
+    for team in teams:
+        for item in (team.logs or [])[-10:]:
+            timeline.append({
+                "kind": "team",
+                "name": team.title,
+                "status": team.status,
+                "message": item.get("message", str(item)) if isinstance(item, dict) else str(item),
+                "level": item.get("level", "info") if isinstance(item, dict) else "info",
+                "created_at": team.updated_at.isoformat(),
+            })
+    for job in jobs:
+        for item in (job.logs or [])[-10:]:
+            timeline.append({
+                "kind": "job",
+                "name": job.task.title,
+                "status": job.status,
+                "message": item.get("message", str(item)) if isinstance(item, dict) else str(item),
+                "level": item.get("level", "info") if isinstance(item, dict) else "info",
+                "created_at": job.updated_at.isoformat(),
+            })
+    timeline.sort(key=lambda item: item["created_at"], reverse=True)
     return JsonResponse({
         "success": True,
         "summary": {
@@ -1489,6 +1524,21 @@ def ai_observability(request):
             "input_chars": sum(event.input_chars for event in events),
             "output_chars": sum(event.output_chars for event in events),
         },
+        "agent_summary": {
+            "tasks": len(tasks),
+            "running_tasks": sum(1 for task in tasks if task.status == "running"),
+            "teams": len(teams),
+            "jobs": len(jobs),
+            "active_jobs": sum(1 for job in jobs if job.status in {"queued", "running", "paused"}),
+            "failed_jobs": sum(1 for job in jobs if job.status == "failed"),
+            "timeline_events": len(timeline),
+        },
+        "resource_usage": {
+            "cpu_ms": sum(int((event.metadata or {}).get("cpu_ms", 0) or 0) for event in events),
+            "memory_mb_peak": max([int((event.metadata or {}).get("memory_mb", 0) or 0) for event in events] or [0]),
+            "tool_calls": sum(int((event.metadata or {}).get("tool_calls", 0) or 0) for event in events),
+        },
+        "timeline": timeline[:120],
         "events": [
             {
                 "id": event.id,

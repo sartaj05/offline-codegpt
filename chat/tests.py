@@ -8,7 +8,7 @@ from django.test import TestCase
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import AgentJob, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, KnowledgeChunk, KnowledgeDocument, SandboxPolicy, Workspace, WorkspaceMembership, WorkspacePolicy
+from .models import AgentJob, AgentTask, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, KnowledgeChunk, KnowledgeDocument, SandboxPolicy, Workspace, WorkspaceMembership, WorkspacePolicy
 from .views import _search_knowledge
 
 
@@ -232,6 +232,26 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(dashboard.status_code, 200)
         self.assertEqual(dashboard.json()["summary"]["events"], 1)
         self.assertEqual(dashboard.json()["summary"]["success_rate"], 100.0)
+
+    def test_observability_includes_agent_timeline_and_resource_summary(self):
+        task = AgentTask.objects.create(
+            owner=self.user,
+            title="Observe agent",
+            goal="Track a running task",
+            status="running",
+            logs=[{"message": "Waiting for approval", "level": "warning"}],
+        )
+        AgentJob.objects.create(
+            owner=self.user,
+            task=task,
+            status="paused",
+            logs=[{"message": "Checkpoint saved", "level": "info"}],
+        )
+        AiEvent.objects.create(owner=self.user, event_type="agent", metadata={"cpu_ms": 42, "memory_mb": 128, "tool_calls": 2})
+        payload = self.client.get("/api/observability/").json()
+        self.assertEqual(payload["agent_summary"]["active_jobs"], 1)
+        self.assertEqual(payload["resource_usage"]["cpu_ms"], 42)
+        self.assertTrue(any(item["message"] == "Checkpoint saved" for item in payload["timeline"]))
 
     def test_workspace_roles_and_audit_log(self):
         created = self.client.post("/api/workspace/", {"action": "create", "name": "Core team"})

@@ -46,6 +46,7 @@ const evaluationDashboardRecent = document.getElementById("evaluationDashboardRe
 let evaluationTasksCache = [];
 const observabilityStats = document.getElementById("observabilityStats");
 const observabilityOutput = document.getElementById("observabilityOutput");
+let observabilityTimer = null;
 const sandboxTimeout = document.getElementById("sandboxTimeout");
 const sandboxMemory = document.getElementById("sandboxMemory");
 const sandboxOutputChars = document.getElementById("sandboxOutputChars");
@@ -374,7 +375,14 @@ function toggleMcpPanel() {
 function toggleObservability() {
     if (!observabilityPanel) return;
     observabilityPanel.hidden = !observabilityPanel.hidden;
-    if (!observabilityPanel.hidden) loadObservability();
+    if (observabilityPanel.hidden) {
+        if (observabilityTimer) window.clearInterval(observabilityTimer);
+        observabilityTimer = null;
+        return;
+    }
+    loadObservability();
+    if (observabilityTimer) window.clearInterval(observabilityTimer);
+    observabilityTimer = window.setInterval(loadObservability, 5000);
 }
 
 async function loadObservability() {
@@ -391,10 +399,15 @@ async function loadObservability() {
             ["Avg. latency", summary.average_duration_ms + " ms"],
             ["Input chars", summary.input_chars],
             ["Output chars", summary.output_chars],
+            ["Active jobs", data.agent_summary.active_jobs],
+            ["Tool calls", data.resource_usage.tool_calls],
         ].map(item => "<div><strong>" + item[1] + "</strong><span>" + item[0] + "</span></div>").join("");
-        observabilityOutput.innerText = data.events.length
-            ? data.events.map(event => event.created_at + " | " + (event.success ? "ok" : "failed") + " | " + (event.model || "local model") + " | " + event.duration_ms + " ms | in " + event.input_chars + " / out " + event.output_chars).join("\n")
-            : "No AI activity recorded yet.";
+        const agentHeader = "Agent center: " + data.agent_summary.tasks + " tasks, " + data.agent_summary.teams + " teams, " + data.agent_summary.jobs + " jobs, " + data.agent_summary.failed_jobs + " failed jobs.";
+        const timeline = data.timeline.map(item => item.created_at + " | " + item.kind + " | " + item.status + " | " + item.name + " | " + item.message);
+        const aiEvents = data.events.map(event => event.created_at + " | AI " + (event.success ? "ok" : "failed") + " | " + (event.model || "local model") + " | " + event.duration_ms + " ms | in " + event.input_chars + " / out " + event.output_chars);
+        observabilityOutput.innerText = agentHeader + "\nResource usage: " + data.resource_usage.cpu_ms + " CPU ms, " + data.resource_usage.memory_mb_peak + " MB peak memory.\n\n" +
+            (timeline.length ? timeline.join("\n") : "No agent timeline events yet.") + "\n\n" +
+            (aiEvents.length ? aiEvents.join("\n") : "No AI activity recorded yet.");
     } catch (error) {
         observabilityOutput.innerText = "Metrics error: " + error;
     }
