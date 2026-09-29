@@ -3092,30 +3092,29 @@ You are a fully offline coding assistant running locally.
 Language:
 {language}
 
-User task:
-{prompt}
+User request:
+{prompt or "(No separate prompt was provided. Interpret the Code section as the user's request if it contains natural language.)"}
 
-Uploaded files:
-{", ".join(uploaded_filenames)}
+Uploaded files (optional):
+{", ".join(uploaded_filenames) or "None"}
 
-Relevant project context:
-{knowledge_context or "No matching project context found."}
+Relevant project context (optional):
+{knowledge_context or "None"}
 
-Code:
-{final_code}
+Code or additional user input (optional):
+{final_code or "None"}
 
 {truncated_note}
 
 Instructions:
-1. Understand all uploaded files together.
-2. Explain clearly.
-3. If there is an error, show the exact problem.
-4. Give corrected code where required.
-5. Mention which file needs change.
-6. Keep answer practical.
-7. Do not say you need internet.
+1. Answer the user's request directly, even when no files, project context, or source code are provided.
+2. Treat uploaded files and project context as optional supporting information, not a prerequisite for an answer.
+3. Never ask the user to upload or provide files merely because none were supplied.
+4. If the user asks for code, a question, an example, or an explanation, provide it in this response.
+5. If there is an error, show the exact problem and give corrected code where appropriate.
+6. Mention a file name only when a file was actually provided or a file is needed for a concrete change.
+7. Keep the answer practical and do not say you need internet.
 """
-
     ai_event = None
     event_started = time.perf_counter()
     try:
