@@ -755,9 +755,23 @@
                 {% endif %}
             </div>
 
+                        <div class="prompt-tools">
+                <label for="promptMode">Prompt template</label>
+                <select id="promptMode" aria-label="Prompt template">
+                    <option value="">Choose a mode...</option>
+                    <option value="generate">Generate</option>
+                    <option value="explain">Explain</option>
+                    <option value="debug">Debug</option>
+                    <option value="refactor">Refactor</option>
+                    <option value="test">Test</option>
+                    <option value="document">Document</option>
+                </select>
+                <button type="button" onclick="applyPromptTemplate()">Use template</button>
+                <span>Templates remain editable before sending.</span>
+            </div>
             <div class="prompt-bar">
                 <textarea id="promptInput" placeholder="Ask anything about your code..." aria-label="Prompt"></textarea>
-                <button id="sendBtn" onclick="sendMessage()">Send <span>↗</span></button>
+                <button id="sendBtn" onclick="sendMessage()">Send <span>â†—</span></button>
             </div>
             <div class="composer-hint">Local model · Your code stays on this machine</div>
         </section>

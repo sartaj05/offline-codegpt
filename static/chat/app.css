@@ -419,7 +419,7 @@ select { padding: 0 10px; }
 .editor-tab.active { border-color: var(--border); border-bottom-color: #11141b; background: #11141b; color: var(--text); }
 .preview-label { padding: 7px 13px 0; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
 .editor-preview { max-height: 180px; margin: 0; padding: 8px 13px 13px; overflow: auto; color: #dbe6f3; font-family: Consolas, "SFMono-Regular", monospace; font-size: 12px; line-height: 1.55; white-space: pre-wrap; }
-.prompt-bar { display: flex; gap: 10px; margin-top: 10px; padding: 9px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-2); }
+.prompt-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 10px; color: var(--muted); font-size: 10px; } .prompt-tools label { color: var(--text); font-weight: 700; } .prompt-tools select, .prompt-tools button { height: 30px; padding: 0 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); color: var(--text); font-size: 10px; } .prompt-tools button { border-color: #697ee5; background: #34448d; color: #f0f3ff; } .prompt-tools span { color: var(--muted); } .prompt-bar { display: flex; gap: 10px; margin-top: 10px; padding: 9px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-2); }
 #promptInput { width: 100%; min-height: 42px; resize: vertical; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 13px; line-height: 1.45; }
 #sendBtn { width: 98px; flex: 0 0 98px; align-self: stretch; border: 0; border-radius: 8px; background: var(--accent-strong); color: #071319; font-weight: 800; }
 #sendBtn:hover { background: var(--accent); }

@@ -4,6 +4,7 @@ let editingMessageId = "";
 
 const chatBox = document.getElementById("chatBox");
 const promptInput = document.getElementById("promptInput");
+const promptMode = document.getElementById("promptMode");
 const codeInput = document.getElementById("codeInput");
 const modelInput = document.getElementById("model");
 const ollamaSettingsPanel = document.getElementById("ollamaSettingsPanel");
@@ -1810,6 +1811,21 @@ function addUserActions(column, wrapper, payload) {
 
     actions.appendChild(editButton);
     column.appendChild(actions);
+}
+
+function applyPromptTemplate() {
+    if (!promptMode || !promptInput || !promptMode.value) return;
+    const templates = {
+        generate: "Generate a complete solution for this task. Return executable code and a short explanation.",
+        explain: "Explain the provided code step by step, including its inputs, outputs, and important design choices.",
+        debug: "Find bugs, edge cases, and likely runtime errors in the provided code. Show corrected code and explain each fix.",
+        refactor: "Refactor the provided code for clarity, maintainability, and performance while preserving its behavior.",
+        test: "Write thorough tests for the provided code, including normal cases, edge cases, and failure cases.",
+        document: "Document the provided code with a practical overview, setup instructions, usage examples, and API details where applicable.",
+    };
+    promptInput.value = templates[promptMode.value] || "";
+    promptInput.focus();
+    promptInput.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function clearWelcome() {
