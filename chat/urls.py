@@ -11,6 +11,7 @@ urlpatterns = [
     path("api/ask-code/", views.ask_code, name="ask_code"),
     path("api/models/", views.model_list, name="model_list"),
     path("api/ollama/settings/", views.ollama_settings, name="ollama_settings"),
+    path("api/ollama/health/", views.ollama_health, name="ollama_health"),
     path("api/ollama/models/action/", views.ollama_model_action, name="ollama_model_action"),
     path("api/sessions/", views.session_list, name="session_list"),
     path("api/session/<int:session_id>/manage/", views.manage_session, name="manage_session"),

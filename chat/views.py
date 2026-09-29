@@ -749,6 +749,7 @@ def _ollama_settings_payload(settings):
     return {
         "server_url": settings.server_url,
         "default_model": settings.default_model,
+        "fallback_model": settings.fallback_model,
         "temperature": settings.temperature,
         "top_p": settings.top_p,
         "max_context_chars": settings.max_context_chars,
@@ -771,6 +772,7 @@ def ollama_settings(request):
             return JsonResponse({"success": False, "error": "Temperature, top-p, and context must be valid numbers."}, status=400)
         settings.server_url = server_url
         settings.default_model = request.POST.get("default_model", settings.default_model).strip()[:100] or DEFAULT_MODEL
+        settings.fallback_model = request.POST.get("fallback_model", settings.fallback_model).strip()[:100]
         settings.temperature = temperature
         settings.top_p = top_p
         settings.max_context_chars = max_context_chars
@@ -781,6 +783,38 @@ def ollama_settings(request):
         "models": _available_models(settings.server_url),
     })
 
+
+@login_required(login_url="/login/")
+@require_GET
+def ollama_health(request):
+    settings = _user_ollama_settings(request.user)
+    started = time.perf_counter()
+    try:
+        response = requests.get(f"{settings.server_url}/api/tags", timeout=5)
+        response.raise_for_status()
+        models = [
+            item.get("name")
+            for item in response.json().get("models", [])
+            if item.get("name")
+        ]
+        return JsonResponse({
+            "success": True,
+            "status": "ready",
+            "server_url": settings.server_url,
+            "latency_ms": round((time.perf_counter() - started) * 1000),
+            "models": models,
+            "default_model": settings.default_model,
+            "fallback_model": settings.fallback_model,
+            "fallback_available": settings.fallback_model in models,
+        })
+    except (requests.RequestException, ValueError) as exc:
+        return JsonResponse({
+            "success": False,
+            "status": "offline",
+            "server_url": settings.server_url,
+            "latency_ms": round((time.perf_counter() - started) * 1000),
+            "error": "Ollama health check failed: " + str(exc),
+        }, status=503)
 
 @login_required(login_url="/login/")
 @require_POST
@@ -794,7 +828,7 @@ def ollama_model_action(request):
         if action == "pull":
             response = requests.post(
                 f"{settings.server_url}/api/pull",
-                json={"name": name, "stream": False},
+                json={"name": name, "stream": True},
                 timeout=(10, 300),
             )
         elif action == "delete":
@@ -809,7 +843,26 @@ def ollama_model_action(request):
         return JsonResponse({"success": False, "error": "Ollama is unavailable: " + str(exc)}, status=503)
     if not response.ok:
         return JsonResponse({"success": False, "error": response.text}, status=400)
-    return JsonResponse({"success": True, "models": _available_models(settings.server_url)})
+
+    progress = []
+    if action == "pull" and hasattr(response, "iter_lines"):
+        for raw_line in response.iter_lines(decode_unicode=True):
+            if not raw_line:
+                continue
+            try:
+                event = json.loads(raw_line)
+            except (TypeError, ValueError):
+                continue
+            progress.append({
+                "status": event.get("status", ""),
+                "completed": event.get("completed", 0),
+                "total": event.get("total", 0),
+            })
+    return JsonResponse({
+        "success": True,
+        "models": _available_models(settings.server_url),
+        "progress": progress[-100:],
+    })
 
 
 @login_required(login_url="/login/")
@@ -3171,22 +3224,43 @@ Instructions:
             model_name=model_name,
             input_chars=len(full_prompt),
         )
-        response = requests.post(
-            f"{ollama_base_url}/api/generate",
-            json={
-                "model": model_name,
-                "prompt": full_prompt,
-                "stream": True,
-                "options": {
-                    "temperature": user_settings.temperature if user_settings else 0.2,
-                    "top_p": user_settings.top_p if user_settings else 0.9,
-                    "num_ctx": max(512, (user_settings.max_context_chars if user_settings else 24000) // 4),
-                },
-                **({"images": image_data} if image_data else {}),
-            },
-            timeout=(10, 300),
-            stream=True,
-        )
+        fallback_model = user_settings.fallback_model if user_settings else ""
+        candidate_models = list(dict.fromkeys(
+            candidate for candidate in (model_name, fallback_model) if candidate
+        ))
+        response = None
+        last_error = None
+        for candidate_model in candidate_models:
+            try:
+                candidate_response = requests.post(
+                    f"{ollama_base_url}/api/generate",
+                    json={
+                        "model": candidate_model,
+                        "prompt": full_prompt,
+                        "stream": True,
+                        "options": {
+                            "temperature": user_settings.temperature if user_settings else 0.2,
+                            "top_p": user_settings.top_p if user_settings else 0.9,
+                            "num_ctx": max(512, (user_settings.max_context_chars if user_settings else 24000) // 4),
+                        },
+                        **({"images": image_data} if image_data else {}),
+                    },
+                    timeout=(10, 300),
+                    stream=True,
+                )
+            except requests.RequestException as exc:
+                last_error = exc
+                continue
+            response = candidate_response
+            if response.status_code == 200:
+                model_name = candidate_model
+                break
+
+        if response is None:
+            raise last_error or requests.exceptions.ConnectionError("No Ollama model responded.")
+        if ai_event.model_name != model_name:
+            ai_event.model_name = model_name
+            ai_event.save(update_fields=["model_name"])
         if response.status_code != 200:
             ai_event.success = False
             ai_event.duration_ms = round((time.perf_counter() - event_started) * 1000)

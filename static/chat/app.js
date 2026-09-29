@@ -15,6 +15,9 @@ const ollamaTopP = document.getElementById("ollamaTopP");
 const ollamaContextLength = document.getElementById("ollamaContextLength");
 const ollamaModelName = document.getElementById("ollamaModelName");
 const ollamaSettingsStatus = document.getElementById("ollamaSettingsStatus");
+const ollamaFallbackModel = document.getElementById("ollamaFallbackModel");
+const ollamaHealthStatus = document.getElementById("ollamaHealthStatus");
+const ollamaPullProgress = document.getElementById("ollamaPullProgress");
 const memoryPanel = document.getElementById("memoryPanel");
 const memorySummary = document.getElementById("memorySummary");
 const selectedContextSummary = document.getElementById("selectedContextSummary");
@@ -273,15 +276,20 @@ async function clearConversationContext() {
     }
 }
 
-function renderOllamaModels(models, selected) {
-    [modelInput, ollamaDefaultModel].forEach(select => {
+function renderOllamaModels(models, selected, fallback) {
+    const names = [...new Set([...(models || []), fallback].filter(Boolean))];
+    [
+        [modelInput, selected],
+        [ollamaDefaultModel, selected],
+        [ollamaFallbackModel, fallback],
+    ].forEach(([select, value]) => {
         if (!select) return;
         select.innerHTML = "";
-        models.forEach(name => {
+        names.forEach(name => {
             const option = document.createElement("option");
             option.value = name;
             option.innerText = name;
-            option.selected = name === selected;
+            option.selected = name === value;
             select.appendChild(option);
         });
     });
@@ -299,9 +307,23 @@ async function loadOllamaSettings() {
         ollamaTemperature.value = settings.temperature;
         ollamaTopP.value = settings.top_p;
         ollamaContextLength.value = settings.max_context_chars;
-        renderOllamaModels(data.models, settings.default_model);
+        renderOllamaModels(data.models, settings.default_model, settings.fallback_model);
     } catch (error) {
         ollamaSettingsStatus.innerText = String(error);
+    }
+}
+
+async function checkOllamaHealth() {
+    if (ollamaHealthStatus) ollamaHealthStatus.innerText = "Checking local Ollama...";
+    try {
+        const response = await fetch("/api/ollama/health/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Ollama is unavailable.");
+        const fallbackState = data.fallback_available ? "fallback ready" : "fallback model not installed";
+        ollamaHealthStatus.innerText = "Ready · " + data.latency_ms + " ms · " + data.models.length + " model(s) · " + fallbackState;
+        renderOllamaModels(data.models, data.default_model, data.fallback_model);
+    } catch (error) {
+        if (ollamaHealthStatus) ollamaHealthStatus.innerText = "Offline: " + error.message;
     }
 }
 
@@ -319,11 +341,12 @@ async function saveOllamaSettings() {
                 temperature: ollamaTemperature.value,
                 top_p: ollamaTopP.value,
                 max_context_chars: ollamaContextLength.value,
+                fallback_model: ollamaFallbackModel.value,
             }),
         });
         const data = await response.json();
         if (!data.success) throw new Error(data.error || "Unable to save settings.");
-        renderOllamaModels(data.models, data.settings.default_model);
+        renderOllamaModels(data.models, data.settings.default_model, data.settings.fallback_model);
         ollamaSettingsStatus.innerText = "Saved. New chats use these settings.";
     } catch (error) {
         ollamaSettingsStatus.innerText = String(error);
@@ -338,6 +361,7 @@ async function manageOllamaModel(action) {
     }
     if (action === "delete" && !confirm("Delete local model " + name + "?")) return;
     ollamaSettingsStatus.innerText = action === "pull" ? "Pulling model..." : "Deleting model...";
+    if (ollamaPullProgress) ollamaPullProgress.innerText = action === "pull" ? "Downloading " + name + "..." : "Updating model list...";
     try {
         const response = await fetch("/api/ollama/models/action/", {
             method: "POST",
@@ -349,7 +373,12 @@ async function manageOllamaModel(action) {
         });
         const data = await response.json();
         if (!data.success) throw new Error(data.error || "Model action failed.");
-        renderOllamaModels(data.models, modelInput.value);
+        renderOllamaModels(data.models, modelInput.value, ollamaFallbackModel.value);
+        if (ollamaPullProgress && data.progress && data.progress.length) {
+            const last = data.progress[data.progress.length - 1];
+            const percent = last.total ? " " + Math.round((last.completed / last.total) * 100) + "%" : "";
+            ollamaPullProgress.innerText = (last.status || "Download complete") + percent;
+        }
         ollamaSettingsStatus.innerText = action === "pull" ? "Model pulled." : "Model deleted.";
     } catch (error) {
         ollamaSettingsStatus.innerText = String(error);
