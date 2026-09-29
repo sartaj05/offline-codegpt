@@ -296,6 +296,21 @@ class ChatFeatureTests(TestCase):
         removed = self.client.post("/api/extensions/marketplace/", {"action": "uninstall", "slug": package["slug"]})
         self.assertEqual(removed.json()["extension"]["install_status"], "disabled")
 
+    def test_deployment_toolkit_generates_health_checks_and_validates_environment(self):
+        generated = self.client.post("/api/deployment/kit/", {
+            "project_name": "Syntax App",
+            "port": "8080",
+            "health_path": "/health",
+            "strategy": "rolling",
+        })
+        self.assertEqual(generated.status_code, 200)
+        payload = generated.json()
+        self.assertIn("k8s/syntax-app-deployment.yml", payload["files"])
+        self.assertIn("/health", payload["files"]["docker-compose.deploy.yml"])
+        validation = self.client.post("/api/deployment/validate/", {"content": "APP_ENV=production\nSECRET_KEY=literal-secret\nEMPTY="})
+        self.assertFalse(validation.json()["valid"])
+        self.assertTrue(any("SECRET_KEY" in warning for warning in validation.json()["warnings"]))
+
     def test_workspace_roles_and_audit_log(self):
         created = self.client.post("/api/workspace/", {"action": "create", "name": "Core team"})
         self.assertEqual(created.status_code, 200)

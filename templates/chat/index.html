@@ -93,6 +93,7 @@
                     {% if request.user.is_authenticated %}<button type="button" onclick="toggleEvaluationLab()">Eval Lab</button>{% endif %}
                     <button type="button" onclick="toggleWorkspace()">Team</button>
                     <button type="button" onclick="toggleDevops()">DevOps</button>
+                    <button type="button" onclick="toggleDeployment()">Deploy</button>
                     <button type="button" onclick="toggleDocumentation()">Docs</button>
                     <button type="button" onclick="toggleReviewGate()">Review</button>
                     <button type="button" onclick="toggleDependencies()">Deps</button>
@@ -338,6 +339,26 @@
             <textarea id="devopsLogs" class="devops-logs" placeholder="Paste build, server, or deployment logs..."></textarea>
             <button type="button" onclick="analyzeDevopsLogs()">Analyze logs</button>
             <pre id="devopsLogOutput" class="devops-output">Log findings will appear here.</pre>
+        </section>
+        <section id="deploymentPanel" class="deployment-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Production deployment toolkit</strong>
+                    <span>Generate health-checked Compose/Kubernetes assets, backups, rollback scripts, and validate environment files.</span>
+                </div>
+                <button type="button" onclick="toggleDeployment()">Close</button>
+            </div>
+            <div class="deployment-form">
+                <input id="deploymentProject" placeholder="Project name" value="syntax-local">
+                <input id="deploymentPort" type="number" min="1" max="65535" value="8000" placeholder="Port">
+                <input id="deploymentHealth" placeholder="Health path" value="/">
+                <select id="deploymentStrategy"><option value="rolling">Rolling update</option><option value="recreate">Recreate</option></select>
+                <button type="button" onclick="generateDeploymentKit()">Generate deployment kit</button>
+            </div>
+            <pre id="deploymentOutput" class="devops-output">Deployment artifacts will appear here.</pre>
+            <textarea id="deploymentEnv" class="devops-logs" placeholder="Paste .env content to validate; secrets should use references, not literal values..."></textarea>
+            <button type="button" onclick="validateDeploymentEnvironment()">Validate environment</button>
+            <pre id="deploymentValidation" class="devops-output">Environment validation will appear here.</pre>
         </section>
         <section id="documentationPanel" class="documentation-panel" hidden>
             <div class="settings-heading">

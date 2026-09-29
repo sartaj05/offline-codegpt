@@ -64,6 +64,7 @@ from .dependencies import analyze_dependencies
 from .browser_testing import analyze_browser_report, generate_playwright_test
 from .model_router import route_model
 from .devcontainer import generate_devcontainer
+from .deployment import generate_deployment_kit, validate_deployment_environment
 from .incident import analyze_incident
 from .architecture import analyze_architecture
 from .cross_repository import analyze_cross_repository
@@ -2436,6 +2437,27 @@ def devops_generate(request):
 def devops_logs(request):
     logs = request.POST.get("logs", "")[:50_000]
     return JsonResponse({"success": True, **analyze_logs(logs)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def deployment_kit(request):
+    try:
+        kit = generate_deployment_kit(
+            project_name=request.POST.get("project_name", "syntax-local"),
+            port=request.POST.get("port", "8000"),
+            health_path=request.POST.get("health_path", "/"),
+            strategy=request.POST.get("strategy", "rolling"),
+        )
+    except ValueError as exc:
+        return JsonResponse({"success": False, "error": str(exc)}, status=400)
+    return JsonResponse({"success": True, **kit})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def deployment_validate(request):
+    return JsonResponse({"success": True, **validate_deployment_environment(request.POST.get("content", "")[:50_000])})
 
 
 @login_required(login_url="/login/")

@@ -71,6 +71,14 @@ const devopsKind = document.getElementById("devopsKind");
 const devopsArtifact = document.getElementById("devopsArtifact");
 const devopsLogs = document.getElementById("devopsLogs");
 const devopsLogOutput = document.getElementById("devopsLogOutput");
+const deploymentPanel = document.getElementById("deploymentPanel");
+const deploymentProject = document.getElementById("deploymentProject");
+const deploymentPort = document.getElementById("deploymentPort");
+const deploymentHealth = document.getElementById("deploymentHealth");
+const deploymentStrategy = document.getElementById("deploymentStrategy");
+const deploymentOutput = document.getElementById("deploymentOutput");
+const deploymentEnv = document.getElementById("deploymentEnv");
+const deploymentValidation = document.getElementById("deploymentValidation");
 const documentationPanel = document.getElementById("documentationPanel");
 const documentationType = document.getElementById("documentationType");
 const documentationProjectName = document.getElementById("documentationProjectName");
@@ -875,6 +883,46 @@ async function analyzeDevopsLogs() {
             "\n\nRecommendations:\n- " + (data.recommendations.join("\n- ") || "No extra recommendations.");
     } catch (error) {
         devopsLogOutput.innerText = "Log analysis error: " + error;
+    }
+}
+
+function toggleDeployment() {
+    if (!deploymentPanel) return;
+    deploymentPanel.hidden = !deploymentPanel.hidden;
+}
+
+async function generateDeploymentKit() {
+    deploymentOutput.innerText = "Generating deployment files...";
+    try {
+        const response = await fetch("/api/deployment/kit/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ project_name: deploymentProject.value, port: deploymentPort.value, health_path: deploymentHealth.value, strategy: deploymentStrategy.value }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to generate deployment kit.");
+        deploymentOutput.innerText = data.project + " · " + data.strategy + " deployment\n\n" +
+            Object.entries(data.files).map(([filename, content]) => "--- " + filename + " ---\n" + content).join("\n") +
+            "\n\nChecklist:\n- " + data.checklist.join("\n- ");
+    } catch (error) {
+        deploymentOutput.innerText = "Deployment error: " + error;
+    }
+}
+
+async function validateDeploymentEnvironment() {
+    deploymentValidation.innerText = "Validating environment...";
+    try {
+        const response = await fetch("/api/deployment/validate/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ content: deploymentEnv.value }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to validate environment.");
+        deploymentValidation.innerText = (data.valid ? "Environment passed validation." : "Environment needs review.") +
+            "\nVariables: " + data.variables.join(", ") + "\n\n" + (data.warnings.length ? data.warnings.map(item => "- " + item).join("\n") : "No warnings.");
+    } catch (error) {
+        deploymentValidation.innerText = "Validation error: " + error;
     }
 }
 
