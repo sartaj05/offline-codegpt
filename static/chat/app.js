@@ -131,6 +131,13 @@ const enterpriseEnforce = document.getElementById("enterpriseEnforce");
 const enterpriseScim = document.getElementById("enterpriseScim");
 const enterpriseIdentityStatus = document.getElementById("enterpriseIdentityStatus");
 const enterpriseScimToken = document.getElementById("enterpriseScimToken");
+const secretsPanel = document.getElementById("secretsPanel");
+const secretName = document.getElementById("secretName");
+const secretValue = document.getElementById("secretValue");
+const secretDescription = document.getElementById("secretDescription");
+const secretsStatus = document.getElementById("secretsStatus");
+const secretsList = document.getElementById("secretsList");
+const secretRevealOutput = document.getElementById("secretRevealOutput");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -1202,6 +1209,95 @@ async function saveEnterpriseIdentity(rotateToken) {
     } catch (error) {
         enterpriseIdentityStatus.innerText = "Enterprise identity error: " + error;
     }
+}
+
+function toggleSecretsVault() {
+    if (!secretsPanel) return;
+    secretsPanel.hidden = !secretsPanel.hidden;
+    if (!secretsPanel.hidden) loadSecrets();
+}
+
+function renderSecrets(items) {
+    secretsList.innerHTML = "";
+    if (!items.length) {
+        secretsList.innerText = "No workspace secrets yet.";
+        return;
+    }
+    items.forEach(item => {
+        const row = document.createElement("div");
+        row.className = "secret-row";
+        const label = document.createElement("span");
+        label.innerText = item.name + " · version " + item.version + " · masked";
+        const reveal = document.createElement("button");
+        reveal.type = "button";
+        reveal.innerText = "Reveal";
+        reveal.onclick = () => revealSecret(item.id, item.name);
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.innerText = "Delete";
+        remove.onclick = () => deleteSecret(item.id);
+        row.append(label, reveal, remove);
+        secretsList.append(row);
+    });
+}
+
+async function loadSecrets() {
+    secretsStatus.innerText = "Loading encrypted secrets...";
+    try {
+        const response = await fetch("/api/secrets/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load secrets.");
+        renderSecrets(data.secrets);
+        secretsStatus.innerText = data.secrets.length + " masked workspace secret(s).";
+    } catch (error) {
+        secretsStatus.innerText = "Secrets error: " + error;
+    }
+}
+
+async function saveSecret() {
+    secretsStatus.innerText = "Encrypting and saving secret...";
+    try {
+        const response = await fetch("/api/secrets/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ name: secretName.value, value: secretValue.value, description: secretDescription.value }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to save secret.");
+        secretValue.value = "";
+        await loadSecrets();
+        secretsStatus.innerText = "Secret encrypted and saved.";
+    } catch (error) {
+        secretsStatus.innerText = "Secrets error: " + error;
+    }
+}
+
+async function revealSecret(id, name) {
+    secretRevealOutput.hidden = true;
+    try {
+        const response = await fetch("/api/secrets/" + id + "/reveal/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken },
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to reveal secret.");
+        secretRevealOutput.hidden = false;
+        secretRevealOutput.innerText = name + ": " + data.value + "\n\n" + data.warning;
+    } catch (error) {
+        secretsStatus.innerText = "Reveal error: " + error;
+    }
+}
+
+async function deleteSecret(id) {
+    if (!confirm("Delete this workspace secret?")) return;
+    const response = await fetch("/api/secrets/" + id + "/", { method: "DELETE", headers: { "X-CSRFToken": csrfToken } });
+    const data = await response.json();
+    if (!data.success) {
+        secretsStatus.innerText = "Delete error: " + (data.error || "Unable to delete secret.");
+        return;
+    }
+    secretRevealOutput.hidden = true;
+    loadSecrets();
 }
 
 function renderMcpConnectors(connectors) {

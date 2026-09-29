@@ -103,6 +103,7 @@
                     <button type="button" onclick="toggleContracts()">API</button>
                     <button type="button" onclick="toggleProvenance()">Proof</button>
                     <button type="button" onclick="toggleIdentityPolicy()">Policy</button>
+                    <button type="button" onclick="toggleSecretsVault()">Secrets</button>
                     <button type="button" onclick="exportChat('markdown')">MD</button>
                     <button type="button" onclick="exportChat('json')">JSON</button>
                     <button type="button" onclick="exportChat('pdf')">PDF</button>
@@ -527,6 +528,24 @@
                 <div id="enterpriseIdentityStatus" class="identity-policy-status">Enterprise identity is not configured.</div>
                 <pre id="enterpriseScimToken" class="architecture-output" hidden></pre>
             </div>
+        </section>
+        <section id="secretsPanel" class="secrets-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Secrets vault</strong>
+                    <span>Workspace-scoped encrypted credentials. Values stay masked until an admin explicitly reveals one.</span>
+                </div>
+                <button type="button" onclick="toggleSecretsVault()">Close</button>
+            </div>
+            <div class="secrets-form">
+                <input id="secretName" placeholder="Secret name, e.g. GITHUB_TOKEN">
+                <input id="secretValue" type="password" placeholder="Secret value">
+                <input id="secretDescription" placeholder="Description (optional)">
+                <button type="button" onclick="saveSecret()">Save secret</button>
+            </div>
+            <div id="secretsStatus" class="identity-policy-status">No secrets loaded.</div>
+            <div id="secretsList" class="secrets-list"></div>
+            <pre id="secretRevealOutput" class="architecture-output" hidden></pre>
         </section>
 
         <section id="chatBox" class="chat-box">

@@ -8,7 +8,7 @@ from django.test import TestCase
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import AgentJob, AgentTask, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, KnowledgeChunk, KnowledgeDocument, SandboxPolicy, Workspace, WorkspaceMembership, WorkspacePolicy
+from .models import AgentJob, AgentTask, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, KnowledgeChunk, KnowledgeDocument, SandboxPolicy, SecretVaultItem, Workspace, WorkspaceMembership, WorkspacePolicy
 from .views import _search_knowledge
 
 
@@ -252,6 +252,23 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["agent_summary"]["active_jobs"], 1)
         self.assertEqual(payload["resource_usage"]["cpu_ms"], 42)
         self.assertTrue(any(item["message"] == "Checkpoint saved" for item in payload["timeline"]))
+
+    def test_secrets_vault_encrypts_masks_and_reveals_only_on_admin_action(self):
+        saved = self.client.post("/api/secrets/", {
+            "name": "GITHUB_TOKEN",
+            "value": "ghp-super-secret",
+            "description": "GitHub automation token",
+        })
+        self.assertEqual(saved.status_code, 200)
+        item = SecretVaultItem.objects.get(name="GITHUB_TOKEN")
+        self.assertNotEqual(item.ciphertext, "ghp-super-secret")
+        listing = self.client.get("/api/secrets/").json()
+        self.assertEqual(listing["secrets"][0]["masked"], True)
+        self.assertNotIn("ghp-super-secret", json.dumps(listing))
+        revealed = self.client.post(f"/api/secrets/{item.id}/reveal/")
+        self.assertEqual(revealed.json()["value"], "ghp-super-secret")
+        updated = self.client.post("/api/secrets/", {"name": "GITHUB_TOKEN", "value": "ghp-rotated"})
+        self.assertEqual(updated.json()["secret"]["version"], 2)
 
     def test_workspace_roles_and_audit_log(self):
         created = self.client.post("/api/workspace/", {"action": "create", "name": "Core team"})

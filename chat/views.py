@@ -51,6 +51,7 @@ from .models import (
     EvaluationRun,
     EvaluationScore,
     EvaluationRegressionSuite,
+    SecretVaultItem,
 )
 from .quality import analyze_code_quality
 from .sandbox import run_sandboxed_code
@@ -64,6 +65,7 @@ from .devcontainer import generate_devcontainer
 from .incident import analyze_incident
 from .architecture import analyze_architecture
 from .cross_repository import analyze_cross_repository
+from .vault import decrypt_secret, encrypt_secret, mask_json
 from .api_contract import analyze_api_contract
 from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
@@ -2127,6 +2129,79 @@ def enterprise_identity_api(request):
     return JsonResponse(payload)
 
 
+def _secret_payload(item):
+    return {
+        "id": item.id,
+        "name": item.name,
+        "description": item.description,
+        "version": item.version,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+        "masked": True,
+    }
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def secrets_api(request):
+    workspace = _workspace_for_user(request.user)
+    membership = _workspace_membership(request.user, workspace)
+    if not membership:
+        return JsonResponse({"success": False, "error": "You are not a workspace member."}, status=403)
+    if request.method == "POST":
+        if membership.role != "admin":
+            return JsonResponse({"success": False, "error": "Only workspace admins can manage secrets."}, status=403)
+        name = request.POST.get("name", "").strip()[:120]
+        value = request.POST.get("value", "")
+        description = request.POST.get("description", "").strip()[:300]
+        if not name or not re.fullmatch(r"[A-Za-z0-9_.-]+", name):
+            return JsonResponse({"success": False, "error": "Secret names may contain letters, numbers, dots, underscores, and hyphens."}, status=400)
+        if not value:
+            return JsonResponse({"success": False, "error": "Secret value is required."}, status=400)
+        item = SecretVaultItem.objects.filter(workspace=workspace, name=name).first()
+        version = item.version + 1 if item else 1
+        if item:
+            item.ciphertext = encrypt_secret(value)
+            item.description = description
+            item.version = version
+            item.save()
+        else:
+            item = SecretVaultItem.objects.create(workspace=workspace, name=name, description=description, ciphertext=encrypt_secret(value))
+        AuditEvent.objects.create(actor=request.user, workspace=workspace, event_type="secret.updated", details={"name": name, "version": version})
+        return JsonResponse({"success": True, "secret": _secret_payload(item)})
+    return JsonResponse({"success": True, "secrets": [_secret_payload(item) for item in SecretVaultItem.objects.filter(workspace=workspace)]})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def secret_reveal(request, secret_id):
+    workspace = _workspace_for_user(request.user)
+    membership = _workspace_membership(request.user, workspace)
+    if not membership or membership.role != "admin":
+        return JsonResponse({"success": False, "error": "Only workspace admins can reveal secrets."}, status=403)
+    item = get_object_or_404(SecretVaultItem, id=secret_id, workspace=workspace)
+    try:
+        value = decrypt_secret(item.ciphertext)
+    except Exception:
+        return JsonResponse({"success": False, "error": "Secret could not be decrypted."}, status=500)
+    AuditEvent.objects.create(actor=request.user, workspace=workspace, event_type="secret.revealed", details={"name": item.name})
+    return JsonResponse({"success": True, "name": item.name, "value": value, "warning": "Keep this value private; it will not be shown in vault listings."})
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["DELETE"])
+def secret_delete(request, secret_id):
+    workspace = _workspace_for_user(request.user)
+    membership = _workspace_membership(request.user, workspace)
+    if not membership or membership.role != "admin":
+        return JsonResponse({"success": False, "error": "Only workspace admins can delete secrets."}, status=403)
+    item = get_object_or_404(SecretVaultItem, id=secret_id, workspace=workspace)
+    name = item.name
+    item.delete()
+    AuditEvent.objects.create(actor=request.user, workspace=workspace, event_type="secret.deleted", details={"name": name})
+    return JsonResponse({"success": True, "deleted_id": secret_id})
+
+
 def _scim_workspace(request):
     workspace_id = request.headers.get("X-Workspace-ID") or request.GET.get("workspace_id")
     if workspace_id:
@@ -2603,10 +2678,10 @@ def mcp_rpc(request):
         tool_name = params.get("name", "")
         arguments = params.get("arguments") or {}
         success, result, error = _mcp_call(request.user, tool_name, arguments)
-        _mcp_log(request.user, tool_name, arguments, success, error)
+        _mcp_log(request.user, tool_name, mask_json(request.user, arguments), success, mask_json(request.user, error))
         if not success:
-            return JsonResponse({"jsonrpc": "2.0", "id": request_id, "error": {"code": -32000, "message": error}}, status=400)
-        result = {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}]}
+            return JsonResponse({"jsonrpc": "2.0", "id": request_id, "error": {"code": -32000, "message": mask_json(request.user, error)}}, status=400)
+        result = {"content": [{"type": "text", "text": json.dumps(mask_json(request.user, result), ensure_ascii=False)}]}
     else:
         return JsonResponse({"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": "Method not found."}}, status=400)
     return JsonResponse({"jsonrpc": "2.0", "id": request_id, "result": result})

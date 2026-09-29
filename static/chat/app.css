@@ -257,6 +257,13 @@ button { cursor: pointer; }
 .enterprise-identity-card .policy-grid label { flex-direction: column; align-items: flex-start; }
 .enterprise-identity-card input:not([type="checkbox"]), .enterprise-identity-card select { width: 100%; margin-top: 5px; padding: 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); }
 .enterprise-identity-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.secrets-panel { margin: 12px 24px 0; padding: 16px; border: 1px solid rgba(126,167,255,.3); border-radius: 12px; background: linear-gradient(145deg, rgba(32,42,67,.98), rgba(24,29,40,.98)); }
+.secrets-form { display: grid; grid-template-columns: 1fr 1.5fr 1.4fr auto; gap: 8px; margin-top: 14px; }
+.secrets-form input { min-width: 0; padding: 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); color: var(--text); }
+.secrets-list { display: grid; gap: 6px; margin-top: 12px; }
+.secret-row { display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); color: var(--muted); font-size: 10px; }
+.secret-row span { flex: 1; }
+.secret-row button { padding: 4px 7px; border: 1px solid var(--border); border-radius: 5px; background: transparent; color: var(--muted); font-size: 9px; }
 .sso-divider { display: flex; align-items: center; gap: 8px; margin: 16px 0 10px; color: var(--muted); font-size: 10px; }
 .sso-divider::before, .sso-divider::after { content: ""; height: 1px; flex: 1; background: var(--border); }
 .sso-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
