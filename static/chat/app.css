@@ -539,4 +539,15 @@ select { padding: 0 10px; }
 .evaluation-regression span { color: var(--muted); font-size: .9rem; }
 .evaluation-regression-form { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 .evaluation-regression-form input { flex: 1 1 220px; }
+.evaluation-dashboard { margin: 18px 0 22px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,.02); }
+.evaluation-dashboard-heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.evaluation-dashboard-heading span { display: block; color: var(--muted); font-size: .9rem; margin-top: 4px; }
+.evaluation-dashboard-stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
+.evaluation-dashboard-stats div { border: 1px solid var(--border); border-radius: 9px; padding: 10px; }
+.evaluation-dashboard-stats strong, .evaluation-dashboard-stats span { display: block; }
+.evaluation-dashboard-stats span { color: var(--muted); font-size: .78rem; margin-top: 4px; }
+.evaluation-dashboard-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.evaluation-dashboard-output { min-height: 70px; max-height: 180px; overflow: auto; white-space: pre-wrap; margin-top: 8px; }
 @media (max-width: 760px) { .evaluation-task-form { grid-template-columns: 1fr; } .evaluation-task-form textarea:first-of-type { grid-column: 1; } }
+@media (max-width: 900px) { .evaluation-dashboard-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .evaluation-dashboard-heading, .evaluation-dashboard-columns { display: block; } .evaluation-dashboard-heading button { margin-top: 10px; } .evaluation-dashboard-columns > div + div { margin-top: 14px; } }

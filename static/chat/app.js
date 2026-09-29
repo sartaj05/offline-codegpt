@@ -40,6 +40,9 @@ const evaluationSuiteName = document.getElementById("evaluationSuiteName");
 const evaluationSuiteDescription = document.getElementById("evaluationSuiteDescription");
 const evaluationSuiteStatus = document.getElementById("evaluationSuiteStatus");
 const evaluationSuiteList = document.getElementById("evaluationSuiteList");
+const evaluationDashboardStats = document.getElementById("evaluationDashboardStats");
+const evaluationDashboardModels = document.getElementById("evaluationDashboardModels");
+const evaluationDashboardRecent = document.getElementById("evaluationDashboardRecent");
 let evaluationTasksCache = [];
 const observabilityStats = document.getElementById("observabilityStats");
 const observabilityOutput = document.getElementById("observabilityOutput");
@@ -378,7 +381,37 @@ async function loadObservability() {
 function toggleEvaluationLab() {
     if (!evaluationPanel) return;
     evaluationPanel.hidden = !evaluationPanel.hidden;
-    if (!evaluationPanel.hidden) loadEvaluationTasks();
+    if (!evaluationPanel.hidden) {
+        loadEvaluationTasks();
+        loadEvaluationDashboard();
+    }
+}
+
+async function loadEvaluationDashboard() {
+    if (!evaluationDashboardStats) return;
+    evaluationDashboardStats.innerText = "Loading evaluation metrics...";
+    try {
+        const response = await fetch("/api/evaluations/dashboard/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load evaluation dashboard.");
+        const summary = data.summary;
+        evaluationDashboardStats.innerHTML = [
+            ["Tasks", summary.tasks],
+            ["Runs", summary.runs],
+            ["Success rate", summary.success_rate + "%"],
+            ["Average score", summary.average_score + "/100"],
+            ["Average latency", summary.average_duration_ms + " ms"],
+            ["Needs review", summary.regressions_needing_review],
+        ].map(item => "<div><strong>" + item[1] + "</strong><span>" + item[0] + "</span></div>").join("");
+        evaluationDashboardModels.innerText = data.models.length
+            ? data.models.map(item => item.model_name + " · score " + item.average_score + " · " + item.average_duration_ms + " ms · " + item.completed + "/" + item.runs + " completed").join("\n")
+            : "No model runs yet.";
+        evaluationDashboardRecent.innerText = data.recent_runs.length
+            ? data.recent_runs.map(item => item.created_at.slice(0, 19).replace("T", " ") + " · " + item.task + " · " + item.model_name + " · " + item.status + " · " + (item.score === null ? "unscored" : item.score + "/100")).join("\n")
+            : "No evaluation runs yet.";
+    } catch (error) {
+        evaluationDashboardStats.innerText = "Dashboard error: " + error;
+    }
 }
 
 function renderEvaluationTasks(tasks) {
@@ -432,6 +465,7 @@ async function runEvaluationTask(task) {
         const data = await response.json();
         if (!data.success) throw new Error(data.error || data.run?.response || "Evaluation run failed.");
         output.innerText = data.run.model_name + " · " + data.run.duration_ms + " ms\n\n" + data.run.response;
+        loadEvaluationDashboard();
         const scoreButton = document.createElement("button");
         scoreButton.type = "button";
         scoreButton.innerText = "Score response";
@@ -454,6 +488,7 @@ async function scoreEvaluationRun(runId, output) {
         output.innerText += "\n\nAutomatic score: " + data.score.overall + "/100" +
             "\nCorrectness " + data.score.correctness + " · Relevance " + data.score.relevance +
             " · Completeness " + data.score.completeness + " · Safety " + data.score.safety;
+        loadEvaluationDashboard();
     } catch (error) {
         output.innerText += "\n\nScore error: " + error;
     }

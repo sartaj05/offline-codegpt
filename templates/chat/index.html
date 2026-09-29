@@ -150,7 +150,28 @@
                 </div>
                 <div class="panel-actions">
                     <button type="button" onclick="loadEvaluationTasks()">Refresh</button>
+                    <button type="button" onclick="loadEvaluationDashboard()">Dashboard</button>
                     <button type="button" onclick="toggleEvaluationLab()">Close</button>
+                </div>
+            </div>
+            <div class="evaluation-dashboard">
+                <div class="evaluation-dashboard-heading">
+                    <div>
+                        <strong>Results dashboard</strong>
+                        <span>Compare quality, speed, models, and regression health.</span>
+                    </div>
+                    <button type="button" onclick="loadEvaluationDashboard()">Refresh metrics</button>
+                </div>
+                <div id="evaluationDashboardStats" class="evaluation-dashboard-stats"></div>
+                <div class="evaluation-dashboard-columns">
+                    <div>
+                        <strong>Model comparison</strong>
+                        <pre id="evaluationDashboardModels" class="evaluation-dashboard-output">No model runs yet.</pre>
+                    </div>
+                    <div>
+                        <strong>Recent runs</strong>
+                        <pre id="evaluationDashboardRecent" class="evaluation-dashboard-output">No evaluation runs yet.</pre>
+                    </div>
                 </div>
             </div>
             <div class="evaluation-task-form">

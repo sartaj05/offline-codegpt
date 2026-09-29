@@ -1406,6 +1406,63 @@ def evaluation_regression_run(request, suite_id):
     return JsonResponse({"success": True, "suite": _regression_suite_payload(suite)})
 
 
+@login_required(login_url="/login/")
+@require_GET
+def evaluation_dashboard(request):
+    tasks = EvaluationTask.objects.filter(owner=request.user)
+    runs = list(EvaluationRun.objects.filter(owner=request.user).select_related("task", "score").order_by("-created_at")[:200])
+    completed = [run for run in runs if run.status == "completed"]
+    scored = [run for run in completed if hasattr(run, "score")]
+    durations = [run.duration_ms for run in completed if run.duration_ms]
+    models = {}
+    for run in runs:
+        item = models.setdefault(run.model_name, {"model_name": run.model_name, "runs": 0, "completed": 0, "scores": [], "durations": []})
+        item["runs"] += 1
+        if run.status == "completed":
+            item["completed"] += 1
+            if run.duration_ms:
+                item["durations"].append(run.duration_ms)
+        if hasattr(run, "score"):
+            item["scores"].append(run.score.overall)
+    model_rows = []
+    for item in models.values():
+        model_rows.append({
+            "model_name": item["model_name"],
+            "runs": item["runs"],
+            "completed": item["completed"],
+            "average_score": round(sum(item["scores"]) / len(item["scores"]), 1) if item["scores"] else 0,
+            "average_duration_ms": round(sum(item["durations"]) / len(item["durations"])) if item["durations"] else 0,
+        })
+    suites = list(EvaluationRegressionSuite.objects.filter(owner=request.user))
+    return JsonResponse({
+        "success": True,
+        "summary": {
+            "tasks": tasks.count(),
+            "runs": len(runs),
+            "completed_runs": len(completed),
+            "success_rate": round((len(completed) / len(runs)) * 100, 1) if runs else 0,
+            "scored_runs": len(scored),
+            "average_score": round(sum(run.score.overall for run in scored) / len(scored), 1) if scored else 0,
+            "average_duration_ms": round(sum(durations) / len(durations)) if durations else 0,
+            "regression_suites": len(suites),
+            "regressions_needing_review": sum(1 for suite in suites if suite.last_result and not suite.last_result.get("passed", False)),
+        },
+        "models": sorted(model_rows, key=lambda row: (-row["average_score"], row["model_name"])),
+        "recent_runs": [
+            {
+                "id": run.id,
+                "task": run.task.name,
+                "model_name": run.model_name,
+                "status": run.status,
+                "duration_ms": run.duration_ms,
+                "score": run.score.overall if hasattr(run, "score") else None,
+                "created_at": run.created_at.isoformat(),
+            }
+            for run in runs[:30]
+        ],
+    })
+
+
 def _workspace_for_user(user):
     membership = (
         WorkspaceMembership.objects.filter(user=user)

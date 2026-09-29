@@ -100,6 +100,30 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(payload["passed"])
         self.assertEqual(payload["results"][0]["delta"], 0)
 
+    def test_evaluation_dashboard_summarizes_runs_models_and_scores(self):
+        task = EvaluationTask.objects.create(owner=self.user, name="Dashboard task", prompt="Explain this.")
+        run = EvaluationRun.objects.create(
+            owner=self.user,
+            task=task,
+            model_name="qwen2.5-coder:1.5b",
+            status="completed",
+            response="answer",
+            duration_ms=120,
+        )
+        EvaluationScore.objects.create(run=run, correctness=80, relevance=80, completeness=80, safety=80, overall=80)
+        EvaluationRun.objects.create(
+            owner=self.user,
+            task=task,
+            model_name="qwen2.5-coder:1.5b",
+            status="failed",
+            duration_ms=200,
+        )
+        payload = self.client.get("/api/evaluations/dashboard/").json()
+        self.assertEqual(payload["summary"]["runs"], 2)
+        self.assertEqual(payload["summary"]["success_rate"], 50.0)
+        self.assertEqual(payload["summary"]["average_score"], 80.0)
+        self.assertEqual(payload["models"][0]["completed"], 1)
+
     def test_guest_upload_requires_free_account(self):
         self.client.logout()
         image = SimpleUploadedFile("diagram.png", b"fake-image", content_type="image/png")

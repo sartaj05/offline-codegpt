@@ -29,6 +29,7 @@ urlpatterns = [
     path("api/evaluations/runs/<int:run_id>/score/", views.evaluation_score, name="evaluation_score"),
     path("api/evaluations/regressions/", views.evaluation_regressions, name="evaluation_regressions"),
     path("api/evaluations/regressions/<int:suite_id>/run/", views.evaluation_regression_run, name="evaluation_regression_run"),
+    path("api/evaluations/dashboard/", views.evaluation_dashboard, name="evaluation_dashboard"),
     path("api/workspace/", views.workspace_api, name="workspace_api"),
     path("api/identity/policy/", views.identity_policy_api, name="identity_policy_api"),
     path("api/devops/generate/", views.devops_generate, name="devops_generate"),
