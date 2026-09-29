@@ -85,6 +85,8 @@
             </div>
             <div class="topbar-actions">
                 {% if request.user.is_authenticated %}
+                    <button type="button" onclick="toggleSetupPanel()">Setup</button>
+                    <button type="button" onclick="toggleBackupPanel()">Backup</button>
                     <button type="button" onclick="toggleOllamaSettings()">Ollama</button>
                     <button type="button" onclick="toggleMemoryPanel()">Memory</button>
                     <button type="button" onclick="toggleRemoteIntegration()">Remote</button>
@@ -147,10 +149,45 @@
                 <button type="button" onclick="checkOllamaHealth()">Test connection</button>
                 <span id="ollamaHealthStatus">Connection not checked.</span>
             </div>
-            <div id="ollamaPullProgress" class="ollama-pull-progress">Model download progress will appear here.</div>            <div id="ollamaSettingsStatus" class="settings-status"></div>
+            <div id="ollamaPullProgress" class="ollama-pull-progress">Model download progress will appear here.</div>
+            <div id="ollamaSettingsStatus" class="settings-status"></div>
             <button type="button" class="settings-save-button" onclick="saveOllamaSettings()">Save settings</button>
         </section>
-        {% if request.user.is_authenticated %}
+        <section id="setupPanel" class="setup-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Local setup</strong>
+                    <span>Check Ollama, install a model, and start chatting.</span>
+                </div>
+                <button type="button" onclick="toggleSetupPanel()">Close</button>
+            </div>
+            <div id="setupStatus" class="setup-status">Checking your local AI setup...</div>
+            <div class="setup-row">
+                <select id="setupModel" aria-label="Setup model">
+                    <option value="qwen2.5-coder:1.5b">qwen2.5-coder:1.5b</option>
+                    <option value="phi3:mini">phi3:mini</option>
+                </select>
+                <button type="button" onclick="runSetupCheck()">Check Ollama</button>
+                <button type="button" onclick="installSetupModel()">Install model</button>
+                <button type="button" onclick="finishSetup()">Mark ready</button>
+            </div>
+        </section>
+
+        <section id="backupPanel" class="backup-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Project backup</strong>
+                    <span>Download or restore local project files, chats, and Ollama settings.</span>
+                </div>
+                <button type="button" onclick="toggleBackupPanel()">Close</button>
+            </div>
+            <div class="backup-row">
+                <button type="button" onclick="downloadProjectBackup()">Download backup ZIP</button>
+                <input id="backupFile" type="file" accept=".zip,application/zip">
+                <button type="button" onclick="restoreProjectBackup()">Restore backup</button>
+            </div>
+            <div id="backupStatus" class="backup-status">No backup action yet.</div>
+        </section>
         <section id="memoryPanel" class="memory-panel" hidden>
             <div class="settings-heading">
                 <div>
@@ -224,7 +261,6 @@
                 <div id="evaluationSuiteList" class="evaluation-task-list"></div>
             </div>
         </section>
-        {% endif %}
         {% endif %}
 
         <section id="remoteIntegrationPanel" class="remote-integration-panel" hidden>
@@ -626,7 +662,12 @@
 
         <section class="composer">
             <input type="hidden" id="csrfToken" value="{{ csrf_token }}">
-            <div class="composer-controls">
+            <div class="task-mode-row">
+                <span>Start with:</span>
+                <button type="button" onclick="useTaskMode('generate')">Generate</button>
+                <button type="button" onclick="useTaskMode('fix')">Fix</button>
+                <button type="button" onclick="useTaskMode('explain')">Explain</button>
+            </div>            <div class="composer-controls">
                 <button id="toggleAdvancedComposer" type="button" onclick="toggleAdvancedComposer()">Code &amp; tools</button>
                 <span>Simple chat is ready. Open this only when you need code, files, templates, or runtime tools.</span>
             </div>

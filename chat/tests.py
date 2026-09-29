@@ -1077,3 +1077,29 @@ class ChatFeatureTests(TestCase):
             {"action": "delete"},
         )
         self.assertTrue(deleted.json()["deleted"])
+
+    def test_generated_file_save_and_project_backup_restore(self):
+        saved = self.client.post("/api/project/save/", {
+            "filename": "generated.py",
+            "content": "print('hello')",
+            "language": "python",
+        })
+        self.assertTrue(saved.json()["success"])
+        session = ChatSession.objects.create(owner=self.user, title="Backup chat")
+        ChatMessage.objects.create(session=session, role="user", content="Generate hello")
+        ChatMessage.objects.create(session=session, role="assistant", content="print('hello')")
+        backup = self.client.get("/api/backup/")
+        self.assertEqual(backup.status_code, 200)
+        self.assertEqual(backup["Content-Type"], "application/zip")
+
+        KnowledgeDocument.objects.filter(owner=self.user).delete()
+        ChatSession.objects.filter(owner=self.user).delete()
+        restored = self.client.post(
+            "/api/backup/",
+            {"backup": SimpleUploadedFile("backup.zip", backup.content, content_type="application/zip")},
+        )
+        self.assertTrue(restored.json()["success"])
+        self.assertEqual(restored.json()["project_files"], 1)
+        self.assertEqual(restored.json()["chats"], 1)
+        self.assertEqual(KnowledgeDocument.objects.get(owner=self.user).original_text, "print('hello')")
+        self.assertEqual(ChatSession.objects.get(owner=self.user).title, "Backup chat")

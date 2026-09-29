@@ -17,6 +17,7 @@ urlpatterns = [
     path("api/session/<int:session_id>/manage/", views.manage_session, name="manage_session"),
     path("api/search/", views.knowledge_search, name="knowledge_search"),
     path("api/project/", views.project_documents, name="project_documents"),
+    path("api/project/save/", views.project_document_create, name="project_document_create"),
     path("api/project/<int:document_id>/", views.project_document_delete, name="project_document_delete"),
     path("api/project/<int:document_id>/content/", views.project_document_content, name="project_document_content"),
     path("api/project/<int:document_id>/reindex/", views.project_document_reindex, name="project_document_reindex"),
@@ -85,5 +86,6 @@ urlpatterns = [
     path("api/session/<int:session_id>/", views.session_messages, name="session_messages"),
     path("api/session/<int:session_id>/summary/", views.session_summary, name="session_summary"),
     path("api/session/<int:session_id>/revisions/", views.session_revisions, name="session_revisions"),
+    path("api/backup/", views.project_backup, name="project_backup"),
     path("api/session/<int:session_id>/export/", views.export_session, name="export_session"),
 ]

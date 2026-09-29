@@ -20,6 +20,12 @@ const ollamaSettingsStatus = document.getElementById("ollamaSettingsStatus");
 const ollamaFallbackModel = document.getElementById("ollamaFallbackModel");
 const ollamaHealthStatus = document.getElementById("ollamaHealthStatus");
 const ollamaPullProgress = document.getElementById("ollamaPullProgress");
+const setupPanel = document.getElementById("setupPanel");
+const setupStatus = document.getElementById("setupStatus");
+const setupModel = document.getElementById("setupModel");
+const backupPanel = document.getElementById("backupPanel");
+const backupFile = document.getElementById("backupFile");
+const backupStatus = document.getElementById("backupStatus");
 const memoryPanel = document.getElementById("memoryPanel");
 const memorySummary = document.getElementById("memorySummary");
 const selectedContextSummary = document.getElementById("selectedContextSummary");
@@ -235,6 +241,102 @@ function openAdvancedComposer() {
     if (!advancedComposer) return;
     advancedComposer.hidden = false;
     if (toggleAdvancedComposerButton) toggleAdvancedComposerButton.innerText = "Hide code & tools";
+}
+function toggleSetupPanel() {
+    if (setupPanel) setupPanel.hidden = !setupPanel.hidden;
+    if (setupPanel && !setupPanel.hidden) runSetupCheck();
+}
+
+async function runSetupCheck() {
+    if (!setupStatus) return;
+    setupStatus.innerText = "Checking Ollama...";
+    try {
+        const response = await fetch("/api/ollama/health/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Ollama is unavailable.");
+        if (setupModel) {
+            setupModel.innerHTML = "";
+            const availableModels = data.models.length ? data.models : ["qwen2.5-coder:1.5b", "phi3:mini"];
+            availableModels.forEach(name => {
+                const option = document.createElement("option");
+                option.value = name;
+                option.innerText = name;
+                option.selected = name === data.default_model;
+                setupModel.appendChild(option);
+            });
+        }
+        setupStatus.innerText = "Ollama is ready. " + data.models.length + " model(s) available.";
+    } catch (error) {
+        setupStatus.innerText = "Ollama is not ready: " + error.message;
+    }
+}
+
+async function installSetupModel() {
+    const name = setupModel ? setupModel.value.trim() : "";
+    if (!name) {
+        if (setupStatus) setupStatus.innerText = "Choose a model first.";
+        return;
+    }
+    if (setupStatus) setupStatus.innerText = "Installing " + name + "...";
+    try {
+        const response = await fetch("/api/ollama/models/action/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ action: "pull", name }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Model installation failed.");
+        if (ollamaDefaultModel) {
+            renderOllamaModels(data.models, name, ollamaFallbackModel ? ollamaFallbackModel.value : "");
+            await saveOllamaSettings();
+        }
+        if (setupStatus) setupStatus.innerText = name + " is installed and selected.";
+    } catch (error) {
+        if (setupStatus) setupStatus.innerText = "Installation error: " + error.message;
+    }
+}
+
+function finishSetup() {
+    localStorage.setItem("syntaxLocalSetupComplete", "1");
+    if (setupPanel) setupPanel.hidden = true;
+}
+
+function maybeShowSetup() {
+    if (!setupPanel || localStorage.getItem("syntaxLocalSetupComplete") === "1") return;
+    setupPanel.hidden = false;
+    runSetupCheck();
+}
+
+function toggleBackupPanel() {
+    if (backupPanel) backupPanel.hidden = !backupPanel.hidden;
+}
+
+function downloadProjectBackup() {
+    window.location.href = "/api/backup/";
+}
+
+async function restoreProjectBackup() {
+    if (!backupFile || !backupFile.files.length) {
+        if (backupStatus) backupStatus.innerText = "Choose a backup ZIP first.";
+        return;
+    }
+    if (backupStatus) backupStatus.innerText = "Restoring backup...";
+    const formData = new FormData();
+    formData.append("backup", backupFile.files[0]);
+    try {
+        const response = await fetch("/api/backup/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken },
+            body: formData,
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Restore failed.");
+        if (backupStatus) backupStatus.innerText = "Restored " + data.project_files + " project file(s) and " + data.chats + " chat(s).";
+        if (projectFiles) loadProjectWorkspace();
+        if (chatHistory) loadChatHistory();
+    } catch (error) {
+        if (backupStatus) backupStatus.innerText = "Restore error: " + error.message;
+    }
 }
 function toggleMemoryPanel() {
     if (memoryPanel) memoryPanel.hidden = !memoryPanel.hidden;
@@ -1800,15 +1902,101 @@ function addAssistantActions(element) {
     copyButton.innerText = "Copy answer";
     copyButton.onclick = () => copyText(element.dataset.rawContent || element.innerText, copyButton);
 
+    const saveButton = document.createElement("button");
+    saveButton.type = "button";
+    saveButton.innerText = "Save as file";
+    saveButton.onclick = () => saveAnswerAsFile(element, saveButton);
+
     const downloadButton = document.createElement("button");
     downloadButton.type = "button";
     downloadButton.innerText = "Download .md";
     downloadButton.onclick = () => downloadText("syntax-local-ai-answer.md", element.dataset.rawContent || element.innerText);
 
-    actions.append(copyButton, downloadButton);
+    const feedbackMenu = document.createElement("details");
+    feedbackMenu.className = "feedback-menu";
+    const feedbackSummary = document.createElement("summary");
+    feedbackSummary.innerText = "Improve";
+    feedbackMenu.appendChild(feedbackSummary);
+    ["Shorter", "More detail", "Fix errors", "Use another model"].forEach(feedback => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.innerText = feedback;
+        button.onclick = () => regenerateWithFeedback(element, feedback);
+        feedbackMenu.appendChild(button);
+    });
+
+    actions.append(copyButton, saveButton, downloadButton, feedbackMenu);
     element.parentElement.appendChild(actions);
 }
 
+function extractGeneratedCode(content) {
+    const newline = String.fromCharCode(10);
+    const fence = String.fromCharCode(96, 96, 96);
+    const start = content.indexOf(fence);
+    if (start < 0) return { language: languageInput ? languageInput.value : "auto", code: content.trim() };
+    const firstEnd = content.indexOf(newline, start + 3);
+    const end = firstEnd < 0 ? -1 : content.indexOf(fence, firstEnd + 1);
+    if (firstEnd < 0 || end < 0) return { language: languageInput ? languageInput.value : "auto", code: content.trim() };
+    return {
+        language: content.slice(start + 3, firstEnd).trim().toLowerCase() || (languageInput ? languageInput.value : "auto"),
+        code: content.slice(firstEnd + 1, end).trim(),
+    };
+}
+
+async function saveAnswerAsFile(element, button) {
+    const extracted = extractGeneratedCode(element.dataset.rawContent || element.innerText);
+    if (!extracted.code) {
+        alert("There is no generated code to save.");
+        return;
+    }
+    const extensions = { python: "py", py: "py", javascript: "js", js: "js", typescript: "ts", ts: "ts", html: "html", css: "css", java: "java", csharp: "cs", sql: "sql" };
+    const extension = extensions[extracted.language] || "txt";
+    const filename = window.prompt("Save generated code as", "generated." + extension);
+    if (!filename) return;
+    const original = button.innerText;
+    button.disabled = true;
+    button.innerText = "Saving...";
+    try {
+        const response = await fetch("/api/project/save/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ filename, content: extracted.code, language: extracted.language }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to save file.");
+        button.innerText = "Saved";
+        if (projectFiles) loadProjectWorkspace();
+        setTimeout(() => { button.innerText = original; button.disabled = false; }, 1400);
+    } catch (error) {
+        button.disabled = false;
+        button.innerText = original;
+        alert("Unable to save file: " + error.message);
+    }
+}
+
+async function regenerateWithFeedback(element, feedback) {
+    const assistantWrapper = element.closest(".message");
+    const userWrapper = assistantWrapper && assistantWrapper.previousElementSibling;
+    const payload = userWrapper && userWrapper._payload;
+    if (!payload) {
+        alert("Send a new message before using response feedback.");
+        return;
+    }
+    promptInput.value = (payload.prompt || "Improve the previous answer.") + String.fromCharCode(10, 10) + "Please revise the response: " + feedback + ".";
+    codeInput.value = payload.code || "";
+    if (modelInput && feedback !== "Use another model" && payload.model) modelInput.value = payload.model;
+    if (feedback === "Use another model" && modelInput && modelInput.options.length > 1) {
+        modelInput.selectedIndex = (modelInput.selectedIndex + 1) % modelInput.options.length;
+        updateActiveModel();
+    }
+    if (languageInput && payload.language) languageInput.value = payload.language;
+    restoreFileSelection(fileInput, payload.fileFiles);
+    restoreFileSelection(folderInput, payload.folderFiles);
+    restoreFileSelection(imageInput, payload.imageFiles);
+    selectedProjectFiles = new Set(payload.selectedFiles || []);
+    renderSelectedContextSummary();
+    await sendMessage();
+}
 function addSourceCitations(element, sources) {
     if (!sources || !sources.length) return;
     const citations = document.createElement("div");
@@ -1916,11 +2104,22 @@ function addUserActions(column, wrapper, payload) {
     column.appendChild(actions);
 }
 
+const taskModePrompts = {
+    generate: "Generate a complete solution for this task. Return executable code and a short explanation.",
+    fix: "Find the errors in the provided code and return corrected code with a short explanation of every fix.",
+    explain: "Explain the provided code step by step, including its inputs, outputs, and important design choices.",
+};
+
+function useTaskMode(mode) {
+    if (!promptInput) return;
+    promptInput.value = taskModePrompts[mode] || "";
+    promptInput.focus();
+}
 function applyPromptTemplate() {
     if (!promptMode || !promptInput || !promptMode.value) return;
     const templates = {
-        generate: "Generate a complete solution for this task. Return executable code and a short explanation.",
-        explain: "Explain the provided code step by step, including its inputs, outputs, and important design choices.",
+        generate: taskModePrompts.generate,
+        explain: taskModePrompts.explain,
         debug: "Find bugs, edge cases, and likely runtime errors in the provided code. Show corrected code and explain each fix.",
         refactor: "Refactor the provided code for clarity, maintainability, and performance while preserving its behavior.",
         test: "Write thorough tests for the provided code, including normal cases, edge cases, and failure cases.",
@@ -1995,7 +2194,8 @@ function addMessage(role, content, options = {}) {
 
     const wrapper = document.createElement("div");
     wrapper.className = "message " + (role === "user" ? "user-message" : "assistant-message");
-    if (options.messageId) wrapper.dataset.messageId = options.messageId;
+    if (options.messageId) wrapper.dataset.messageId = options.messageId
+    if (options.payload) wrapper._payload = options.payload;
 
     const inner = document.createElement("div");
     inner.className = "message-inner";
@@ -3133,5 +3333,6 @@ syncEditorPreview();
 if (projectFiles) loadProjectWorkspace();
 if (gitFiles) loadGitStatus();
 if (ollamaSettingsPanel) loadOllamaSettings();
+if (setupPanel) maybeShowSetup();
 if (chatHistory) loadChatHistory();
 if (sandboxPolicyStatus) loadSandboxPolicy();

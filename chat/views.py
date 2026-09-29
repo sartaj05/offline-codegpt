@@ -2,6 +2,7 @@ import ast
 import base64
 import difflib
 import hashlib
+import io
 import json
 import os
 import re
@@ -10,6 +11,7 @@ import sqlite3
 import subprocess
 import time
 import uuid
+import zipfile
 from pathlib import PurePosixPath
 from urllib.parse import quote, urlencode, urlparse
 
@@ -85,6 +87,7 @@ CHUNK_SIZE = 2_000
 MAX_EXECUTION_CHARS = 20_000
 MAX_TEST_CHARS = 20_000
 MAX_GIT_OUTPUT_CHARS = 50_000
+MAX_BACKUP_BYTES = 25_000_000
 
 EXTENSION_CATALOG = [
     {
@@ -965,6 +968,26 @@ def project_documents(request):
 
 
 @login_required(login_url="/login/")
+@require_POST
+def project_document_create(request):
+    filename = _safe_filename(request.POST.get("filename", "generated-file"))
+    content = request.POST.get("content", "")
+    if not content.strip():
+        return JsonResponse({"success": False, "error": "Generated content is empty."}, status=400)
+    if len(content.encode("utf-8")) > MAX_FILE_BYTES:
+        return JsonResponse({"success": False, "error": "Saved files are limited to 1 MB."}, status=400)
+    document = _save_knowledge_document(filename, content, "manual", request.user)
+    return JsonResponse({
+        "success": True,
+        "document": {
+            "id": document.id,
+            "filename": document.filename,
+            "language": document.language,
+            "size_bytes": document.file_size_bytes,
+        },
+    })
+
+@login_required(login_url="/login/")
 @require_http_methods(["DELETE"])
 def project_document_delete(request, document_id):
     document = get_object_or_404(
@@ -1174,6 +1197,128 @@ def _session_pdf(session):
     pdf += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF".encode()
     return pdf
 
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def project_backup(request):
+    if request.method == "GET":
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
+            bundle.writestr(
+                "manifest.json",
+                json.dumps({
+                    "format": "syntax-local-ai-backup",
+                    "version": 1,
+                    "username": request.user.username,
+                    "created_at": timezone.now().isoformat(),
+                }, indent=2),
+            )
+            for document in KnowledgeDocument.objects.filter(
+                owner=request.user, is_active=True
+            ).order_by("filename"):
+                filename = _safe_filename(document.filename or document.title)
+                bundle.writestr("project/" + filename, document.original_text)
+            for session in ChatSession.objects.filter(
+                owner=request.user
+            ).order_by("id"):
+                messages = list(session.messages.order_by("created_at").values(
+                    "role", "content", "filename", "model_name", "created_at"
+                ))
+                bundle.writestr(
+                    f"chats/{session.id}.json",
+                    json.dumps({
+                        "title": session.title,
+                        "model_name": session.model_name,
+                        "tags": session.tags,
+                        "messages": messages,
+                    }, default=str, indent=2),
+                )
+            settings = _user_ollama_settings(request.user)
+            bundle.writestr(
+                "settings/ollama.json",
+                json.dumps({
+                    "server_url": settings.server_url,
+                    "default_model": settings.default_model,
+                    "fallback_model": settings.fallback_model,
+                    "temperature": settings.temperature,
+                    "top_p": settings.top_p,
+                    "max_context_chars": settings.max_context_chars,
+                }, indent=2),
+            )
+        response = HttpResponse(archive.getvalue(), content_type="application/zip")
+        response["Content-Disposition"] = 'attachment; filename="syntax-local-ai-backup.zip"'
+        return response
+
+    upload = request.FILES.get("backup")
+    if not upload:
+        return JsonResponse({"success": False, "error": "Choose a backup ZIP file."}, status=400)
+    if upload.size > MAX_BACKUP_BYTES:
+        return JsonResponse({"success": False, "error": "Backup files are limited to 25 MB."}, status=400)
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(upload.read())) as bundle:
+            names = bundle.namelist()
+            for name in names:
+                parts = PurePosixPath(name).parts
+                if name.startswith("/") or ".." in parts:
+                    return JsonResponse({"success": False, "error": "Backup contains an unsafe path."}, status=400)
+
+            project_count = 0
+            chat_count = 0
+            for name in names:
+                if name.startswith("project/") and not name.endswith("/"):
+                    filename = _safe_filename(name[len("project/"):])
+                    content = bundle.read(name).decode("utf-8", errors="ignore")
+                    if content and project_count < MAX_PROJECT_FILES:
+                        _save_knowledge_document(filename, content, "manual", request.user)
+                        project_count += 1
+
+            settings_name = "settings/ollama.json"
+            if settings_name in names:
+                payload = json.loads(bundle.read(settings_name).decode("utf-8"))
+                settings = _user_ollama_settings(request.user)
+                server_url = _safe_ollama_url(payload.get("server_url", settings.server_url))
+                if server_url:
+                    settings.server_url = server_url
+                settings.default_model = str(payload.get("default_model", settings.default_model))[:100] or DEFAULT_MODEL
+                settings.fallback_model = str(payload.get("fallback_model", settings.fallback_model))[:100]
+                settings.temperature = min(max(float(payload.get("temperature", settings.temperature)), 0), 2)
+                settings.top_p = min(max(float(payload.get("top_p", settings.top_p)), 0), 1)
+                settings.max_context_chars = min(max(int(payload.get("max_context_chars", settings.max_context_chars)), 4000), 100000)
+                settings.save()
+
+            for name in names:
+                if not name.startswith("chats/") or not name.endswith(".json"):
+                    continue
+                payload = json.loads(bundle.read(name).decode("utf-8"))
+                session = ChatSession.objects.create(
+                    owner=request.user,
+                    title=str(payload.get("title", "Restored chat"))[:200] or "Restored chat",
+                    model_name=str(payload.get("model_name", DEFAULT_MODEL))[:100] or DEFAULT_MODEL,
+                    tags=str(payload.get("tags", ""))[:300],
+                )
+                restored_messages = []
+                for message in payload.get("messages", []):
+                    role = message.get("role")
+                    if role not in {"user", "assistant", "system"}:
+                        continue
+                    restored_messages.append(ChatMessage(
+                        session=session,
+                        role=role,
+                        content=str(message.get("content", "")),
+                        filename=str(message.get("filename", ""))[:500],
+                        model_name=str(message.get("model_name", ""))[:100] or None,
+                    ))
+                ChatMessage.objects.bulk_create(restored_messages)
+                chat_count += 1
+
+            return JsonResponse({
+                "success": True,
+                "project_files": project_count,
+                "chats": chat_count,
+            })
+    except (zipfile.BadZipFile, UnicodeDecodeError, ValueError, TypeError, OverflowError) as exc:
+        return JsonResponse({"success": False, "error": "Unable to restore backup: " + str(exc)}, status=400)
 
 @login_required(login_url="/login/")
 def export_session(request, session_id):

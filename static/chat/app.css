@@ -586,3 +586,24 @@ select { padding: 0 10px; }
 @media (max-width: 760px) { .evaluation-task-form { grid-template-columns: 1fr; } .evaluation-task-form textarea:first-of-type { grid-column: 1; } }
 @media (max-width: 900px) { .evaluation-dashboard-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .evaluation-dashboard-heading, .evaluation-dashboard-columns { display: block; } .evaluation-dashboard-heading button { margin-top: 10px; } .evaluation-dashboard-columns > div + div { margin-top: 14px; } }
+
+/* Lightweight onboarding, task modes, backup, and response feedback */
+.setup-panel, .backup-panel { position: absolute; z-index: 6; top: 76px; right: clamp(24px, 5vw, 68px); width: min(560px, calc(100% - 48px)); padding: 15px; border: 1px solid var(--border); border-radius: 12px; background: rgba(21,25,34,.98); box-shadow: 0 18px 50px rgba(0,0,0,.35); }
+.setup-panel strong, .backup-panel strong { color: var(--text); font-size: 12px; }
+.setup-panel p, .backup-panel p { margin: 6px 0 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
+.setup-row, .backup-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 11px; }
+.setup-row select, .setup-row button, .backup-row button { height: 31px; padding: 0 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); color: var(--text); font-size: 10px; }
+.setup-row button:first-of-type, .backup-row button:first-of-type { border-color: #2d997b; background: #176a56; color: #e7fff7; }
+.backup-row input[type=file] { max-width: 220px; color: var(--muted); font-size: 10px; }
+.setup-status, .backup-status { min-height: 16px; margin-top: 9px; color: var(--accent); font-size: 10px; }
+.task-mode-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; width: min(980px, 100%); margin: 0 auto 7px; }
+.task-mode-label { margin-right: 2px; color: var(--muted); font-size: 10px; }
+.task-mode-row button { padding: 6px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); color: var(--text); font-size: 10px; }
+.task-mode-row button:hover { border-color: var(--accent); color: var(--accent); }
+.feedback-menu { position: relative; display: inline-block; }
+.feedback-menu summary { list-style: none; cursor: pointer; }
+.feedback-menu summary::-webkit-details-marker { display: none; }
+.feedback-menu button { display: block; width: 100%; margin-top: 4px; text-align: left; white-space: nowrap; }
+.feedback-menu[open] { padding: 4px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); }
+.feedback-menu[open] summary { padding: 2px 4px 4px; color: var(--accent); }
+@media (max-width: 720px) { .setup-panel, .backup-panel { top: 125px; right: 16px; width: calc(100% - 32px); } .task-mode-row { padding: 0 2px; } }
