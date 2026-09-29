@@ -1,5 +1,6 @@
 import json
 from types import SimpleNamespace
+from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -433,6 +434,36 @@ class ChatFeatureTests(TestCase):
         self.assertFalse(User.objects.get(username="directory-user").is_active)
         self.assertFalse(WorkspaceMembership.objects.filter(id=member.id).exists())
         self.assertTrue(EnterpriseIdentityConfig.objects.filter(workspace=workspace, scim_enabled=True).exists())
+
+    def test_oidc_login_uses_pkce_state_and_links_workspace_user(self):
+        saved = self.client.post("/api/identity/enterprise/", {
+            "provider": "oidc",
+            "issuer_url": "https://idp.example.com",
+            "client_id": "syntax-local",
+            "allowed_domains": "example.com",
+        })
+        self.assertEqual(saved.status_code, 200)
+        discovery = SimpleNamespace(
+            raise_for_status=lambda: None,
+            json=lambda: {
+                "authorization_endpoint": "https://idp.example.com/authorize",
+                "token_endpoint": "https://idp.example.com/token",
+                "userinfo_endpoint": "https://idp.example.com/userinfo",
+            },
+        )
+        userinfo = SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"email": "sso-user@example.com", "name": "SSO User"})
+        token_response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"access_token": "access-token"})
+        with patch("chat.views.requests.get", side_effect=[discovery, discovery, userinfo]) as get_request, patch("chat.views.requests.post", return_value=token_response):
+            started = self.client.get("/sso/oidc/login/")
+            self.assertEqual(started.status_code, 302)
+            location = started["Location"]
+            query = parse_qs(urlparse(location).query)
+            self.assertEqual(query["code_challenge_method"], ["S256"])
+            completed = self.client.get("/sso/oidc/callback/?code=auth-code&state=" + query["state"][0])
+        self.assertEqual(completed.status_code, 302)
+        self.assertEqual(completed["Location"], "/")
+        self.assertTrue(User.objects.filter(username="sso-user", email="sso-user@example.com").exists())
+        self.assertEqual(get_request.call_count, 3)
 
     def test_api_contract_finds_undocumented_endpoint(self):
         response = self.client.post("/api/contracts/analyze/", {

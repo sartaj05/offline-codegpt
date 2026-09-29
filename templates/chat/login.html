@@ -36,6 +36,11 @@
                 <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
                 <button type="submit">Sign in <span>↗</span></button>
             </form>
+            <div class="sso-divider"><span>or continue with enterprise SSO</span></div>
+            <div class="sso-actions">
+                <a class="sso-button" href="{% url 'sso_login' provider='oidc' %}">Continue with OIDC</a>
+                <a class="sso-button" href="{% url 'sso_login' provider='saml' %}">Continue with SAML</a>
+            </div>
             <p class="auth-switch">New here? <a href="{% url 'signup' %}">Create a free account</a></p>
             <a class="guest-link" href="{% url 'chat_home' %}">← Continue without an account</a>
         </main>

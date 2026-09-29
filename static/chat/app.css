@@ -257,6 +257,10 @@ button { cursor: pointer; }
 .enterprise-identity-card .policy-grid label { flex-direction: column; align-items: flex-start; }
 .enterprise-identity-card input:not([type="checkbox"]), .enterprise-identity-card select { width: 100%; margin-top: 5px; padding: 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); }
 .enterprise-identity-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.sso-divider { display: flex; align-items: center; gap: 8px; margin: 16px 0 10px; color: var(--muted); font-size: 10px; }
+.sso-divider::before, .sso-divider::after { content: ""; height: 1px; flex: 1; background: var(--border); }
+.sso-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sso-button { padding: 9px; border: 1px solid var(--border); border-radius: 7px; color: var(--text); text-align: center; text-decoration: none; background: var(--surface-2); font-size: 11px; }
 .git-file { display: flex; align-items: center; gap: 5px; margin-top: 5px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); }
 .git-file-status { flex: 0 0 22px; color: var(--accent); font-family: Consolas, monospace; font-size: 9px; }
 .git-file-path { min-width: 0; flex: 1; overflow: hidden; color: var(--muted); font-family: Consolas, monospace; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }

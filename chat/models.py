@@ -234,6 +234,7 @@ class EnterpriseIdentityConfig(models.Model):
     workspace = models.OneToOneField(Workspace, on_delete=models.CASCADE, related_name="identity_config")
     provider = models.CharField(max_length=10, choices=PROVIDER_CHOICES, default="oidc")
     issuer_url = models.URLField(blank=True, default="")
+    saml_entrypoint_url = models.URLField(blank=True, default="")
     client_id = models.CharField(max_length=200, blank=True, default="")
     allowed_domains = models.CharField(max_length=500, blank=True, default="")
     enforce_sso = models.BooleanField(default=False)

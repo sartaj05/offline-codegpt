@@ -123,6 +123,7 @@ const policyRetention = document.getElementById("policyRetention");
 const identityPolicyStatus = document.getElementById("identityPolicyStatus");
 const enterpriseProvider = document.getElementById("enterpriseProvider");
 const enterpriseIssuer = document.getElementById("enterpriseIssuer");
+const enterpriseSamlEntrypoint = document.getElementById("enterpriseSamlEntrypoint");
 const enterpriseClientId = document.getElementById("enterpriseClientId");
 const enterpriseDomains = document.getElementById("enterpriseDomains");
 const enterpriseEnforce = document.getElementById("enterpriseEnforce");
@@ -1136,6 +1137,7 @@ function renderEnterpriseIdentity(config) {
     if (!config) return;
     enterpriseProvider.value = config.provider || "oidc";
     enterpriseIssuer.value = config.issuer_url || "";
+    enterpriseSamlEntrypoint.value = config.saml_entrypoint_url || "";
     enterpriseClientId.value = config.client_id || "";
     enterpriseDomains.value = config.allowed_domains || "";
     enterpriseEnforce.checked = Boolean(config.enforce_sso);
@@ -1166,6 +1168,7 @@ async function saveEnterpriseIdentity(rotateToken) {
             body: new URLSearchParams({
                 provider: enterpriseProvider.value,
                 issuer_url: enterpriseIssuer.value,
+                saml_entrypoint_url: enterpriseSamlEntrypoint.value,
                 client_id: enterpriseClientId.value,
                 allowed_domains: enterpriseDomains.value,
                 enforce_sso: enterpriseEnforce.checked,

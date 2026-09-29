@@ -11,7 +11,7 @@ import subprocess
 import time
 import uuid
 from pathlib import PurePosixPath
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urlencode, urlparse
 
 import requests
 
@@ -21,6 +21,7 @@ from django.contrib.auth.models import User
 from django.db.models import Count, Min, Q
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from django.views.decorators.csrf import csrf_exempt
@@ -533,6 +534,145 @@ def login_view(request):
             return redirect("chat_home")
         return render(request, "chat/login.html", {"error": "Invalid username or password."})
     return render(request, "chat/login.html")
+
+
+def _sso_config(provider, workspace_id=None):
+    query = EnterpriseIdentityConfig.objects.filter(provider=provider)
+    if workspace_id:
+        try:
+            query = query.filter(workspace_id=int(workspace_id))
+        except (TypeError, ValueError):
+            return None
+    return query.select_related("workspace").order_by("workspace_id").first()
+
+
+def _sso_domain_allowed(config, email):
+    domains = [item.strip().lower().lstrip("@") for item in config.allowed_domains.split(",") if item.strip()]
+    if not domains:
+        return True
+    email = email.strip().lower()
+    return any(email.endswith("@" + domain) for domain in domains)
+
+
+def _sso_login_user(request, config, claims):
+    email = str(claims.get("email") or claims.get("upn") or "").strip().lower()
+    if not email or "@" not in email:
+        raise ValueError("The identity provider did not return an email address.")
+    if not _sso_domain_allowed(config, email):
+        raise ValueError("This email domain is not allowed for the workspace.")
+    username = str(claims.get("preferred_username") or email.split("@", 1)[0]).strip()
+    username = re.sub(r"[^A-Za-z0-9_.@+-]", "-", username)[:150] or email.split("@", 1)[0][:150]
+    user, created = User.objects.get_or_create(username=username, defaults={"email": email})
+    changed = []
+    if user.email != email:
+        user.email = email
+        changed.append("email")
+    display_name = str(claims.get("name") or claims.get("display_name") or "").strip()
+    if display_name:
+        parts = display_name.split(" ", 1)
+        if user.first_name != parts[0][:150]:
+            user.first_name = parts[0][:150]
+            changed.append("first_name")
+        last_name = parts[1][:150] if len(parts) > 1 else ""
+        if user.last_name != last_name:
+            user.last_name = last_name
+            changed.append("last_name")
+    if not user.is_active:
+        user.is_active = True
+        changed.append("is_active")
+    if created:
+        user.set_unusable_password()
+        user.save()
+    elif changed:
+        user.save(update_fields=changed)
+    WorkspaceMembership.objects.get_or_create(workspace=config.workspace, user=user, defaults={"role": "developer"})
+    login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+    return user
+
+
+@require_GET
+def sso_login(request, provider):
+    provider = provider.strip().lower()
+    if provider not in {"oidc", "saml"}:
+        return JsonResponse({"success": False, "error": "Unsupported SSO provider."}, status=400)
+    config = _sso_config(provider, request.GET.get("workspace_id"))
+    if not config:
+        return JsonResponse({"success": False, "error": "No configured workspace identity provider found."}, status=404)
+    state = secrets.token_urlsafe(32)
+    callback = request.build_absolute_uri(reverse("sso_callback", kwargs={"provider": provider}))
+    request.session[f"sso:{state}"] = {"workspace_id": config.workspace_id, "callback": callback}
+    request.session.set_expiry(600)
+    if provider == "saml":
+        if not config.saml_entrypoint_url:
+            return JsonResponse({"success": False, "error": "SAML entrypoint is not configured."}, status=400)
+        suffix = "&" if "?" in config.saml_entrypoint_url else "?"
+        return redirect(config.saml_entrypoint_url + suffix + urlencode({"RelayState": state, "redirect_uri": callback}))
+    if not config.issuer_url or not config.client_id:
+        return JsonResponse({"success": False, "error": "OIDC issuer URL and client ID are required."}, status=400)
+    try:
+        discovery = requests.get(config.issuer_url.rstrip("/") + "/.well-known/openid-configuration", timeout=10)
+        discovery.raise_for_status()
+        metadata = discovery.json()
+        authorization_endpoint = metadata["authorization_endpoint"]
+    except (requests.RequestException, KeyError, ValueError) as exc:
+        return JsonResponse({"success": False, "error": f"OIDC discovery failed: {exc}"}, status=502)
+    verifier = secrets.token_urlsafe(48)
+    nonce = secrets.token_urlsafe(24)
+    request.session[f"sso:{state}"].update({"verifier": verifier, "nonce": nonce})
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("utf-8")).digest()).decode("ascii").rstrip("=")
+    params = {
+        "client_id": config.client_id,
+        "response_type": "code",
+        "redirect_uri": callback,
+        "scope": "openid profile email",
+        "state": state,
+        "nonce": nonce,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+    }
+    return redirect(authorization_endpoint + "?" + urlencode(params))
+
+
+@require_http_methods(["GET", "POST"])
+def sso_callback(request, provider):
+    provider = provider.strip().lower()
+    state = request.GET.get("state") or request.POST.get("RelayState")
+    state_data = request.session.pop(f"sso:{state}", None) if state else None
+    if not state_data:
+        return JsonResponse({"success": False, "error": "SSO state is missing or expired."}, status=400)
+    config = _sso_config(provider, state_data.get("workspace_id"))
+    if not config:
+        return JsonResponse({"success": False, "error": "SSO workspace configuration was not found."}, status=404)
+    if provider == "saml":
+        return JsonResponse({"success": False, "error": "SAML assertion validation must be handled by a signed SAML gateway before this callback."}, status=501)
+    if request.GET.get("error"):
+        return JsonResponse({"success": False, "error": request.GET.get("error_description") or request.GET.get("error")}, status=400)
+    code = request.GET.get("code", "").strip()
+    if not code:
+        return JsonResponse({"success": False, "error": "OIDC authorization code is missing."}, status=400)
+    callback = state_data.get("callback") or request.build_absolute_uri(reverse("sso_callback", kwargs={"provider": provider}))
+    try:
+        discovery = requests.get(config.issuer_url.rstrip("/") + "/.well-known/openid-configuration", timeout=10)
+        discovery.raise_for_status()
+        metadata = discovery.json()
+        token_response = requests.post(metadata["token_endpoint"], data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "client_id": config.client_id,
+            "redirect_uri": callback,
+            "code_verifier": state_data.get("verifier", ""),
+        }, timeout=10)
+        token_response.raise_for_status()
+        token_data = token_response.json()
+        access_token = token_data.get("access_token")
+        if not access_token or not metadata.get("userinfo_endpoint"):
+            raise ValueError("OIDC provider did not return an access token and userinfo endpoint.")
+        userinfo = requests.get(metadata["userinfo_endpoint"], headers={"Authorization": "Bearer " + access_token}, timeout=10)
+        userinfo.raise_for_status()
+        _sso_login_user(request, config, userinfo.json())
+    except (requests.RequestException, KeyError, ValueError) as exc:
+        return JsonResponse({"success": False, "error": f"OIDC sign-in failed: {exc}"}, status=502)
+    return redirect("chat_home")
 
 
 @require_POST
@@ -1889,6 +2029,7 @@ def _enterprise_identity_payload(config):
     return {
         "provider": config.provider,
         "issuer_url": config.issuer_url,
+        "saml_entrypoint_url": config.saml_entrypoint_url,
         "client_id": config.client_id,
         "allowed_domains": config.allowed_domains,
         "enforce_sso": config.enforce_sso,
@@ -1915,6 +2056,7 @@ def enterprise_identity_api(request):
             return JsonResponse({"success": False, "error": "Provider must be OIDC or SAML."}, status=400)
         config.provider = provider
         config.issuer_url = request.POST.get("issuer_url", "").strip()[:500]
+        config.saml_entrypoint_url = request.POST.get("saml_entrypoint_url", "").strip()[:500]
         config.client_id = request.POST.get("client_id", "").strip()[:200]
         config.allowed_domains = request.POST.get("allowed_domains", "").strip()[:500]
         config.enforce_sso = request.POST.get("enforce_sso", "false").lower() in {"1", "true", "yes", "on"}
