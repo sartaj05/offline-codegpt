@@ -2771,23 +2771,29 @@ async function openPatchReview(updated, language) {
     }
 }
 
-function applyPatch() {
+function acceptPatch() {
     if (!pendingPatch) return;
     codeInput.value = pendingPatch.updated;
     if (pendingPatch.language && [...languageInput.options].some(option => option.value === pendingPatch.language)) {
         languageInput.value = pendingPatch.language;
     }
+    pendingPatch.accepted = true;
     syncActiveEditorTab();
     syncEditorPreview();
-    if (patchStatus) patchStatus.innerText = "Patch applied. Save the file when ready.";
+    if (patchStatus) {
+        patchStatus.innerText = activeEditorDocumentId
+            ? "Changes accepted in the editor. Save the file to persist them."
+            : "Changes accepted in the scratch buffer.";
+    }
 }
 
-function restorePatch() {
+function rollbackPatch() {
     if (!pendingPatch) return;
     codeInput.value = codeBeforePatch;
+    pendingPatch.accepted = false;
     syncActiveEditorTab();
     syncEditorPreview();
-    if (patchStatus) patchStatus.innerText = "Previous code restored.";
+    if (patchStatus) patchStatus.innerText = "Changes rolled back to the previous editor content.";
 }
 
 function rejectPatch() {
@@ -2795,7 +2801,6 @@ function rejectPatch() {
     codeBeforePatch = "";
     if (patchPanel) patchPanel.hidden = true;
 }
-
 async function loadProjectWorkspace() {
     if (!projectFiles) return;
     projectFiles.innerText = "Loading indexed files...";
