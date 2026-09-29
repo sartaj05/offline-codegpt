@@ -59,6 +59,7 @@ from .model_router import route_model
 from .devcontainer import generate_devcontainer
 from .incident import analyze_incident
 from .architecture import analyze_architecture
+from .cross_repository import analyze_cross_repository
 from .api_contract import analyze_api_contract
 from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
@@ -2078,6 +2079,18 @@ def architecture_analyze(request):
         for item in files if isinstance(item, dict)
     ]
     return JsonResponse({"success": True, **analyze_architecture(files)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def cross_repository_analyze(request):
+    try:
+        repositories = json.loads(request.POST.get("repositories_json", "[]"))
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "error": "Repositories must be valid JSON."}, status=400)
+    if not isinstance(repositories, list) or not repositories:
+        return JsonResponse({"success": False, "error": "Add at least one repository with files."}, status=400)
+    return JsonResponse({"success": True, **analyze_cross_repository(repositories)})
 
 
 @login_required(login_url="/login/")

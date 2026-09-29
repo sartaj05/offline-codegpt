@@ -50,6 +50,7 @@ urlpatterns = [
     path("api/devcontainers/generate/", views.devcontainer_generate, name="devcontainer_generate"),
     path("api/incidents/analyze/", views.incident_analyze, name="incident_analyze"),
     path("api/architecture/analyze/", views.architecture_analyze, name="architecture_analyze"),
+    path("api/architecture/cross-repo/", views.cross_repository_analyze, name="cross_repository_analyze"),
     path("api/contracts/analyze/", views.api_contract_analyze, name="api_contract_analyze"),
     path("api/provenance/generate/", views.provenance_generate, name="provenance_generate"),
     path("api/provenance/verify/", views.provenance_verify, name="provenance_verify"),

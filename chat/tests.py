@@ -386,6 +386,18 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(payload["symbols"])
         self.assertTrue(payload["cycles"])
 
+    def test_cross_repository_graph_reports_service_impact(self):
+        response = self.client.post("/api/architecture/cross-repo/", {
+            "repositories_json": json.dumps([
+                {"name": "api", "files": [{"filename": "users.py", "content": "def users(): return True"}]},
+                {"name": "worker", "files": [{"filename": "jobs.py", "content": "from users import users"}]},
+            ]),
+        })
+        payload = response.json()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(payload["cross_edges"]), 1)
+        self.assertEqual(payload["impacts"][0]["repository"], "api")
+
     def test_api_contract_finds_undocumented_endpoint(self):
         response = self.client.post("/api/contracts/analyze/", {
             "spec": json.dumps({"paths": {"/api/users/": {"get": {}}}}),

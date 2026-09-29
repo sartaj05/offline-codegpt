@@ -450,6 +450,9 @@
             <textarea id="architectureFiles" class="architecture-files" placeholder='Paste project files as JSON: [{"filename":"app.py","content":"..."}]'></textarea>
             <button type="button" onclick="analyzeArchitecture()">Analyze architecture</button>
             <pre id="architectureOutput" class="architecture-output">Architecture findings will appear here.</pre>
+            <textarea id="crossRepositoryFiles" class="architecture-files" placeholder='Cross-repo JSON: [{"name":"api","files":[{"filename":"users.py","content":"..."}]}]'></textarea>
+            <button type="button" onclick="analyzeCrossRepositories()">Analyze cross-repository impact</button>
+            <pre id="crossRepositoryOutput" class="architecture-output">Cross-repository findings will appear here.</pre>
         </section>
         <section id="contractsPanel" class="contracts-panel" hidden>
             <div class="settings-heading">

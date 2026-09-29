@@ -100,6 +100,8 @@ const incidentOutput = document.getElementById("incidentOutput");
 const architecturePanel = document.getElementById("architecturePanel");
 const architectureFiles = document.getElementById("architectureFiles");
 const architectureOutput = document.getElementById("architectureOutput");
+const crossRepositoryFiles = document.getElementById("crossRepositoryFiles");
+const crossRepositoryOutput = document.getElementById("crossRepositoryOutput");
 const contractsPanel = document.getElementById("contractsPanel");
 const contractSpec = document.getElementById("contractSpec");
 const contractCode = document.getElementById("contractCode");
@@ -955,6 +957,27 @@ async function analyzeIncident() {
 function toggleArchitecture() {
     if (!architecturePanel) return;
     architecturePanel.hidden = !architecturePanel.hidden;
+}
+
+async function analyzeCrossRepositories() {
+    crossRepositoryOutput.innerText = "Building cross-repository impact graph...";
+    try {
+        const response = await fetch("/api/architecture/cross-repo/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ repositories_json: crossRepositoryFiles.value }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Cross-repository analysis failed.");
+        const newline = String.fromCharCode(10);
+        crossRepositoryOutput.innerText = data.summary + newline + data.warnings.join(newline) +
+            newline + newline + "Impacts:" + newline +
+            (data.impacts.length ? data.impacts.map(item => item.repository + " · " + item.risk + " · in " + item.incoming_dependencies + " / out " + item.outgoing_dependencies).join(newline) : "No impact data.") +
+            newline + newline + "Cross-repository edges:" + newline +
+            (data.cross_edges.length ? data.cross_edges.map(edge => edge.from + " -> " + edge.to).join(newline) : "None");
+    } catch (error) {
+        crossRepositoryOutput.innerText = "Cross-repository error: " + error;
+    }
 }
 
 async function analyzeArchitecture() {
