@@ -625,6 +625,7 @@
                                 <button type="button" onclick="controlAgentTask('resume')">Resume</button>
                                 <button type="button" onclick="controlAgentTask('retry')">Retry</button>
                                 <button type="button" onclick="resetAgentTask()">Undo / reset</button>
+                                <button type="button" onclick="queueAgentJob()">Queue background job</button>
                             </div>
                         </div>
                         <textarea id="agentGoal" class="agent-goal" placeholder="Describe a multi-step coding task..."></textarea>
@@ -632,6 +633,7 @@
                         <div id="agentStatus" class="agent-status">No agent task yet.</div>
                         <div id="agentPlan" class="agent-plan"></div>
                         <pre id="agentLogs" class="agent-logs">Agent logs will appear here.</pre>
+                        <div id="agentJobStatus" class="agent-status">No background job queued.</div>
                     </div>
                     <div class="agent-team-workspace">
                         <div class="agent-heading">

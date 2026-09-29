@@ -36,6 +36,7 @@ from .models import (
     AgentTask,
     AgentTeam,
     SandboxPolicy,
+    AgentJob,
     AiEvent,
     AuditEvent,
     UserOllamaSettings,
@@ -1128,6 +1129,97 @@ def agent_team_control(request, team_id):
     team.logs = [*(team.logs or []), {"level": "warning" if action in {"pause", "cancel"} else "info", "message": message}][-50:]
     team.save(update_fields=["status", "members", "current_member", "logs", "updated_at"])
     return JsonResponse({"success": True, "team": _agent_team_payload(team)})
+
+
+def _agent_job_payload(job):
+    return {
+        "id": job.id,
+        "task_id": job.task_id,
+        "task_title": job.task.title,
+        "status": job.status,
+        "payload": job.payload,
+        "checkpoint": job.checkpoint,
+        "logs": job.logs,
+        "attempts": job.attempts,
+        "last_error": job.last_error,
+        "started_at": job.started_at.isoformat() if job.started_at else None,
+        "finished_at": job.finished_at.isoformat() if job.finished_at else None,
+        "created_at": job.created_at.isoformat(),
+    }
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def agent_jobs(request):
+    if request.method == "GET":
+        jobs = AgentJob.objects.filter(owner=request.user).select_related("task")[:100]
+        return JsonResponse({"success": True, "jobs": [_agent_job_payload(job) for job in jobs]})
+    task = get_object_or_404(AgentTask, id=request.POST.get("task_id"), owner=request.user)
+    job = AgentJob.objects.create(
+        owner=request.user,
+        task=task,
+        payload={"code": request.POST.get("code", "")[:20000], "test_code": request.POST.get("test_code", "")[:20000]},
+        logs=[{"level": "info", "message": "Job queued and ready for a guarded worker run."}],
+    )
+    return JsonResponse({"success": True, "job": _agent_job_payload(job)}, status=201)
+
+
+@login_required(login_url="/login/")
+@require_POST
+def agent_job_run(request, job_id):
+    job = get_object_or_404(AgentJob, id=job_id, owner=request.user)
+    if job.status in {"cancelled", "completed"}:
+        return JsonResponse({"success": False, "error": "This job is no longer runnable."}, status=400)
+    job.status = "running"
+    job.attempts += 1
+    job.started_at = job.started_at or timezone.now()
+    job.checkpoint = {**(job.checkpoint or {}), "stage": "safe_checks", "updated_at": timezone.now().isoformat()}
+    logs = [*(job.logs or []), {"level": "info", "message": f"Worker attempt {job.attempts} started."}]
+    code = job.payload.get("code", "")
+    test_code = job.payload.get("test_code", "")
+    if code:
+        scan = scan_files([{"filename": "background-agent-buffer", "content": code}])
+        logs.append({"level": "warning" if scan["findings"] else "info", "message": scan["summary"]})
+    if test_code:
+        result = run_sandboxed_code("python", code + "\n\n" + test_code)
+        logs.append({"level": "info" if result["success"] else "error", "message": "Guarded tests " + ("passed." if result["success"] else "failed.")})
+        job.checkpoint["tests_passed"] = result["success"]
+        if not result["success"]:
+            job.status = "failed"
+            job.last_error = result.get("stderr") or "Guarded tests failed."
+    if job.status == "running":
+        job.status = "completed"
+        job.checkpoint["stage"] = "completed"
+        job.finished_at = timezone.now()
+        logs.append({"level": "info", "message": "Background job completed at a safe checkpoint."})
+    job.logs = logs[-100:]
+    job.save(update_fields=["status", "attempts", "started_at", "finished_at", "checkpoint", "logs", "last_error", "updated_at"])
+    return JsonResponse({"success": job.status == "completed", "job": _agent_job_payload(job)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def agent_job_control(request, job_id):
+    job = get_object_or_404(AgentJob, id=job_id, owner=request.user)
+    action = request.POST.get("action", "").strip().lower()
+    if action == "pause":
+        job.status = "paused"
+        message = "Job paused at its last checkpoint."
+    elif action == "resume":
+        job.status = "queued"
+        message = "Job resumed and queued for another worker run."
+    elif action == "retry":
+        job.status = "queued"
+        job.last_error = ""
+        message = "Job reset for retry."
+    elif action == "cancel":
+        job.status = "cancelled"
+        message = "Job cancelled by user."
+    else:
+        return JsonResponse({"success": False, "error": "Use pause, resume, retry, or cancel."}, status=400)
+    job.logs = [*(job.logs or []), {"level": "warning" if action in {"pause", "cancel"} else "info", "message": message}][-100:]
+    job.save(update_fields=["status", "last_error", "logs", "updated_at"])
+    return JsonResponse({"success": True, "job": _agent_job_payload(job)})
 
 
 @login_required(login_url="/login/")

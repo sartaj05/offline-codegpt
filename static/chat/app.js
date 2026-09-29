@@ -127,11 +127,13 @@ const agentGoal = document.getElementById("agentGoal");
 const agentStatus = document.getElementById("agentStatus");
 const agentPlan = document.getElementById("agentPlan");
 const agentLogs = document.getElementById("agentLogs");
+const agentJobStatus = document.getElementById("agentJobStatus");
 const agentTeamRoles = document.getElementById("agentTeamRoles");
 const agentTeamStatus = document.getElementById("agentTeamStatus");
 const agentTeamLogs = document.getElementById("agentTeamLogs");
 let agentTaskId = null;
 let agentTeamId = null;
+let agentJobId = null;
 const languageInput = document.getElementById("language");
 const fileInput = document.getElementById("fileInput");
 const folderInput = document.getElementById("folderInput");
@@ -1946,6 +1948,45 @@ async function runAgentTask() {
     } catch (error) {
         agentStatus.innerText = "Agent error: " + error;
     }
+}
+
+async function queueAgentJob() {
+    if (!agentTaskId) {
+        agentJobStatus.innerText = "Create an approved agent plan first.";
+        return;
+    }
+    try {
+        const response = await fetch("/api/agent/jobs/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                task_id: agentTaskId,
+                code: codeInput.value,
+                test_code: document.getElementById("testInput") ? document.getElementById("testInput").value : "",
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to queue background job.");
+        agentJobId = data.job.id;
+        agentJobStatus.innerText = "QUEUED job #" + agentJobId + " · ready for worker run.";
+        await runAgentJob();
+    } catch (error) {
+        agentJobStatus.innerText = "Job error: " + error;
+    }
+}
+
+async function runAgentJob() {
+    if (!agentJobId) return;
+    const response = await fetch("/api/agent/job/" + agentJobId + "/run/", {
+        method: "POST",
+        headers: { "X-CSRFToken": csrfToken },
+    });
+    const data = await response.json();
+    if (!data.success && !data.job) {
+        agentJobStatus.innerText = "Job error: " + (data.error || "Worker failed.");
+        return;
+    }
+    agentJobStatus.innerText = data.job.status.toUpperCase() + " job #" + agentJobId + " · attempt " + data.job.attempts;
 }
 
 async function controlAgentTask(action) {

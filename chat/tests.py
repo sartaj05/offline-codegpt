@@ -7,7 +7,7 @@ from django.test import TestCase
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EvaluationRun, EvaluationScore, EvaluationTask, KnowledgeChunk, KnowledgeDocument, SandboxPolicy, WorkspaceMembership, WorkspacePolicy
+from .models import AgentJob, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EvaluationRun, EvaluationScore, EvaluationTask, KnowledgeChunk, KnowledgeDocument, SandboxPolicy, WorkspaceMembership, WorkspacePolicy
 from .views import _search_knowledge
 
 
@@ -51,6 +51,22 @@ class ChatFeatureTests(TestCase):
         executed = self.client.post("/api/execute/", {"language": "python", "code": "print('safe')"})
         self.assertTrue(executed.json()["success"])
         self.assertEqual(executed.json()["limits"]["timeout_seconds"], 10)
+
+    def test_durable_agent_job_checkpoints_and_can_retry(self):
+        task = self.client.post("/api/agent/plan/", {"goal": "Run a safe background check"}).json()["task"]
+        queued = self.client.post("/api/agent/jobs/", {
+            "task_id": task["id"],
+            "code": "def add(a, b):\n    return a + b",
+            "test_code": "assert add(2, 3) == 5",
+        })
+        self.assertEqual(queued.status_code, 201)
+        job_id = queued.json()["job"]["id"]
+        completed = self.client.post(f"/api/agent/job/{job_id}/run/")
+        self.assertTrue(completed.json()["success"])
+        self.assertEqual(completed.json()["job"]["status"], "completed")
+        self.assertEqual(AgentJob.objects.get(id=job_id).checkpoint["stage"], "completed")
+        paused = self.client.post(f"/api/agent/job/{job_id}/control/", {"action": "retry"})
+        self.assertEqual(paused.json()["job"]["status"], "queued")
 
     def test_evaluation_tasks_can_be_created_listed_and_deleted(self):
         created = self.client.post("/api/evaluations/tasks/", {

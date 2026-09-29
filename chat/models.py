@@ -104,6 +104,36 @@ class SandboxPolicy(models.Model):
         return f"Sandbox policy for {self.user.username}"
 
 
+class AgentJob(models.Model):
+    STATUS_CHOICES = (
+        ("queued", "Queued"),
+        ("running", "Running"),
+        ("paused", "Paused"),
+        ("completed", "Completed"),
+        ("failed", "Failed"),
+        ("cancelled", "Cancelled"),
+    )
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="agent_jobs")
+    task = models.ForeignKey(AgentTask, on_delete=models.CASCADE, related_name="jobs")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="queued")
+    payload = models.JSONField(default=dict)
+    checkpoint = models.JSONField(default=dict)
+    logs = models.JSONField(default=list)
+    attempts = models.PositiveIntegerField(default=0)
+    last_error = models.TextField(blank=True, default="")
+    started_at = models.DateTimeField(blank=True, null=True)
+    finished_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"Job {self.id} · {self.task.title}"
+
+
 class McpConnector(models.Model):
     CONNECTOR_TYPES = (
         ("local_folder", "Local folder"),
