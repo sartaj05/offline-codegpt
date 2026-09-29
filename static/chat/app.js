@@ -1608,7 +1608,22 @@ function renderMessageContent(element, content) {
         reviewPatchButton.innerText = "Review patch";
         reviewPatchButton.onclick = () => openPatchReview(match[2].trimEnd(), match[1] || languageInput.value);
         codeActions.appendChild(reviewPatchButton);
-        pre.appendChild(codeActions);
+
+        const codeLanguage = (match[1] || languageInput.value || "auto").toLowerCase();
+        if (["python", "py", "javascript", "js", "node", "sql"].includes(codeLanguage)) {
+            const runButton = document.createElement("button");
+            runButton.type = "button";
+            runButton.className = "code-copy-button run-generated-code";
+            runButton.innerText = "Run code";
+            const runOutput = document.createElement("pre");
+            runOutput.className = "generated-run-output";
+            runOutput.hidden = true;
+            runButton.onclick = () => runGeneratedCode(match[2].replace(/\n$/, ""), codeLanguage, runButton, runOutput);
+            codeActions.appendChild(runButton);
+            pre.append(codeActions, runOutput);
+        } else {
+            pre.appendChild(codeActions);
+        }
         element.appendChild(pre);
         cursor = fence.lastIndex;
     }
@@ -1617,6 +1632,37 @@ function renderMessageContent(element, content) {
         element.innerText = content;
     } else if (cursor < content.length) {
         element.appendChild(document.createTextNode(content.slice(cursor)));
+    }
+}
+
+async function runGeneratedCode(code, language, button, output) {
+    const normalizedLanguage = language === "py" ? "python" : language === "js" || language === "node" ? "javascript" : language;
+    button.disabled = true;
+    button.innerText = "Running...";
+    output.hidden = false;
+    output.innerText = "Running in the guarded sandbox...";
+    try {
+        const response = await fetch("/api/execute/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({ code, language: normalizedLanguage }),
+        });
+        const data = await response.json();
+        if (!response.ok || data.success === false && !("stdout" in data)) {
+            throw new Error(data.error || "Execution failed.");
+        }
+        const detail = data.success
+            ? (data.stdout || "Completed without output.")
+            : (data.stderr || "Execution failed without error output.");
+        output.innerText = (data.success ? "Success" : "Failed") + " - " + (data.duration_ms || 0) + " ms\n\n" + detail + "\n\nNetwork: " + ((data.limits && data.limits.network) || "blocked");
+    } catch (error) {
+        output.innerText = "Execution error: " + error.message;
+    } finally {
+        button.disabled = false;
+        button.innerText = "Run again";
     }
 }
 
