@@ -564,6 +564,19 @@
 
                 {% if request.user.is_authenticated %}
                     <pre id="executionOutput" class="execution-output">Guarded sandbox: 3-second timeout, 128 MB memory limit, temporary directory, capped output, and blocked network/file APIs.</pre>
+                    <div class="sandbox-policy">
+                        <div class="settings-heading">
+                            <div><strong>Secure runtime policy</strong><span>Network remains blocked. Limits are bounded for local execution.</span></div>
+                            <button type="button" onclick="saveSandboxPolicy()">Save limits</button>
+                        </div>
+                        <div class="sandbox-policy-grid">
+                            <label>Timeout seconds<input id="sandboxTimeout" type="number" min="1" max="10" value="3"></label>
+                            <label>Memory MB<input id="sandboxMemory" type="number" min="32" max="256" value="128"></label>
+                            <label>Output characters<input id="sandboxOutputChars" type="number" min="1000" max="20000" value="12000"></label>
+                            <label><input id="sandboxApproval" type="checkbox" checked> Require approval</label>
+                        </div>
+                        <div id="sandboxPolicyStatus" class="sandbox-policy-status">Loading secure runtime policy...</div>
+                    </div>
                     <div class="quality-row">
                         <select id="qualityMode" aria-label="Quality check type">
                             <option value="all">All quality checks</option>

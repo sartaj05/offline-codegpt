@@ -35,6 +35,7 @@ from .models import (
     McpToolCall,
     AgentTask,
     AgentTeam,
+    SandboxPolicy,
     AiEvent,
     AuditEvent,
     UserOllamaSettings,
@@ -968,7 +969,40 @@ def execute_code(request):
             "error": f"Code checking is limited to {MAX_EXECUTION_CHARS} characters.",
         }, status=400)
 
-    return JsonResponse(run_sandboxed_code(language, code))
+    policy, _ = SandboxPolicy.objects.get_or_create(user=request.user)
+    return JsonResponse(run_sandboxed_code(language, code, limits={
+        "timeout_seconds": policy.timeout_seconds,
+        "memory_mb": policy.memory_mb,
+        "output_chars": policy.output_chars,
+        "network_blocked": policy.network_blocked,
+    }))
+
+
+def _sandbox_policy_payload(policy):
+    return {
+        "timeout_seconds": policy.timeout_seconds,
+        "memory_mb": policy.memory_mb,
+        "output_chars": policy.output_chars,
+        "require_approval": policy.require_approval,
+        "network_blocked": policy.network_blocked,
+    }
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def sandbox_policy_api(request):
+    policy, _ = SandboxPolicy.objects.get_or_create(user=request.user)
+    if request.method == "POST":
+        try:
+            policy.timeout_seconds = min(10, max(1, int(request.POST.get("timeout_seconds", policy.timeout_seconds))))
+            policy.memory_mb = min(256, max(32, int(request.POST.get("memory_mb", policy.memory_mb))))
+            policy.output_chars = min(20000, max(1000, int(request.POST.get("output_chars", policy.output_chars))))
+        except (TypeError, ValueError):
+            return JsonResponse({"success": False, "error": "Runtime limits must be whole numbers."}, status=400)
+        policy.require_approval = request.POST.get("require_approval", "true").lower() in {"1", "true", "yes", "on"}
+        policy.network_blocked = True
+        policy.save()
+    return JsonResponse({"success": True, "policy": _sandbox_policy_payload(policy)})
 
 
 @login_required(login_url="/login/")

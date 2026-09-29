@@ -47,12 +47,23 @@ BLOCKED_SQL_TOKENS = re.compile(
 )
 
 
-def _result(success, stdout="", stderr="", started=None, timed_out=False):
-    output = (stdout or "")[:MAX_OUTPUT_CHARS]
-    error = (stderr or "")[:MAX_OUTPUT_CHARS]
-    if len(stdout or "") > MAX_OUTPUT_CHARS:
+def _effective_limits(limits=None):
+    limits = limits or {}
+    return {
+        "timeout_seconds": min(10, max(1, int(limits.get("timeout_seconds", MAX_SECONDS)))),
+        "memory_mb": min(256, max(32, int(limits.get("memory_mb", MAX_MEMORY_MB)))),
+        "output_chars": min(20000, max(1000, int(limits.get("output_chars", MAX_OUTPUT_CHARS)))),
+        "network_blocked": True,
+    }
+
+
+def _result(success, stdout="", stderr="", started=None, timed_out=False, limits=None):
+    limits = _effective_limits(limits)
+    output = (stdout or "")[:limits["output_chars"]]
+    error = (stderr or "")[:limits["output_chars"]]
+    if len(stdout or "") > limits["output_chars"]:
         output += "\n[Output truncated.]"
-    if len(stderr or "") > MAX_OUTPUT_CHARS:
+    if len(stderr or "") > limits["output_chars"]:
         error += "\n[Error output truncated.]"
     return {
         "success": success,
@@ -62,10 +73,10 @@ def _result(success, stdout="", stderr="", started=None, timed_out=False):
         "timed_out": timed_out,
         "sandbox": "guarded-local",
         "limits": {
-            "timeout_seconds": MAX_SECONDS,
-            "memory_mb": MAX_MEMORY_MB,
+            "timeout_seconds": limits["timeout_seconds"],
+            "memory_mb": limits["memory_mb"],
             "memory_limit_enforced": os.name == "nt",
-            "output_characters": MAX_OUTPUT_CHARS,
+            "output_characters": limits["output_chars"],
             "network": "blocked by policy",
             "working_directory": "temporary",
         },
@@ -141,7 +152,8 @@ def _current_memory_bytes(process):
     return 0
 
 
-def _run_process(command, code):
+def _run_process(command, code, limits=None):
+    limits = _effective_limits(limits)
     started = time.perf_counter()
     startupinfo = None
     creationflags = 0
@@ -163,7 +175,7 @@ def _run_process(command, code):
                 creationflags=creationflags,
             )
         except OSError as ex:
-            return _result(False, "", str(ex), started)
+            return _result(False, "", str(ex), started, limits=limits)
 
         output = {}
 
@@ -175,11 +187,11 @@ def _run_process(command, code):
         timed_out = False
         memory_exceeded = False
         while collector.is_alive():
-            if time.perf_counter() - started >= MAX_SECONDS:
+            if time.perf_counter() - started >= limits["timeout_seconds"]:
                 timed_out = True
                 process.kill()
                 break
-            if _current_memory_bytes(process) > MAX_MEMORY_MB * 1024 * 1024:
+            if _current_memory_bytes(process) > limits["memory_mb"] * 1024 * 1024:
                 memory_exceeded = True
                 process.kill()
                 break
@@ -187,9 +199,9 @@ def _run_process(command, code):
         collector.join(timeout=1)
         stdout, stderr = output.get("value", ("", ""))
         if timed_out:
-            return _result(False, stdout, f"Execution stopped after {MAX_SECONDS} seconds.", started, True)
+            return _result(False, stdout, f"Execution stopped after {limits['timeout_seconds']} seconds.", started, True, limits)
         if memory_exceeded:
-            return _result(False, stdout, f"Execution stopped after exceeding the {MAX_MEMORY_MB} MB memory limit.", started)
+            return _result(False, stdout, f"Execution stopped after exceeding the {limits['memory_mb']} MB memory limit.", started, limits=limits)
 
         completed_returncode = process.returncode
 
@@ -198,17 +210,18 @@ def _run_process(command, code):
         stdout,
         stderr,
         started,
+        limits=limits,
     )
 
 
-def _run_python(code):
+def _run_python(code, limits=None):
     allowed, error = _python_policy(code)
     if not allowed:
         return _result(False, "", error, time.perf_counter())
-    return _run_process([sys.executable, "-I", "-S", "-c", code], code)
+    return _run_process([sys.executable, "-I", "-S", "-c", code], code, limits)
 
 
-def _run_javascript(code):
+def _run_javascript(code, limits=None):
     if BLOCKED_JAVASCRIPT_TOKENS.search(code):
         return _result(
             False,
@@ -219,17 +232,18 @@ def _run_javascript(code):
     node = shutil.which("node")
     if not node:
         return _result(False, "", "Node.js is not installed on this machine.", time.perf_counter())
-    return _run_process([node, "--no-addons", "-e", code], code)
+    return _run_process([node, "--no-addons", "-e", code], code, limits)
 
 
-def _run_sql(code):
+def _run_sql(code, limits=None):
+    limits = _effective_limits(limits)
     started = time.perf_counter()
     if BLOCKED_SQL_TOKENS.search(code):
         return _result(False, "", "File attachment, pragmas, and SQLite extension APIs are blocked.", started)
 
     connection = sqlite3.connect(":memory:")
     connection.set_progress_handler(
-        lambda: 1 if time.perf_counter() - started > MAX_SECONDS else 0,
+        lambda: 1 if time.perf_counter() - started > limits["timeout_seconds"] else 0,
         1_000,
     )
     cursor = connection.cursor()
@@ -258,14 +272,14 @@ def _run_sql(code):
     return _result(True, "\n".join(output) or "SQL completed without rows.", "", started)
 
 
-def run_sandboxed_code(language, code):
+def run_sandboxed_code(language, code, limits=None):
     language = language.strip().lower()
     if language in ("auto", "py", "python"):
-        return _run_python(code)
+        return _run_python(code, limits)
     if language in ("js", "javascript", "node"):
-        return _run_javascript(code)
+        return _run_javascript(code, limits)
     if language == "sql":
-        return _run_sql(code)
+        return _run_sql(code, limits)
     return _result(
         False,
         "",

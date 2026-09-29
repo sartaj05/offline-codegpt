@@ -7,7 +7,7 @@ from django.test import TestCase
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EvaluationRun, EvaluationScore, EvaluationTask, KnowledgeChunk, KnowledgeDocument, WorkspaceMembership, WorkspacePolicy
+from .models import AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EvaluationRun, EvaluationScore, EvaluationTask, KnowledgeChunk, KnowledgeDocument, SandboxPolicy, WorkspaceMembership, WorkspacePolicy
 from .views import _search_knowledge
 
 
@@ -35,6 +35,22 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(started.json()["team"]["status"], "running")
         advanced = self.client.post(f"/api/agent/team/{team['id']}/control/", {"action": "advance"})
         self.assertEqual(advanced.json()["team"]["progress"], 1)
+
+    def test_secure_runtime_policy_is_bounded_and_network_stays_blocked(self):
+        saved = self.client.post("/api/sandbox/policy/", {
+            "timeout_seconds": "99",
+            "memory_mb": "999",
+            "output_chars": "999999",
+            "require_approval": "false",
+        })
+        self.assertTrue(saved.json()["success"])
+        self.assertEqual(saved.json()["policy"]["timeout_seconds"], 10)
+        self.assertEqual(saved.json()["policy"]["memory_mb"], 256)
+        self.assertTrue(saved.json()["policy"]["network_blocked"])
+        self.assertTrue(SandboxPolicy.objects.get(user=self.user).network_blocked)
+        executed = self.client.post("/api/execute/", {"language": "python", "code": "print('safe')"})
+        self.assertTrue(executed.json()["success"])
+        self.assertEqual(executed.json()["limits"]["timeout_seconds"], 10)
 
     def test_evaluation_tasks_can_be_created_listed_and_deleted(self):
         created = self.client.post("/api/evaluations/tasks/", {

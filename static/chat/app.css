@@ -420,6 +420,11 @@ select { padding: 0 10px; }
 .test-input { width: 100%; min-height: 120px; margin-top: 9px; resize: vertical; padding: 10px; border: 1px solid var(--border); border-radius: 8px; outline: 0; background: #11141b; color: #dce6f2; font-family: Consolas, monospace; font-size: 11px; line-height: 1.5; }
 .test-output { max-height: 130px; overflow: auto; margin: 8px 0 0; padding: 9px; border: 1px solid var(--border); border-radius: 8px; background: #0d1016; color: var(--muted); font-family: Consolas, monospace; font-size: 10px; white-space: pre-wrap; }
 .security-workspace { margin-top: 10px; padding: 11px; border: 1px solid rgba(255,177,92,.25); border-radius: 9px; background: rgba(69,48,24,.18); }
+.sandbox-policy { margin: 10px 0; padding: 11px; border: 1px solid rgba(255,177,92,.25); border-radius: 9px; background: rgba(69,48,24,.14); }
+.sandbox-policy-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.sandbox-policy-grid label { display: grid; gap: 5px; color: var(--muted); font-size: 10px; }
+.sandbox-policy-grid input[type="number"] { width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); }
+.sandbox-policy-status { margin-top: 8px; color: var(--muted); font-size: 10px; }
 .security-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .security-heading strong, .security-heading span { display: block; }
 .security-heading strong { color: #ffe3ba; font-size: 11px; }

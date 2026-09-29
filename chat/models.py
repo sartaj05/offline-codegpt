@@ -91,6 +91,19 @@ class AgentTeam(models.Model):
         return self.title
 
 
+class SandboxPolicy(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="sandbox_policy")
+    timeout_seconds = models.PositiveIntegerField(default=3)
+    memory_mb = models.PositiveIntegerField(default=128)
+    output_chars = models.PositiveIntegerField(default=12000)
+    require_approval = models.BooleanField(default=True)
+    network_blocked = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Sandbox policy for {self.user.username}"
+
+
 class McpConnector(models.Model):
     CONNECTOR_TYPES = (
         ("local_folder", "Local folder"),

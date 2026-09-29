@@ -18,6 +18,7 @@ urlpatterns = [
     path("api/project/<int:document_id>/content/", views.project_document_content, name="project_document_content"),
     path("api/project/<int:document_id>/reindex/", views.project_document_reindex, name="project_document_reindex"),
     path("api/execute/", views.execute_code, name="execute_code"),
+    path("api/sandbox/policy/", views.sandbox_policy_api, name="sandbox_policy_api"),
     path("api/agent/plan/", views.agent_plan, name="agent_plan"),
     path("api/agent/teams/", views.agent_team_plan, name="agent_team_plan"),
     path("api/agent/team/<int:team_id>/run/", views.agent_team_run, name="agent_team_run"),

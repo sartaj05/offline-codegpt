@@ -46,6 +46,11 @@ const evaluationDashboardRecent = document.getElementById("evaluationDashboardRe
 let evaluationTasksCache = [];
 const observabilityStats = document.getElementById("observabilityStats");
 const observabilityOutput = document.getElementById("observabilityOutput");
+const sandboxTimeout = document.getElementById("sandboxTimeout");
+const sandboxMemory = document.getElementById("sandboxMemory");
+const sandboxOutputChars = document.getElementById("sandboxOutputChars");
+const sandboxApproval = document.getElementById("sandboxApproval");
+const sandboxPolicyStatus = document.getElementById("sandboxPolicyStatus");
 const workspacePanel = document.getElementById("workspacePanel");
 const workspaceName = document.getElementById("workspaceName");
 const workspaceMember = document.getElementById("workspaceMember");
@@ -1635,6 +1640,42 @@ async function sendMessage() {
         sendStatus.textContent = "";
     }
 }
+async function loadSandboxPolicy() {
+    if (!sandboxPolicyStatus) return;
+    try {
+        const response = await fetch("/api/sandbox/policy/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load sandbox policy.");
+        sandboxTimeout.value = data.policy.timeout_seconds;
+        sandboxMemory.value = data.policy.memory_mb;
+        sandboxOutputChars.value = data.policy.output_chars;
+        sandboxApproval.checked = data.policy.require_approval;
+        sandboxPolicyStatus.innerText = "Network blocked · policy ready.";
+    } catch (error) {
+        sandboxPolicyStatus.innerText = "Policy error: " + error;
+    }
+}
+
+async function saveSandboxPolicy() {
+    try {
+        const response = await fetch("/api/sandbox/policy/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                timeout_seconds: sandboxTimeout.value,
+                memory_mb: sandboxMemory.value,
+                output_chars: sandboxOutputChars.value,
+                require_approval: sandboxApproval.checked ? "true" : "false",
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to save sandbox policy.");
+        sandboxPolicyStatus.innerText = "Saved · network remains blocked.";
+    } catch (error) {
+        sandboxPolicyStatus.innerText = "Policy error: " + error;
+    }
+}
+
 async function runCode() {
     const code = codeInput.value.trim();
     if (!code) {
@@ -2508,3 +2549,4 @@ if (projectFiles) loadProjectWorkspace();
 if (gitFiles) loadGitStatus();
 if (ollamaSettingsPanel) loadOllamaSettings();
 if (chatHistory) loadChatHistory();
+if (sandboxPolicyStatus) loadSandboxPolicy();
