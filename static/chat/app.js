@@ -5,6 +5,8 @@ let editingMessageId = "";
 const chatBox = document.getElementById("chatBox");
 const promptInput = document.getElementById("promptInput");
 const promptMode = document.getElementById("promptMode");
+const advancedComposer = document.getElementById("advancedComposer");
+const toggleAdvancedComposerButton = document.getElementById("toggleAdvancedComposer");
 const codeInput = document.getElementById("codeInput");
 const modelInput = document.getElementById("model");
 const ollamaSettingsPanel = document.getElementById("ollamaSettingsPanel");
@@ -221,6 +223,19 @@ function toggleOllamaSettings() {
     if (ollamaSettingsPanel) ollamaSettingsPanel.hidden = !ollamaSettingsPanel.hidden;
 }
 
+function toggleAdvancedComposer() {
+    if (!advancedComposer) return;
+    advancedComposer.hidden = !advancedComposer.hidden;
+    if (toggleAdvancedComposerButton) {
+        toggleAdvancedComposerButton.innerText = advancedComposer.hidden ? "Code & tools" : "Hide code & tools";
+    }
+}
+
+function openAdvancedComposer() {
+    if (!advancedComposer) return;
+    advancedComposer.hidden = false;
+    if (toggleAdvancedComposerButton) toggleAdvancedComposerButton.innerText = "Hide code & tools";
+}
 function toggleMemoryPanel() {
     if (memoryPanel) memoryPanel.hidden = !memoryPanel.hidden;
     renderSelectedContextSummary();
@@ -2849,6 +2864,7 @@ async function saveProjectFile() {
 }
 
 async function openPatchReview(updated, language) {
+    openAdvancedComposer();
     if (!patchPanel) {
         alert("Sign in to review and apply AI patches.");
         return;

@@ -626,6 +626,11 @@
 
         <section class="composer">
             <input type="hidden" id="csrfToken" value="{{ csrf_token }}">
+            <div class="composer-controls">
+                <button id="toggleAdvancedComposer" type="button" onclick="toggleAdvancedComposer()">Code &amp; tools</button>
+                <span>Simple chat is ready. Open this only when you need code, files, templates, or runtime tools.</span>
+            </div>
+            <div id="advancedComposer" class="advanced-composer" hidden>
             <div class="code-panel">
                 <div class="form-row">
                     <select id="model" aria-label="Ollama model">
@@ -789,6 +794,7 @@
                 </select>
                 <button type="button" onclick="applyPromptTemplate()">Use template</button>
                 <span>Templates remain editable before sending.</span>
+            </div>
             </div>
             <div class="prompt-bar">
                 <textarea id="promptInput" placeholder="Ask anything about your code..." aria-label="Prompt"></textarea>
