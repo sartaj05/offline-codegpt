@@ -86,6 +86,7 @@
             <div class="topbar-actions">
                 {% if request.user.is_authenticated %}
                     <button type="button" onclick="toggleOllamaSettings()">Ollama</button>
+                    <button type="button" onclick="toggleMemoryPanel()">Memory</button>
                     <button type="button" onclick="toggleRemoteIntegration()">Remote</button>
                     <button type="button" onclick="toggleMcpPanel()">Tools</button>
                     <button type="button" onclick="toggleExtensionsPanel()">Extensions</button>
@@ -145,6 +146,21 @@
             <button type="button" class="settings-save-button" onclick="saveOllamaSettings()">Save settings</button>
         </section>
         {% if request.user.is_authenticated %}
+        <section id="memoryPanel" class="memory-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Conversation memory</strong>
+                    <span>Control the active chat context and selected project files.</span>
+                </div>
+                <button type="button" onclick="toggleMemoryPanel()">Close</button>
+            </div>
+            <div class="memory-actions">
+                <button type="button" onclick="summarizeConversation()">Summarize chat</button>
+                <button type="button" onclick="clearConversationContext()">Clear context</button>
+            </div>
+            <pre id="memorySummary" class="memory-summary">Open a chat and choose Summarize chat to create a local memory snapshot.</pre>
+            <div id="selectedContextSummary" class="selected-context-summary">No project files selected.</div>
+        </section>
         <section id="evaluationPanel" class="evaluation-panel" hidden>
             <div class="settings-heading">
                 <div>

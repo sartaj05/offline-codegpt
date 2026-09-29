@@ -15,6 +15,9 @@ const ollamaTopP = document.getElementById("ollamaTopP");
 const ollamaContextLength = document.getElementById("ollamaContextLength");
 const ollamaModelName = document.getElementById("ollamaModelName");
 const ollamaSettingsStatus = document.getElementById("ollamaSettingsStatus");
+const memoryPanel = document.getElementById("memoryPanel");
+const memorySummary = document.getElementById("memorySummary");
+const selectedContextSummary = document.getElementById("selectedContextSummary");
 const remoteIntegrationPanel = document.getElementById("remoteIntegrationPanel");
 const remoteProvider = document.getElementById("remoteProvider");
 const remoteRepository = document.getElementById("remoteRepository");
@@ -204,6 +207,7 @@ let editorTabsState = [];
 let activeEditorDocumentId = null;
 let pendingPatch = null;
 let codeBeforePatch = "";
+let selectedProjectFiles = new Set();
 
 function updateActiveModel() {
     const activeModel = document.getElementById("activeModel");
@@ -212,6 +216,61 @@ function updateActiveModel() {
 
 function toggleOllamaSettings() {
     if (ollamaSettingsPanel) ollamaSettingsPanel.hidden = !ollamaSettingsPanel.hidden;
+}
+
+function toggleMemoryPanel() {
+    if (memoryPanel) memoryPanel.hidden = !memoryPanel.hidden;
+    renderSelectedContextSummary();
+}
+
+function renderSelectedContextSummary() {
+    if (!selectedContextSummary) return;
+    const files = [...selectedProjectFiles];
+    selectedContextSummary.innerText = files.length
+        ? "Selected project context (" + files.length + "): " + files.join(", ")
+        : "No project files selected. Chat will use matching project context automatically.";
+}
+
+async function summarizeConversation() {
+    if (!currentSessionId) {
+        if (memorySummary) memorySummary.innerText = "Send or open a chat before creating a summary.";
+        return;
+    }
+    if (memorySummary) memorySummary.innerText = "Creating a local memory snapshot...";
+    try {
+        const response = await fetch("/api/session/" + currentSessionId + "/summary/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to summarize chat.");
+        memorySummary.innerText = data.summary;
+    } catch (error) {
+        if (memorySummary) memorySummary.innerText = "Memory summary error: " + error;
+    }
+}
+
+async function clearConversationContext() {
+    if (!currentSessionId) {
+        newChat();
+        if (memorySummary) memorySummary.innerText = "Conversation context cleared.";
+        return;
+    }
+    if (!confirm("Clear the messages in the current chat? This keeps the chat record but removes its context.")) return;
+    try {
+        const response = await fetch("/api/session/" + currentSessionId + "/manage/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({ action: "clear_context" }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to clear chat context.");
+        newChat();
+        if (memorySummary) memorySummary.innerText = "Conversation context cleared.";
+        await loadChatHistory();
+    } catch (error) {
+        if (memorySummary) memorySummary.innerText = "Clear context error: " + error;
+    }
 }
 
 function renderOllamaModels(models, selected) {
@@ -1973,6 +2032,7 @@ async function sendMessage() {
     const imageFiles = imageInput ? [...imageInput.files] : [];
     const files = [...fileFiles, ...folderFiles];
     const images = imageFiles;
+    const selectedFiles = [...selectedProjectFiles];
 
     if (!prompt && !code && files.length === 0 && images.length === 0) {
         alert("Please enter a prompt, paste code, or choose an upload.");
@@ -1989,6 +2049,7 @@ async function sendMessage() {
         userText += images.map(image => image.name).join("\n");
     }
     if (code) userText += "\n\nCode:\n" + code.substring(0, 2000);
+    if (selectedFiles.length) userText += String.fromCharCode(10, 10) + "Selected Project Files:" + String.fromCharCode(10) + selectedFiles.join(String.fromCharCode(10));
 
     const editId = editingMessageId;
     if (editingMessage) {
@@ -2011,6 +2072,7 @@ async function sendMessage() {
         imageFiles,
         fileNames: files.map(file => file.webkitRelativePath || file.name),
         imageNames: images.map(image => image.name),
+        selectedFiles,
     };
     const userBody = addMessage("user", userText.trim(), { payload });
     const userWrapper = userBody.closest(".message");
@@ -2034,6 +2096,7 @@ async function sendMessage() {
         formData.append("file_paths", relativePath);
     });
     images.forEach(image => formData.append("images", image, image.name));
+    selectedFiles.forEach(filename => formData.append("context_files", filename));
 
     try {
         const response = await fetch("/api/ask-code/", {
@@ -2826,23 +2889,37 @@ async function loadProjectWorkspace() {
         if (!data.success) throw new Error(data.error || "Unable to load project files.");
         projectFiles.innerHTML = "";
         const totalChunks = data.documents.reduce((sum, document) => sum + document.chunks, 0);
+        renderSelectedContextSummary();
         projectStats.innerText = data.documents.length
             ? data.documents.length + " file(s) | " + totalChunks + " indexed chunk(s)"
             : "No indexed files yet.";
 
-        data.documents.forEach(document => {
+        data.documents.forEach(projectDocument => {
             const row = document.createElement("div");
             row.className = "project-file";
+
+            const selection = document.createElement("label");
+            selection.className = "project-context-select";
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = selectedProjectFiles.has(projectDocument.filename);
+            checkbox.title = "Include this file in the next chat request";
+            checkbox.onchange = () => {
+                if (checkbox.checked) selectedProjectFiles.add(projectDocument.filename);
+                else selectedProjectFiles.delete(projectDocument.filename);
+                renderSelectedContextSummary();
+            };
+            selection.append(checkbox, document.createTextNode("Context"));
 
             const info = document.createElement("div");
             info.className = "project-file-info";
             const name = document.createElement("strong");
             name.className = "project-file-name";
-            name.innerText = document.filename;
-            name.title = document.filename;
-            name.onclick = () => openProjectFile(document.id);
+            name.innerText = projectDocument.filename;
+            name.title = projectDocument.filename;
+            name.onclick = () => openProjectFile(projectDocument.id);
             const meta = document.createElement("span");
-            meta.innerText = document.language + " | " + formatFileSize(document.size_bytes) + " | " + document.chunks + " chunks";
+            meta.innerText = projectDocument.language + " | " + formatFileSize(projectDocument.size_bytes) + " | " + projectDocument.chunks + " chunks";
             info.append(name, meta);
 
             const actions = document.createElement("div");
@@ -2850,14 +2927,14 @@ async function loadProjectWorkspace() {
             const reindexButton = document.createElement("button");
             reindexButton.type = "button";
             reindexButton.innerText = "Reindex";
-            reindexButton.onclick = () => reindexProjectFile(document.id);
+            reindexButton.onclick = () => reindexProjectFile(projectDocument.id);
             const deleteButton = document.createElement("button");
             deleteButton.type = "button";
             deleteButton.innerText = "Delete";
-            deleteButton.onclick = () => deleteProjectFile(document.id, document.filename);
+            deleteButton.onclick = () => deleteProjectFile(projectDocument.id, projectDocument.filename);
             actions.append(reindexButton, deleteButton);
 
-            row.append(info, actions);
+            row.append(selection, info, actions);
             projectFiles.appendChild(row);
         });
     } catch (error) {

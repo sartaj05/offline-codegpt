@@ -489,9 +489,10 @@ def _save_knowledge_document(filename, file_text, source_type, owner):
     return document
 
 
-def _search_knowledge(query, limit=8, owner=None):
+def _search_knowledge(query, limit=8, owner=None, filenames=None):
     terms = list(dict.fromkeys(re.findall(r"[a-zA-Z0-9_]{2,}", query.lower())))
-    if not terms:
+    selected_filenames = {str(name).strip().lower() for name in (filenames or []) if str(name).strip()}
+    if not terms and not selected_filenames:
         return []
 
     matches = []
@@ -503,10 +504,12 @@ def _search_knowledge(query, limit=8, owner=None):
     for chunk in chunks:
         content = chunk.content.lower()
         filename = (chunk.document.filename or "").lower()
+        if selected_filenames and filename not in selected_filenames:
+            continue
         score = sum(content.count(term) for term in terms)
         score += 3 * sum(filename.count(term) for term in terms)
-        if score:
-            matches.append((score, chunk))
+        if score or selected_filenames:
+            matches.append((max(score, 1), chunk))
 
         matches.sort(key=lambda item: item[0], reverse=True)
     return [
@@ -856,6 +859,10 @@ def manage_session(request, session_id):
         session.is_pinned = not session.is_pinned
     elif action == "archive":
         session.is_archived = True
+    elif action == "clear_context":
+        session.messages.all().delete()
+        session.save(update_fields=["updated_at"])
+        return JsonResponse({"success": True, "id": session.id, "cleared": True})
     elif action == "delete":
         session.delete()
         return JsonResponse({"success": True, "deleted": True})
@@ -1004,6 +1011,37 @@ def session_messages(request, session_id):
         "title": session.title,
         "model": session.model_name,
         "messages": messages,
+    })
+
+
+@login_required(login_url="/login/")
+@require_GET
+def session_summary(request, session_id):
+    session = get_object_or_404(ChatSession, id=session_id, owner=request.user)
+    messages = list(session.messages.order_by("created_at"))
+    user_requests = []
+    for message in messages:
+        if message.role != "user":
+            continue
+        cleaned = message.content.strip()
+        for marker in ("Prompt:", "Code:"):
+            if cleaned.startswith(marker):
+                cleaned = cleaned[len(marker):].strip()
+        user_requests.append(cleaned.replace(chr(10), " "))
+    assistant_count = sum(1 for message in messages if message.role == "assistant")
+    if user_requests:
+        highlights = chr(10).join(f"- {request[:240]}" for request in user_requests[-8:])
+        summary = (
+            f"Conversation memory: {len(messages)} messages, {assistant_count} assistant responses."
+            + chr(10) + "Recent requests:" + chr(10) + highlights
+        )
+    else:
+        summary = "Conversation memory is empty. Send a message to build context."
+    return JsonResponse({
+        "success": True,
+        "session_id": session.id,
+        "summary": summary,
+        "message_count": len(messages),
     })
 
 
@@ -2923,6 +2961,9 @@ def ask_code(request):
     session_id = request.POST.get("session_id", "").strip()
     edit_message_id = request.POST.get("edit_message_id", "").strip()
     requested_model = request.POST.get("model", "").strip()
+    selected_context_files = list(dict.fromkeys(
+        item.strip()[:500] for item in request.POST.getlist("context_files") if item.strip()
+    ))[:50]
 
     uploaded_files = request.FILES.getlist("files")
     image_files = request.FILES.getlist("images")
@@ -3060,6 +3101,8 @@ def ask_code(request):
         user_message_parts.append(f"Prompt:\n{prompt}")
     if uploaded_filenames:
         user_message_parts.append("Uploaded Files:\n" + "\n".join(uploaded_filenames))
+    if selected_context_files:
+        user_message_parts.append("Selected Project Files:" + chr(10) + chr(10).join(selected_context_files))
     if image_filenames:
         user_message_parts.append("Uploaded Images:\n" + "\n".join(image_filenames))
     if final_code:
@@ -3079,7 +3122,11 @@ def ask_code(request):
         final_code = final_code[:max_code_chars]
         truncated_note = "\n\nNote: the uploaded code was truncated for the local model."
 
-    relevant_chunks = _search_knowledge(prompt or code, owner=owner)
+    relevant_chunks = _search_knowledge(
+        prompt or code,
+        owner=owner,
+        filenames=selected_context_files or None,
+    )
     knowledge_context = "\n\n".join(
         f"===== PROJECT CONTEXT: {item['filename']}:{item['line_start']}-{item['line_end']} =====\n"
         f"{item['content']}"
