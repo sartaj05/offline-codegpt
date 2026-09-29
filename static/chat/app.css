@@ -334,6 +334,15 @@ button { cursor: pointer; }
 .mcp-connector-list { display: grid; gap: 5px; max-height: 110px; overflow-y: auto; margin-top: 10px; }
 .mcp-connector { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); color: var(--muted); font-size: 10px; }
 .mcp-connector button { padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; background: transparent; color: var(--muted); font-size: 9px; }
+.extensions-panel { position: absolute; z-index: 7; top: 76px; right: clamp(24px, 5vw, 68px); width: min(720px, calc(100% - 48px)); padding: 16px; border: 1px solid rgba(126,167,255,.3); border-radius: 12px; background: rgba(21,25,34,.99); box-shadow: 0 18px 50px rgba(0,0,0,.4); }
+.extensions-list { display: grid; gap: 7px; margin-top: 12px; }
+.extension-row { display: flex; align-items: center; gap: 8px; padding: 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); color: var(--muted); font-size: 10px; }
+.extension-row > div { display: grid; gap: 3px; flex: 1; }
+.extension-row strong { color: var(--text); font-size: 11px; }
+.extension-row button { padding: 5px 7px; border: 1px solid var(--border); border-radius: 5px; background: transparent; color: var(--muted); font-size: 9px; }
+.extension-sdk { display: grid; gap: 7px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.extension-sdk input, .extension-sdk textarea { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); color: var(--text); font-size: 10px; }
+.extension-sdk textarea { min-height: 70px; resize: vertical; }
 .mcp-tool-row { display: flex; gap: 6px; margin-top: 10px; }
 .mcp-tool-row input { flex: 1; }
 .mcp-output { max-height: 160px; overflow: auto; margin: 8px 0 0; padding: 8px; border: 1px solid var(--border); border-radius: 7px; background: #0d1016; color: #c9d3e4; font-family: Consolas, monospace; font-size: 10px; white-space: pre-wrap; }

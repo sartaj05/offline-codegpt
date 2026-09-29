@@ -52,6 +52,8 @@ from .models import (
     EvaluationScore,
     EvaluationRegressionSuite,
     SecretVaultItem,
+    ExtensionPackage,
+    ExtensionInstall,
 )
 from .quality import analyze_code_quality
 from .sandbox import run_sandboxed_code
@@ -82,6 +84,33 @@ CHUNK_SIZE = 2_000
 MAX_EXECUTION_CHARS = 20_000
 MAX_TEST_CHARS = 20_000
 MAX_GIT_OUTPUT_CHARS = 50_000
+
+EXTENSION_CATALOG = [
+    {
+        "slug": "mcp-project-search",
+        "name": "Project Search Connector",
+        "version": "1.1.0",
+        "description": "Read-only project search for local MCP workflows.",
+        "permissions": ["project.read"],
+        "manifest": {"connector_type": "documentation", "tool": "project.search"},
+    },
+    {
+        "slug": "agent-reviewer",
+        "name": "Agent Review Assistant",
+        "version": "1.0.0",
+        "description": "Adds a guarded review checkpoint to agent tasks.",
+        "permissions": ["agent.read", "agent.approve"],
+        "manifest": {"agent_role": "reviewer", "approval_required": True},
+    },
+    {
+        "slug": "docs-indexer",
+        "name": "Documentation Indexer",
+        "version": "1.0.0",
+        "description": "Indexes local documentation for project-aware answers.",
+        "permissions": ["project.read", "index.write"],
+        "manifest": {"connector_type": "documentation", "index": "local"},
+    },
+]
 
 
 def _agent_plan(goal):
@@ -2200,6 +2229,96 @@ def secret_delete(request, secret_id):
     item.delete()
     AuditEvent.objects.create(actor=request.user, workspace=workspace, event_type="secret.deleted", details={"name": name})
     return JsonResponse({"success": True, "deleted_id": secret_id})
+
+
+def _extension_payload(package, install=None):
+    return {
+        "slug": package.slug,
+        "name": package.name,
+        "version": package.version,
+        "description": package.description,
+        "permissions": package.permissions,
+        "manifest": package.manifest,
+        "installed": bool(install and install.status == "installed"),
+        "install_status": install.status if install else "not_installed",
+        "installed_version": install.version if install else None,
+        "can_rollback": bool(install and install.previous_version),
+    }
+
+
+def _sync_extension_catalog():
+    for item in EXTENSION_CATALOG:
+        ExtensionPackage.objects.update_or_create(slug=item["slug"], defaults=item)
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def extension_marketplace(request):
+    _sync_extension_catalog()
+    if request.method == "POST":
+        action = request.POST.get("action", "install").strip().lower()
+        if action == "publish":
+            name = request.POST.get("name", "").strip()[:160]
+            raw_slug = request.POST.get("slug", "").strip().lower()
+            slug = re.sub(r"[^a-z0-9-]", "-", raw_slug).strip("-")[:80]
+            slug = "custom-" + request.user.username.lower() + "-" + slug
+            if not name or not slug or slug.endswith("-"):
+                return JsonResponse({"success": False, "error": "Extension name and slug are required."}, status=400)
+            try:
+                permissions = json.loads(request.POST.get("permissions", "[]"))
+                manifest = json.loads(request.POST.get("manifest", "{}"))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return JsonResponse({"success": False, "error": "Permissions and manifest must be valid JSON."}, status=400)
+            if not isinstance(permissions, list) or not isinstance(manifest, dict):
+                return JsonResponse({"success": False, "error": "Permissions must be a list and manifest must be an object."}, status=400)
+            package, _ = ExtensionPackage.objects.update_or_create(
+                slug=slug,
+                defaults={
+                    "owner": request.user,
+                    "name": name,
+                    "version": request.POST.get("version", "1.0.0").strip()[:40],
+                    "description": request.POST.get("description", "").strip(),
+                    "permissions": permissions[:20],
+                    "manifest": manifest,
+                },
+            )
+            return JsonResponse({"success": True, "extension": _extension_payload(package)})
+        slug = request.POST.get("slug", "").strip()
+        package = get_object_or_404(ExtensionPackage, slug=slug, is_active=True)
+        install = ExtensionInstall.objects.filter(owner=request.user, package=package).first()
+        if action == "install":
+            try:
+                approved = json.loads(request.POST.get("approved_permissions", "[]"))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                approved = []
+            approved = approved if isinstance(approved, list) else []
+            required = set(package.permissions)
+            if request.POST.get("permissions_approved") != "true" or not required.issubset(set(approved)):
+                return JsonResponse({"success": False, "error": "Review and approve every requested permission before installation.", "required_permissions": package.permissions}, status=400)
+            previous = install.version if install and install.version != package.version else ""
+            install, _ = ExtensionInstall.objects.update_or_create(
+                owner=request.user,
+                package=package,
+                defaults={"status": "installed", "version": package.version, "previous_version": previous, "approved_permissions": approved},
+            )
+        elif action == "uninstall":
+            if not install:
+                return JsonResponse({"success": False, "error": "Extension is not installed."}, status=404)
+            install.status = "disabled"
+            install.save(update_fields=["status", "updated_at"])
+        elif action == "rollback":
+            if not install or not install.previous_version:
+                return JsonResponse({"success": False, "error": "No previous extension version is available."}, status=400)
+            install.version, install.previous_version = install.previous_version, install.version
+            install.status = "installed"
+            install.save(update_fields=["version", "previous_version", "status", "updated_at"])
+        else:
+            return JsonResponse({"success": False, "error": "Use install, uninstall, rollback, or publish."}, status=400)
+        return JsonResponse({"success": True, "extension": _extension_payload(package, install)})
+    packages = []
+    for package in ExtensionPackage.objects.filter(is_active=True).order_by("name"):
+        packages.append(_extension_payload(package, ExtensionInstall.objects.filter(owner=request.user, package=package).first()))
+    return JsonResponse({"success": True, "extensions": packages, "sdk": {"permissions": ["project.read", "agent.read", "agent.approve", "index.write"], "manifest_fields": ["name", "slug", "version", "description", "permissions", "manifest"]}})
 
 
 def _scim_workspace(request):

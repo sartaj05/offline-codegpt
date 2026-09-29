@@ -88,6 +88,7 @@
                     <button type="button" onclick="toggleOllamaSettings()">Ollama</button>
                     <button type="button" onclick="toggleRemoteIntegration()">Remote</button>
                     <button type="button" onclick="toggleMcpPanel()">Tools</button>
+                    <button type="button" onclick="toggleExtensionsPanel()">Extensions</button>
                     <button type="button" onclick="toggleObservability()">Metrics</button>
                     {% if request.user.is_authenticated %}<button type="button" onclick="toggleEvaluationLab()">Eval Lab</button>{% endif %}
                     <button type="button" onclick="toggleWorkspace()">Team</button>
@@ -256,6 +257,25 @@
                 <button type="button" onclick="callMcpSearch()">Run read-only search</button>
             </div>
             <pre id="mcpOutput" class="mcp-output">MCP tools are ready.</pre>
+        </section>
+        <section id="extensionsPanel" class="extensions-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Extension marketplace</strong>
+                    <span>Review permissions before installing MCP connectors and agent plugins.</span>
+                </div>
+                <button type="button" onclick="toggleExtensionsPanel()">Close</button>
+            </div>
+            <div id="extensionsStatus" class="identity-policy-status">Loading extension catalog...</div>
+            <div id="extensionsList" class="extensions-list"></div>
+            <div class="extension-sdk">
+                <strong>Custom connector SDK</strong>
+                <input id="extensionName" placeholder="Extension name">
+                <input id="extensionSlug" placeholder="slug, e.g. jira-tools">
+                <input id="extensionPermissions" placeholder='Permissions JSON, e.g. ["project.read"]'>
+                <textarea id="extensionManifest" placeholder='Manifest JSON, e.g. {"connector_type":"custom"}'></textarea>
+                <button type="button" onclick="publishExtension()">Publish custom extension</button>
+            </div>
         </section>
         <section id="observabilityPanel" class="observability-panel" hidden>
             <div class="settings-heading">

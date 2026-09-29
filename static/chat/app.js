@@ -26,6 +26,13 @@ const mcpConnectorConfig = document.getElementById("mcpConnectorConfig");
 const mcpConnectorList = document.getElementById("mcpConnectorList");
 const mcpSearchQuery = document.getElementById("mcpSearchQuery");
 const mcpOutput = document.getElementById("mcpOutput");
+const extensionsPanel = document.getElementById("extensionsPanel");
+const extensionsStatus = document.getElementById("extensionsStatus");
+const extensionsList = document.getElementById("extensionsList");
+const extensionName = document.getElementById("extensionName");
+const extensionSlug = document.getElementById("extensionSlug");
+const extensionPermissions = document.getElementById("extensionPermissions");
+const extensionManifest = document.getElementById("extensionManifest");
 const observabilityPanel = document.getElementById("observabilityPanel");
 const evaluationPanel = document.getElementById("evaluationPanel");
 const evaluationTaskName = document.getElementById("evaluationTaskName");
@@ -377,6 +384,104 @@ function toggleMcpPanel() {
     if (!mcpPanel) return;
     mcpPanel.hidden = !mcpPanel.hidden;
     if (!mcpPanel.hidden) loadMcpConnectors();
+}
+
+function toggleExtensionsPanel() {
+    if (!extensionsPanel) return;
+    extensionsPanel.hidden = !extensionsPanel.hidden;
+    if (!extensionsPanel.hidden) loadExtensions();
+}
+
+function renderExtensions(items) {
+    extensionsList.innerHTML = "";
+    if (!items.length) {
+        extensionsList.innerText = "No extensions are available.";
+        return;
+    }
+    items.forEach(item => {
+        const row = document.createElement("div");
+        row.className = "extension-row";
+        const info = document.createElement("div");
+        const title = document.createElement("strong");
+        title.innerText = item.name + " · v" + item.version;
+        const description = document.createElement("span");
+        description.innerText = item.description + " Permissions: " + (item.permissions.join(", ") || "none");
+        info.append(title, description);
+        const action = document.createElement("button");
+        action.type = "button";
+        if (item.installed) {
+            action.innerText = "Uninstall";
+            action.onclick = () => changeExtension(item.slug, "uninstall", []);
+        } else {
+            action.innerText = "Review & install";
+            action.onclick = () => installExtension(item);
+        }
+        row.append(info, action);
+        if (item.can_rollback) {
+            const rollback = document.createElement("button");
+            rollback.type = "button";
+            rollback.innerText = "Rollback";
+            rollback.onclick = () => changeExtension(item.slug, "rollback", []);
+            row.append(rollback);
+        }
+        extensionsList.append(row);
+    });
+}
+
+async function loadExtensions() {
+    extensionsStatus.innerText = "Loading extension catalog...";
+    try {
+        const response = await fetch("/api/extensions/marketplace/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load extension catalog.");
+        renderExtensions(data.extensions);
+        extensionsStatus.innerText = data.extensions.length + " extension(s) available.";
+    } catch (error) {
+        extensionsStatus.innerText = "Extensions error: " + error;
+    }
+}
+
+async function installExtension(item) {
+    const permissions = item.permissions || [];
+    if (!confirm("Review permissions before installing " + item.name + ":\n\n" + (permissions.join("\n") || "No requested permissions") + "\n\nContinue?")) return;
+    await changeExtension(item.slug, "install", permissions);
+}
+
+async function changeExtension(slug, action, permissions) {
+    extensionsStatus.innerText = action + " extension...";
+    try {
+        const response = await fetch("/api/extensions/marketplace/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ slug: slug, action: action, permissions_approved: action === "install" ? "true" : "", approved_permissions: JSON.stringify(permissions) }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Extension action failed.");
+        await loadExtensions();
+        extensionsStatus.innerText = "Extension " + action + " complete.";
+    } catch (error) {
+        extensionsStatus.innerText = "Extensions error: " + error;
+    }
+}
+
+async function publishExtension() {
+    try {
+        JSON.parse(extensionPermissions.value || "[]");
+        JSON.parse(extensionManifest.value || "{}");
+        const response = await fetch("/api/extensions/marketplace/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ action: "publish", name: extensionName.value, slug: extensionSlug.value, permissions: extensionPermissions.value || "[]", manifest: extensionManifest.value || "{}" }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to publish extension.");
+        extensionName.value = "";
+        extensionSlug.value = "";
+        await loadExtensions();
+        extensionsStatus.innerText = "Custom extension published.";
+    } catch (error) {
+        extensionsStatus.innerText = "SDK error: " + error;
+    }
 }
 
 function toggleObservability() {

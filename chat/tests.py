@@ -8,7 +8,7 @@ from django.test import TestCase
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import AgentJob, AgentTask, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, KnowledgeChunk, KnowledgeDocument, SandboxPolicy, SecretVaultItem, Workspace, WorkspaceMembership, WorkspacePolicy
+from .models import AgentJob, AgentTask, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, ExtensionInstall, ExtensionPackage, KnowledgeChunk, KnowledgeDocument, SandboxPolicy, SecretVaultItem, Workspace, WorkspaceMembership, WorkspacePolicy
 from .views import _search_knowledge
 
 
@@ -269,6 +269,32 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(revealed.json()["value"], "ghp-super-secret")
         updated = self.client.post("/api/secrets/", {"name": "GITHUB_TOKEN", "value": "ghp-rotated"})
         self.assertEqual(updated.json()["secret"]["version"], 2)
+
+    def test_extension_marketplace_requires_permissions_and_supports_install_uninstall(self):
+        catalog = self.client.get("/api/extensions/marketplace/").json()["extensions"]
+        package = next(item for item in catalog if item["slug"] == "mcp-project-search")
+        denied = self.client.post("/api/extensions/marketplace/", {"action": "install", "slug": package["slug"], "permissions_approved": "false", "approved_permissions": "[]"})
+        self.assertEqual(denied.status_code, 400)
+        installed = self.client.post("/api/extensions/marketplace/", {
+            "action": "install",
+            "slug": package["slug"],
+            "permissions_approved": "true",
+            "approved_permissions": json.dumps(package["permissions"]),
+        })
+        self.assertEqual(installed.status_code, 200)
+        self.assertTrue(installed.json()["extension"]["installed"])
+        self.assertTrue(ExtensionInstall.objects.filter(owner=self.user, package__slug=package["slug"], status="installed").exists())
+        published = self.client.post("/api/extensions/marketplace/", {
+            "action": "publish",
+            "name": "Internal Connector",
+            "slug": "internal-connector",
+            "permissions": '["project.read"]',
+            "manifest": '{"connector_type":"custom"}',
+        })
+        self.assertEqual(published.status_code, 200)
+        self.assertTrue(ExtensionPackage.objects.filter(owner=self.user, slug="custom-tester-internal-connector").exists())
+        removed = self.client.post("/api/extensions/marketplace/", {"action": "uninstall", "slug": package["slug"]})
+        self.assertEqual(removed.json()["extension"]["install_status"], "disabled")
 
     def test_workspace_roles_and_audit_log(self):
         created = self.client.post("/api/workspace/", {"action": "create", "name": "Core team"})

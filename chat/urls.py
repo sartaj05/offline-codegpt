@@ -46,6 +46,7 @@ urlpatterns = [
     path("api/secrets/", views.secrets_api, name="secrets_api"),
     path("api/secrets/<int:secret_id>/reveal/", views.secret_reveal, name="secret_reveal"),
     path("api/secrets/<int:secret_id>/", views.secret_delete, name="secret_delete"),
+    path("api/extensions/marketplace/", views.extension_marketplace, name="extension_marketplace"),
     path("api/devops/generate/", views.devops_generate, name="devops_generate"),
     path("api/devops/logs/", views.devops_logs, name="devops_logs"),
     path("api/documentation/generate/", views.documentation_generate, name="documentation_generate"),

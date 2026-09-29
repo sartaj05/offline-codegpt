@@ -268,6 +268,37 @@ class SecretVaultItem(models.Model):
         ordering = ["name"]
 
 
+class ExtensionPackage(models.Model):
+    owner = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="extension_packages")
+    slug = models.SlugField(max_length=120, unique=True)
+    name = models.CharField(max_length=160)
+    version = models.CharField(max_length=40, default="1.0.0")
+    description = models.TextField(blank=True, default="")
+    permissions = models.JSONField(default=list)
+    manifest = models.JSONField(default=dict)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class ExtensionInstall(models.Model):
+    STATUS_CHOICES = (("installed", "Installed"), ("disabled", "Disabled"))
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="extension_installs")
+    package = models.ForeignKey(ExtensionPackage, on_delete=models.CASCADE, related_name="installs")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="installed")
+    version = models.CharField(max_length=40)
+    previous_version = models.CharField(max_length=40, blank=True, default="")
+    approved_permissions = models.JSONField(default=list)
+    installed_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["owner", "package"], name="unique_owner_extension_install"),
+        ]
+
+
 class ChatSession(models.Model):
     owner = models.ForeignKey(
         User,
