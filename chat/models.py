@@ -225,6 +225,32 @@ class WorkspacePolicy(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 
+class EnterpriseIdentityConfig(models.Model):
+    PROVIDER_CHOICES = (
+        ("oidc", "OIDC"),
+        ("saml", "SAML"),
+    )
+
+    workspace = models.OneToOneField(Workspace, on_delete=models.CASCADE, related_name="identity_config")
+    provider = models.CharField(max_length=10, choices=PROVIDER_CHOICES, default="oidc")
+    issuer_url = models.URLField(blank=True, default="")
+    client_id = models.CharField(max_length=200, blank=True, default="")
+    allowed_domains = models.CharField(max_length=500, blank=True, default="")
+    enforce_sso = models.BooleanField(default=False)
+    scim_enabled = models.BooleanField(default=False)
+    scim_token_hash = models.CharField(max_length=128, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class DirectoryProvisioningEvent(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="provisioning_events")
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="provisioning_events")
+    username = models.CharField(max_length=150)
+    action = models.CharField(max_length=30)
+    details = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class ChatSession(models.Model):
     owner = models.ForeignKey(
         User,

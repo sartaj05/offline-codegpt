@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import sqlite3
 import subprocess
 import time
@@ -43,6 +44,8 @@ from .models import (
     Workspace,
     WorkspaceMembership,
     WorkspacePolicy,
+    EnterpriseIdentityConfig,
+    DirectoryProvisioningEvent,
     EvaluationTask,
     EvaluationRun,
     EvaluationScore,
@@ -1880,6 +1883,144 @@ def identity_policy_api(request):
             details=_policy_payload(policy, membership)["policy"],
         )
     return JsonResponse({"success": True, "workspace": workspace.name, **_policy_payload(policy, membership)})
+
+
+def _enterprise_identity_payload(config):
+    return {
+        "provider": config.provider,
+        "issuer_url": config.issuer_url,
+        "client_id": config.client_id,
+        "allowed_domains": config.allowed_domains,
+        "enforce_sso": config.enforce_sso,
+        "scim_enabled": config.scim_enabled,
+        "token_configured": bool(config.scim_token_hash),
+        "updated_at": config.updated_at.isoformat() if config.updated_at else None,
+    }
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def enterprise_identity_api(request):
+    workspace = _workspace_for_user(request.user)
+    membership = _workspace_membership(request.user, workspace)
+    if not membership:
+        return JsonResponse({"success": False, "error": "You are not a workspace member."}, status=403)
+    config, _ = EnterpriseIdentityConfig.objects.get_or_create(workspace=workspace)
+    scim_token = None
+    if request.method == "POST":
+        if membership.role != "admin":
+            return JsonResponse({"success": False, "error": "Only workspace admins can change enterprise identity."}, status=403)
+        provider = request.POST.get("provider", "oidc").strip().lower()
+        if provider not in dict(EnterpriseIdentityConfig.PROVIDER_CHOICES):
+            return JsonResponse({"success": False, "error": "Provider must be OIDC or SAML."}, status=400)
+        config.provider = provider
+        config.issuer_url = request.POST.get("issuer_url", "").strip()[:500]
+        config.client_id = request.POST.get("client_id", "").strip()[:200]
+        config.allowed_domains = request.POST.get("allowed_domains", "").strip()[:500]
+        config.enforce_sso = request.POST.get("enforce_sso", "false").lower() in {"1", "true", "yes", "on"}
+        config.scim_enabled = request.POST.get("scim_enabled", "false").lower() in {"1", "true", "yes", "on"}
+        if request.POST.get("action", "").strip().lower() == "rotate_scim_token" or not config.scim_token_hash:
+            scim_token = secrets.token_urlsafe(32)
+            config.scim_token_hash = hashlib.sha256(scim_token.encode("utf-8")).hexdigest()
+        config.save()
+        AuditEvent.objects.create(
+            actor=request.user,
+            workspace=workspace,
+            event_type="identity.enterprise_updated",
+            details={"provider": config.provider, "scim_enabled": config.scim_enabled, "token_rotated": bool(scim_token)},
+        )
+    payload = {"success": True, "workspace": workspace.name, "identity_config": _enterprise_identity_payload(config)}
+    if scim_token:
+        payload["scim_token"] = scim_token
+    return JsonResponse(payload)
+
+
+def _scim_workspace(request):
+    workspace_id = request.headers.get("X-Workspace-ID") or request.GET.get("workspace_id")
+    if workspace_id:
+        try:
+            return Workspace.objects.get(id=int(workspace_id))
+        except (TypeError, ValueError, Workspace.DoesNotExist):
+            return None
+    return Workspace.objects.order_by("id").first()
+
+
+def _scim_payload(request):
+    authorization = request.headers.get("Authorization", "")
+    if not authorization.lower().startswith("bearer "):
+        return None, "Bearer token required."
+    token = authorization[7:].strip()
+    workspace = _scim_workspace(request)
+    if not workspace:
+        return None, "Workspace not found."
+    config = EnterpriseIdentityConfig.objects.filter(workspace=workspace).first()
+    if not config or not config.scim_enabled or not config.scim_token_hash:
+        return None, "SCIM is not enabled for this workspace."
+    expected = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    if not secrets.compare_digest(expected, config.scim_token_hash):
+        return None, "Invalid SCIM token."
+    return workspace, None
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST", "DELETE"])
+def scim_directory_api(request):
+    workspace, error = _scim_payload(request)
+    if error:
+        return JsonResponse({"success": False, "error": error}, status=401)
+    if request.method == "GET":
+        members = WorkspaceMembership.objects.filter(workspace=workspace).select_related("user").order_by("user__username")
+        resources = [
+            {
+                "id": str(member.user_id),
+                "userName": member.user.username,
+                "active": member.user.is_active,
+                "displayName": member.user.get_full_name() or member.user.username,
+                "role": member.role,
+            }
+            for member in members
+        ]
+        return JsonResponse({"schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"], "totalResults": len(resources), "Resources": resources})
+    try:
+        body = json.loads(request.body.decode("utf-8") or "{}")
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "SCIM request body must be valid JSON."}, status=400)
+    username = (body.get("userName") or body.get("username") or request.GET.get("userName") or "").strip()[:150]
+    if not username:
+        return JsonResponse({"success": False, "error": "SCIM userName is required."}, status=400)
+    if request.method == "DELETE":
+        user = User.objects.filter(username=username).first()
+        if not user:
+            return JsonResponse({"success": False, "error": "User not found."}, status=404)
+        membership = WorkspaceMembership.objects.filter(workspace=workspace, user=user).first()
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+        if membership and user.id != workspace.owner_id:
+            membership.delete()
+        DirectoryProvisioningEvent.objects.create(workspace=workspace, username=username, action="deprovisioned", details={"removed_membership": bool(membership and user.id != workspace.owner_id)})
+        return JsonResponse({"success": True, "action": "deprovisioned", "userName": username})
+    email = ""
+    emails = body.get("emails") or []
+    if isinstance(emails, list) and emails and isinstance(emails[0], dict):
+        email = str(emails[0].get("value") or "").strip()[:254]
+    user, created = User.objects.get_or_create(username=username, defaults={"email": email})
+    if email and user.email != email:
+        user.email = email
+    active = body.get("active", True) is not False
+    user.is_active = active
+    display_name = str(body.get("displayName") or "").strip()
+    if display_name:
+        parts = display_name.split(" ", 1)
+        user.first_name = parts[0][:150]
+        user.last_name = parts[1][:150] if len(parts) > 1 else ""
+    user.save()
+    role = str(body.get("role") or "developer").strip().lower()
+    if role not in dict(WorkspaceMembership.ROLE_CHOICES) or role == "admin":
+        role = "developer"
+    membership, _ = WorkspaceMembership.objects.update_or_create(workspace=workspace, user=user, defaults={"role": role})
+    action = "provisioned" if created else "updated"
+    DirectoryProvisioningEvent.objects.create(workspace=workspace, username=username, action=action, details={"active": active, "role": membership.role})
+    return JsonResponse({"success": True, "action": action, "user": {"id": str(user.id), "userName": user.username, "active": user.is_active, "role": membership.role}}, status=201 if created else 200)
 
 
 @login_required(login_url="/login/")

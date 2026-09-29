@@ -121,6 +121,14 @@ const policyTests = document.getElementById("policyTests");
 const policyExternal = document.getElementById("policyExternal");
 const policyRetention = document.getElementById("policyRetention");
 const identityPolicyStatus = document.getElementById("identityPolicyStatus");
+const enterpriseProvider = document.getElementById("enterpriseProvider");
+const enterpriseIssuer = document.getElementById("enterpriseIssuer");
+const enterpriseClientId = document.getElementById("enterpriseClientId");
+const enterpriseDomains = document.getElementById("enterpriseDomains");
+const enterpriseEnforce = document.getElementById("enterpriseEnforce");
+const enterpriseScim = document.getElementById("enterpriseScim");
+const enterpriseIdentityStatus = document.getElementById("enterpriseIdentityStatus");
+const enterpriseScimToken = document.getElementById("enterpriseScimToken");
 const remotePrTitle = document.getElementById("remotePrTitle");
 const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
@@ -1070,7 +1078,10 @@ async function verifyProvenance() {
 function toggleIdentityPolicy() {
     if (!identityPolicyPanel) return;
     identityPolicyPanel.hidden = !identityPolicyPanel.hidden;
-    if (!identityPolicyPanel.hidden) loadIdentityPolicy();
+    if (!identityPolicyPanel.hidden) {
+        loadIdentityPolicy();
+        loadEnterpriseIdentity();
+    }
 }
 
 function renderIdentityPolicy(data) {
@@ -1118,6 +1129,62 @@ async function saveIdentityPolicy() {
         identityPolicyStatus.innerText = "Policy saved and added to the audit log.";
     } catch (error) {
         identityPolicyStatus.innerText = "Policy error: " + error;
+    }
+}
+
+function renderEnterpriseIdentity(config) {
+    if (!config) return;
+    enterpriseProvider.value = config.provider || "oidc";
+    enterpriseIssuer.value = config.issuer_url || "";
+    enterpriseClientId.value = config.client_id || "";
+    enterpriseDomains.value = config.allowed_domains || "";
+    enterpriseEnforce.checked = Boolean(config.enforce_sso);
+    enterpriseScim.checked = Boolean(config.scim_enabled);
+    enterpriseIdentityStatus.innerText = (config.token_configured ? "SCIM token configured." : "SCIM token not configured.") +
+        (config.updated_at ? " Updated " + config.updated_at + "." : "");
+}
+
+async function loadEnterpriseIdentity() {
+    enterpriseIdentityStatus.innerText = "Loading enterprise identity...";
+    try {
+        const response = await fetch("/api/identity/enterprise/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load enterprise identity.");
+        renderEnterpriseIdentity(data.identity_config);
+    } catch (error) {
+        enterpriseIdentityStatus.innerText = "Enterprise identity error: " + error;
+    }
+}
+
+async function saveEnterpriseIdentity(rotateToken) {
+    enterpriseIdentityStatus.innerText = rotateToken ? "Rotating SCIM token..." : "Saving enterprise identity...";
+    enterpriseScimToken.hidden = true;
+    try {
+        const response = await fetch("/api/identity/enterprise/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                provider: enterpriseProvider.value,
+                issuer_url: enterpriseIssuer.value,
+                client_id: enterpriseClientId.value,
+                allowed_domains: enterpriseDomains.value,
+                enforce_sso: enterpriseEnforce.checked,
+                scim_enabled: enterpriseScim.checked,
+                action: rotateToken ? "rotate_scim_token" : "",
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to save enterprise identity.");
+        renderEnterpriseIdentity(data.identity_config);
+        if (data.scim_token) {
+            enterpriseScimToken.hidden = false;
+            enterpriseScimToken.innerText = "SCIM token (copy it now; it is shown only once): " + data.scim_token;
+            enterpriseIdentityStatus.innerText = "Enterprise settings saved and a new SCIM token was generated.";
+        } else {
+            enterpriseIdentityStatus.innerText = "Enterprise settings saved.";
+        }
+    } catch (error) {
+        enterpriseIdentityStatus.innerText = "Enterprise identity error: " + error;
     }
 }
 

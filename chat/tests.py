@@ -7,7 +7,7 @@ from django.test import TestCase
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import AgentJob, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EvaluationRun, EvaluationScore, EvaluationTask, KnowledgeChunk, KnowledgeDocument, SandboxPolicy, WorkspaceMembership, WorkspacePolicy
+from .models import AgentJob, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, KnowledgeChunk, KnowledgeDocument, SandboxPolicy, Workspace, WorkspaceMembership, WorkspacePolicy
 from .views import _search_knowledge
 
 
@@ -397,6 +397,42 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(payload["cross_edges"]), 1)
         self.assertEqual(payload["impacts"][0]["repository"], "api")
+
+    def test_enterprise_identity_rotates_token_and_provisions_scim_users(self):
+        saved = self.client.post("/api/identity/enterprise/", {
+            "provider": "oidc",
+            "issuer_url": "https://idp.example.com",
+            "client_id": "syntax-local",
+            "allowed_domains": "example.com",
+            "enforce_sso": "true",
+            "scim_enabled": "true",
+            "action": "rotate_scim_token",
+        })
+        self.assertEqual(saved.status_code, 200)
+        token = saved.json()["scim_token"]
+        self.assertTrue(saved.json()["identity_config"]["token_configured"])
+        self.assertNotIn("scim_token", self.client.get("/api/identity/enterprise/").json())
+        workspace = WorkspaceMembership.objects.get(user=self.user).workspace
+        headers = {"HTTP_AUTHORIZATION": f"Bearer {token}", "HTTP_X_WORKSPACE_ID": str(workspace.id)}
+        provisioned = self.client.post(
+            "/api/identity/scim/",
+            data=json.dumps({"userName": "directory-user", "displayName": "Directory User", "active": True, "role": "reviewer"}),
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(provisioned.status_code, 201)
+        member = WorkspaceMembership.objects.get(workspace=workspace, user__username="directory-user")
+        self.assertEqual(member.role, "reviewer")
+        deprovisioned = self.client.delete(
+            "/api/identity/scim/",
+            data=json.dumps({"userName": "directory-user"}),
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(deprovisioned.status_code, 200)
+        self.assertFalse(User.objects.get(username="directory-user").is_active)
+        self.assertFalse(WorkspaceMembership.objects.filter(id=member.id).exists())
+        self.assertTrue(EnterpriseIdentityConfig.objects.filter(workspace=workspace, scim_enabled=True).exists())
 
     def test_api_contract_finds_undocumented_endpoint(self):
         response = self.client.post("/api/contracts/analyze/", {

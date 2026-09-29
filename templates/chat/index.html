@@ -504,6 +504,28 @@
             </div>
             <button type="button" onclick="saveIdentityPolicy()">Save policy</button>
             <div id="identityPolicyStatus" class="identity-policy-status">Policy status will appear here.</div>
+            <div class="enterprise-identity-card">
+                <div class="settings-heading">
+                    <div>
+                        <strong>Enterprise SSO and SCIM</strong>
+                        <span>Connect an OIDC/SAML identity provider and provision workspace users.</span>
+                    </div>
+                </div>
+                <div class="policy-grid">
+                    <label>Provider<select id="enterpriseProvider"><option value="oidc">OIDC</option><option value="saml">SAML</option></select></label>
+                    <label>Issuer URL<input id="enterpriseIssuer" placeholder="https://idp.example.com"></label>
+                    <label>Client ID<input id="enterpriseClientId" placeholder="Workspace client ID"></label>
+                    <label>Allowed domains<input id="enterpriseDomains" placeholder="example.com, company.org"></label>
+                    <label><input id="enterpriseEnforce" type="checkbox"> Enforce SSO for workspace</label>
+                    <label><input id="enterpriseScim" type="checkbox"> Enable SCIM provisioning</label>
+                </div>
+                <div class="enterprise-identity-actions">
+                    <button type="button" onclick="saveEnterpriseIdentity(false)">Save enterprise settings</button>
+                    <button type="button" onclick="saveEnterpriseIdentity(true)">Rotate SCIM token</button>
+                </div>
+                <div id="enterpriseIdentityStatus" class="identity-policy-status">Enterprise identity is not configured.</div>
+                <pre id="enterpriseScimToken" class="architecture-output" hidden></pre>
+            </div>
         </section>
 
         <section id="chatBox" class="chat-box">
