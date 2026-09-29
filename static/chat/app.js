@@ -122,7 +122,11 @@ const agentGoal = document.getElementById("agentGoal");
 const agentStatus = document.getElementById("agentStatus");
 const agentPlan = document.getElementById("agentPlan");
 const agentLogs = document.getElementById("agentLogs");
+const agentTeamRoles = document.getElementById("agentTeamRoles");
+const agentTeamStatus = document.getElementById("agentTeamStatus");
+const agentTeamLogs = document.getElementById("agentTeamLogs");
 let agentTaskId = null;
+let agentTeamId = null;
 const languageInput = document.getElementById("language");
 const fileInput = document.getElementById("fileInput");
 const folderInput = document.getElementById("folderInput");
@@ -1917,6 +1921,62 @@ async function controlAgentTask(action) {
     } catch (error) {
         agentStatus.innerText = "Agent error: " + error;
     }
+}
+
+function renderAgentTeam(team) {
+    agentTeamId = team.id;
+    agentTeamStatus.innerText = team.status.toUpperCase() + " | " + team.progress + "/" + team.total_members + " roles | " + team.title;
+    agentTeamLogs.innerText = (team.logs || []).map(log => "[" + log.level + "] " + log.message).join(String.fromCharCode(10)) || "Team logs will appear here.";
+}
+
+async function createAgentTeam() {
+    const goal = agentGoal ? agentGoal.value.trim() : "";
+    if (!goal) {
+        alert("Describe the team goal in the agent goal field.");
+        return;
+    }
+    try {
+        const roles = agentTeamRoles.value.split(",").map(role => role.trim()).filter(Boolean);
+        const response = await fetch("/api/agent/teams/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ goal, roles: JSON.stringify(roles) }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to create agent team.");
+        renderAgentTeam(data.team);
+    } catch (error) {
+        agentTeamStatus.innerText = "Team error: " + error;
+    }
+}
+
+async function runAgentTeam() {
+    if (!agentTeamId) return;
+    const response = await fetch("/api/agent/team/" + agentTeamId + "/run/", {
+        method: "POST",
+        headers: { "X-CSRFToken": csrfToken },
+    });
+    const data = await response.json();
+    if (!data.success) {
+        agentTeamStatus.innerText = "Team error: " + (data.error || "Unable to run team.");
+        return;
+    }
+    renderAgentTeam(data.team);
+}
+
+async function controlAgentTeam(action) {
+    if (!agentTeamId) return;
+    const response = await fetch("/api/agent/team/" + agentTeamId + "/control/", {
+        method: "POST",
+        headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ action }),
+    });
+    const data = await response.json();
+    if (!data.success) {
+        agentTeamStatus.innerText = "Team error: " + (data.error || "Team action failed.");
+        return;
+    }
+    renderAgentTeam(data.team);
 }
 
 function resetAgentTask() {

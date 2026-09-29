@@ -620,6 +620,23 @@
                         <div id="agentPlan" class="agent-plan"></div>
                         <pre id="agentLogs" class="agent-logs">Agent logs will appear here.</pre>
                     </div>
+                    <div class="agent-team-workspace">
+                        <div class="agent-heading">
+                            <div>
+                                <strong>Multi-agent team</strong>
+                                <span>Coordinate planner, coder, tester, security, and documentation roles.</span>
+                            </div>
+                            <div class="agent-controls">
+                                <button type="button" onclick="runAgentTeam()">Run team</button>
+                                <button type="button" onclick="controlAgentTeam('pause')">Pause</button>
+                                <button type="button" onclick="controlAgentTeam('advance')">Advance role</button>
+                            </div>
+                        </div>
+                        <input id="agentTeamRoles" class="agent-team-roles" value="planner,coder,tester,security,documenter" placeholder="Roles, comma separated">
+                        <button type="button" class="agent-plan-button" onclick="createAgentTeam()">Create agent team</button>
+                        <div id="agentTeamStatus" class="agent-status">No agent team yet.</div>
+                        <pre id="agentTeamLogs" class="agent-logs">Team logs will appear here.</pre>
+                    </div>
                     <div id="patchPanel" class="patch-panel" hidden>
                         <div class="patch-heading">
                             <strong>Review AI patch</strong>

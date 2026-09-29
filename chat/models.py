@@ -66,6 +66,31 @@ class AgentTask(models.Model):
         return self.title
 
 
+class AgentTeam(models.Model):
+    STATUS_CHOICES = (
+        ("planned", "Planned"),
+        ("running", "Running"),
+        ("paused", "Paused"),
+        ("completed", "Completed"),
+        ("blocked", "Blocked"),
+    )
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="agent_teams")
+    title = models.CharField(max_length=200)
+    goal = models.TextField()
+    roles = models.JSONField(default=list)
+    members = models.JSONField(default=list)
+    shared_context = models.JSONField(default=dict)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="planned")
+    logs = models.JSONField(default=list)
+    current_member = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.title
+
+
 class McpConnector(models.Model):
     CONNECTOR_TYPES = (
         ("local_folder", "Local folder"),

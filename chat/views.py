@@ -34,6 +34,7 @@ from .models import (
     McpConnector,
     McpToolCall,
     AgentTask,
+    AgentTeam,
     AiEvent,
     AuditEvent,
     UserOllamaSettings,
@@ -985,6 +986,114 @@ def agent_plan(request):
         plan=_agent_plan(goal),
     )
     return JsonResponse({"success": True, "task": _agent_payload(task)})
+
+
+def _agent_team_payload(team):
+    members = list(team.members or [])
+    completed = sum(1 for member in members if member.get("status") == "completed")
+    return {
+        "id": team.id,
+        "title": team.title,
+        "goal": team.goal,
+        "roles": team.roles,
+        "members": members,
+        "shared_context": team.shared_context,
+        "status": team.status,
+        "logs": team.logs,
+        "current_member": team.current_member,
+        "progress": completed,
+        "total_members": len(members),
+        "created_at": team.created_at.strftime("%d-%m-%Y %H:%M"),
+    }
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def agent_team_plan(request):
+    if request.method == "GET":
+        teams = AgentTeam.objects.filter(owner=request.user).order_by("-updated_at")[:30]
+        return JsonResponse({"success": True, "teams": [_agent_team_payload(team) for team in teams]})
+    goal = request.POST.get("goal", "").strip()
+    if not goal:
+        return JsonResponse({"success": False, "error": "Describe the team goal."}, status=400)
+    try:
+        roles = json.loads(request.POST.get("roles", "[]"))
+    except json.JSONDecodeError:
+        roles = []
+    roles = [str(role).strip()[:40] for role in roles if str(role).strip()][:8]
+    if not roles:
+        roles = ["planner", "coder", "tester", "security", "documenter"]
+    members = []
+    task_ids = []
+    for role in roles:
+        child = AgentTask.objects.create(
+            owner=request.user,
+            title=f"{role.title()} · {goal[:120]}",
+            goal=f"{role.title()} role for: {goal}",
+            plan=_agent_plan(goal),
+        )
+        task_ids.append(child.id)
+        members.append({"role": role, "task_id": child.id, "status": "queued", "result": ""})
+    team = AgentTeam.objects.create(
+        owner=request.user,
+        title=goal[:80],
+        goal=goal,
+        roles=roles,
+        members=members,
+        shared_context={"child_task_ids": task_ids, "approval_required": True},
+        logs=[{"level": "info", "message": "Agent team planned with approval-gated role tasks."}],
+    )
+    return JsonResponse({"success": True, "team": _agent_team_payload(team)}, status=201)
+
+
+@login_required(login_url="/login/")
+@require_POST
+def agent_team_run(request, team_id):
+    team = get_object_or_404(AgentTeam, id=team_id, owner=request.user)
+    if team.status in {"completed", "blocked"}:
+        return JsonResponse({"success": False, "error": "This agent team cannot run in its current state."}, status=400)
+    members = list(team.members or [])
+    if not members:
+        return JsonResponse({"success": False, "error": "The agent team has no role tasks."}, status=400)
+    team.status = "running"
+    if team.current_member >= len(members):
+        team.current_member = 0
+    member = members[team.current_member]
+    member["status"] = "running"
+    member["result"] = "Role is active. Approve protected child steps before execution."
+    team.logs = [*(team.logs or []), {"level": "info", "message": f"{member['role']} role started."}][-50:]
+    team.save(update_fields=["status", "members", "logs", "updated_at"])
+    return JsonResponse({"success": True, "team": _agent_team_payload(team)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def agent_team_control(request, team_id):
+    team = get_object_or_404(AgentTeam, id=team_id, owner=request.user)
+    action = request.POST.get("action", "").strip().lower()
+    if action == "pause":
+        team.status = "paused"
+        message = "Agent team paused by user."
+    elif action == "resume":
+        team.status = "running"
+        message = "Agent team resumed. Review the active role approvals."
+    elif action == "advance":
+        members = list(team.members or [])
+        if members and team.current_member < len(members):
+            members[team.current_member]["status"] = "completed"
+            members[team.current_member]["result"] = "Role checkpoint completed."
+            team.current_member += 1
+            team.members = members
+        team.status = "completed" if team.current_member >= len(members) else "running"
+        message = "Role checkpoint advanced."
+    elif action == "cancel":
+        team.status = "blocked"
+        message = "Agent team cancelled by user."
+    else:
+        return JsonResponse({"success": False, "error": "Use pause, resume, advance, or cancel."}, status=400)
+    team.logs = [*(team.logs or []), {"level": "warning" if action in {"pause", "cancel"} else "info", "message": message}][-50:]
+    team.save(update_fields=["status", "members", "current_member", "logs", "updated_at"])
+    return JsonResponse({"success": True, "team": _agent_team_payload(team)})
 
 
 @login_required(login_url="/login/")

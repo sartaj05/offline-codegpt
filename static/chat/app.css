@@ -448,6 +448,8 @@ select { padding: 0 10px; }
 .agent-step-actions button:first-child { border-color: #697ee5; color: #d7ddff; }
 .agent-step-actions button:disabled { opacity: .45; }
 .agent-logs { max-height: 100px; overflow: auto; margin: 8px 0 0; padding: 8px; border: 1px solid var(--border); border-radius: 7px; background: #0d1016; color: #aebbd0; font-family: Consolas, monospace; font-size: 9px; white-space: pre-wrap; }
+.agent-team-workspace { margin-top: 10px; padding: 11px; border: 1px solid rgba(99,230,190,.25); border-radius: 9px; background: rgba(25,64,55,.2); }
+.agent-team-roles { width: 100%; margin-top: 9px; padding: 8px; border: 1px solid var(--border); border-radius: 7px; background: #11141b; color: var(--text); font-size: 10px; }
 .patch-panel { margin-top: 10px; padding: 11px; border: 1px solid rgba(99,230,190,.25); border-radius: 9px; background: rgba(27,49,48,.35); }
 .patch-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #dcebe7; font-size: 11px; }
 .patch-heading span { color: var(--muted); font-size: 10px; }

@@ -7,7 +7,7 @@ from django.test import TestCase
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import AiEvent, AuditEvent, ChatMessage, ChatSession, EvaluationRun, EvaluationScore, EvaluationTask, KnowledgeChunk, KnowledgeDocument, WorkspaceMembership, WorkspacePolicy
+from .models import AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EvaluationRun, EvaluationScore, EvaluationTask, KnowledgeChunk, KnowledgeDocument, WorkspaceMembership, WorkspacePolicy
 from .views import _search_knowledge
 
 
@@ -21,6 +21,20 @@ class ChatFeatureTests(TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "FREE PREVIEW")
+
+    def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
+        created = self.client.post("/api/agent/teams/", {
+            "goal": "Prepare a safe release",
+            "roles": '["planner", "tester"]',
+        })
+        self.assertEqual(created.status_code, 201)
+        team = created.json()["team"]
+        self.assertEqual(team["total_members"], 2)
+        self.assertEqual(AgentTeam.objects.get(id=team["id"]).roles, ["planner", "tester"])
+        started = self.client.post(f"/api/agent/team/{team['id']}/run/")
+        self.assertEqual(started.json()["team"]["status"], "running")
+        advanced = self.client.post(f"/api/agent/team/{team['id']}/control/", {"action": "advance"})
+        self.assertEqual(advanced.json()["team"]["progress"], 1)
 
     def test_evaluation_tasks_can_be_created_listed_and_deleted(self):
         created = self.client.post("/api/evaluations/tasks/", {
