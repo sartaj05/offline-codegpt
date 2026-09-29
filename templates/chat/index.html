@@ -85,33 +85,38 @@
             </div>
             <div class="topbar-actions">
                 {% if request.user.is_authenticated %}
-                    <button type="button" onclick="toggleSetupPanel()">Setup</button>
-                    <button type="button" onclick="toggleBackupPanel()">Backup</button>
-                    <button type="button" onclick="toggleOllamaSettings()">Ollama</button>
-                    <button type="button" onclick="toggleMemoryPanel()">Memory</button>
-                    <button type="button" onclick="toggleRemoteIntegration()">Remote</button>
-                    <button type="button" onclick="toggleMcpPanel()">Tools</button>
-                    <button type="button" onclick="toggleExtensionsPanel()">Extensions</button>
-                    <button type="button" onclick="toggleObservability()">Metrics</button>
-                    {% if request.user.is_authenticated %}<button type="button" onclick="toggleEvaluationLab()">Eval Lab</button>{% endif %}
-                    <button type="button" onclick="toggleWorkspace()">Team</button>
-                    <button type="button" onclick="toggleDevops()">DevOps</button>
-                    <button type="button" onclick="toggleDeployment()">Deploy</button>
-                    <button type="button" onclick="toggleDocumentation()">Docs</button>
-                    <button type="button" onclick="toggleReviewGate()">Review</button>
-                    <button type="button" onclick="toggleDependencies()">Deps</button>
-                    <button type="button" onclick="toggleBrowserTests()">Browser</button>
-                    <button type="button" onclick="toggleModelRouter()">Router</button>
-                    <button type="button" onclick="toggleDevcontainer()">Env</button>
-                    <button type="button" onclick="toggleIncident()">Incident</button>
-                    <button type="button" onclick="toggleArchitecture()">Arch</button>
-                    <button type="button" onclick="toggleContracts()">API</button>
-                    <button type="button" onclick="toggleProvenance()">Proof</button>
-                    <button type="button" onclick="toggleIdentityPolicy()">Policy</button>
-                    <button type="button" onclick="toggleSecretsVault()">Secrets</button>
-                    <button type="button" onclick="exportChat('markdown')">MD</button>
-                    <button type="button" onclick="exportChat('json')">JSON</button>
-                    <button type="button" onclick="exportChat('pdf')">PDF</button>
+                    <details class="workspace-tools-menu">
+                        <summary>Workspace tools</summary>
+                        <div class="workspace-tools-grid">
+                            <button type="button" onclick="toggleSetupPanel()">Setup</button>
+                            <button type="button" onclick="toggleBackupPanel()">Backup</button>
+                            <button type="button" onclick="toggleOllamaSettings()">Ollama</button>
+                            <button type="button" onclick="toggleMemoryPanel()">Memory</button>
+                            <button type="button" onclick="toggleRemoteIntegration()">Remote</button>
+                            <button type="button" onclick="toggleMcpPanel()">Tools</button>
+                            <button type="button" onclick="toggleExtensionsPanel()">Extensions</button>
+                            <button type="button" onclick="toggleObservability()">Metrics</button>
+                            <button type="button" onclick="toggleEvaluationLab()">Eval Lab</button>
+                            <button type="button" onclick="toggleWorkspace()">Team</button>
+                            <button type="button" onclick="toggleDevops()">DevOps</button>
+                            <button type="button" onclick="toggleDeployment()">Deploy</button>
+                            <button type="button" onclick="toggleDocumentation()">Docs</button>
+                            <button type="button" onclick="toggleReviewGate()">Review</button>
+                            <button type="button" onclick="toggleDependencies()">Deps</button>
+                            <button type="button" onclick="toggleBrowserTests()">Browser</button>
+                            <button type="button" onclick="toggleModelRouter()">Router</button>
+                            <button type="button" onclick="toggleDevcontainer()">Env</button>
+                            <button type="button" onclick="toggleIncident()">Incident</button>
+                            <button type="button" onclick="toggleArchitecture()">Arch</button>
+                            <button type="button" onclick="toggleContracts()">API</button>
+                            <button type="button" onclick="toggleProvenance()">Proof</button>
+                            <button type="button" onclick="toggleIdentityPolicy()">Policy</button>
+                            <button type="button" onclick="toggleSecretsVault()">Secrets</button>
+                            <button type="button" onclick="exportChat('markdown')">MD</button>
+                            <button type="button" onclick="exportChat('json')">JSON</button>
+                            <button type="button" onclick="exportChat('pdf')">PDF</button>
+                        </div>
+                    </details>
                     <form method="post" action="{% url 'logout' %}">
                         {% csrf_token %}
                         <button type="submit">Log out</button>
@@ -663,23 +668,24 @@
         <section class="composer">
             <input type="hidden" id="csrfToken" value="{{ csrf_token }}">
             <div class="task-mode-row">
-                <span>Start with:</span>
+                <span class="task-mode-label">Quick action:</span>
                 <button type="button" onclick="useTaskMode('generate')">Generate</button>
                 <button type="button" onclick="useTaskMode('fix')">Fix</button>
                 <button type="button" onclick="useTaskMode('explain')">Explain</button>
-            </div>            <div class="composer-controls">
-                <button id="toggleAdvancedComposer" type="button" onclick="toggleAdvancedComposer()">Code &amp; tools</button>
-                <span>Simple chat is ready. Open this only when you need code, files, templates, or runtime tools.</span>
+            </div>
+            <div class="composer-controls">
+                <button id="toggleAdvancedComposer" type="button" onclick="toggleAdvancedComposer()">Add code or files</button>
+                <span>Optional tools. Send a prompt to get your answer.</span>
             </div>
             <div id="advancedComposer" class="advanced-composer" hidden>
             <div class="code-panel">
                 <div class="form-row">
-                    <select id="model" aria-label="Ollama model">
+                    <select id="model" class="composer-default-select" aria-label="Ollama model">
                         {% for model in models %}
                             <option value="{{ model }}" {% if model == default_model %}selected{% endif %}>{{ model }}</option>
                         {% endfor %}
                     </select>
-                    <select id="language" aria-label="Code language">
+                    <select id="language" class="composer-default-select" aria-label="Code language">
                         <option value="auto">Auto detect</option>
                         <option value="csharp">C#</option>
                         <option value="python">Python</option>
