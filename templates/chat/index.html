@@ -63,10 +63,23 @@
                 <button type="button" onclick="loadGitStatus()">Refresh</button>
             </div>
             <div id="gitBranch" class="project-stats">Checking repository...</div>
+            <div class="git-branch-tools">
+                <input id="gitBranchName" placeholder="branch-name">
+                <button type="button" onclick="createGitBranch()">Create branch</button>
+                <button type="button" onclick="switchGitBranch()">Switch branch</button>
+            </div>
             <div id="gitFiles" class="git-files"></div>
+            <div class="git-history-tools">
+                <input id="gitBlamePath" placeholder="file path for blame / rollback">
+                <input id="gitBlameStart" type="number" min="1" value="1" placeholder="start line">
+                <input id="gitBlameEnd" type="number" min="1" value="20" placeholder="end line">
+                <button type="button" onclick="showGitBlame()">Blame</button>
+                <button type="button" onclick="rollbackGitFile()">Rollback file</button>
+            </div>
             <textarea id="gitCommitMessage" class="git-commit-message" placeholder="Commit message..."></textarea>
             <button type="button" class="git-commit-button" onclick="commitGitChanges()">Commit staged changes</button>
             <pre id="gitDiff" class="git-diff">No diff loaded.</pre>
+            <pre id="gitHistoryOutput" class="git-diff">Branch history tools will appear here.</pre>
         </div>
         {% endif %}
 

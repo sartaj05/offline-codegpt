@@ -229,6 +229,11 @@ const gitBranch = document.getElementById("gitBranch");
 const gitFiles = document.getElementById("gitFiles");
 const gitDiff = document.getElementById("gitDiff");
 const gitCommitMessage = document.getElementById("gitCommitMessage");
+const gitBranchName = document.getElementById("gitBranchName");
+const gitBlamePath = document.getElementById("gitBlamePath");
+const gitBlameStart = document.getElementById("gitBlameStart");
+const gitBlameEnd = document.getElementById("gitBlameEnd");
+const gitHistoryOutput = document.getElementById("gitHistoryOutput");
 const chatSearch = document.getElementById("chatSearch");
 const chatHistory = document.getElementById("chatHistory");
 const editorFileName = document.getElementById("editorFileName");
@@ -3631,20 +3636,70 @@ async function loadGitStatus() {
     if (!gitFiles) return;
     gitFiles.innerText = "Loading Git status...";
     try {
-        const [statusResponse, diffResponse] = await Promise.all([
+        const [statusResponse, diffResponse, branchResponse] = await Promise.all([
             fetch("/api/git/status/"),
             fetch("/api/git/diff/"),
+            fetch("/api/git/branches/"),
         ]);
         const status = await statusResponse.json();
         const diff = await diffResponse.json();
+        const branches = await branchResponse.json();
         if (!status.success) throw new Error(status.error || "Unable to load Git status.");
-        gitBranch.innerText = "Branch: " + status.branch + " | " + status.files.length + " changed file(s)";
+        gitBranch.innerText = "Branch: " + status.branch + " | " + status.files.length + " changed file(s) | " + ((branches.branches || []).length) + " local branch(es)";
         renderGitFiles(status.files);
         gitDiff.innerText = diff.success ? (diff.diff || "No diff available.") : (diff.error || "Unable to load diff.");
     } catch (error) {
         gitBranch.innerText = "Git unavailable";
         gitFiles.innerText = String(error);
     }
+}
+
+async function changeGitBranch(action) {
+    const branch = gitBranchName ? gitBranchName.value.trim() : "";
+    if (!branch) { alert("Enter a branch name."); return; }
+    try {
+        const response = await fetch("/api/git/branches/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ action, branch }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to change branch.");
+        sendStatus.innerText = "Git branch changed to " + data.current + ".";
+        await loadGitStatus();
+    } catch (error) { alert("Git branch failed: " + error); }
+}
+
+function createGitBranch() { return changeGitBranch("create"); }
+function switchGitBranch() { return changeGitBranch("switch"); }
+
+async function showGitBlame() {
+    const path = gitBlamePath ? gitBlamePath.value.trim() : "";
+    if (!path) { alert("Enter a repository-relative file path."); return; }
+    try {
+        const params = new URLSearchParams({ path, start: gitBlameStart.value || "1", end: gitBlameEnd.value || gitBlameStart.value || "1" });
+        const response = await fetch("/api/git/blame/?" + params.toString());
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load blame.");
+        gitHistoryOutput.innerText = data.blame || "No blame output.";
+    } catch (error) { gitHistoryOutput.innerText = "Blame error: " + error; }
+}
+
+async function rollbackGitFile() {
+    const path = gitBlamePath ? gitBlamePath.value.trim() : "";
+    if (!path) { alert("Enter the file path to roll back."); return; }
+    if (prompt("This restores the file from HEAD and discards its local changes. Type ROLLBACK to continue:") !== "ROLLBACK") return;
+    try {
+        const response = await fetch("/api/git/rollback/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ path, confirm: "ROLLBACK" }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to roll back file.");
+        sendStatus.innerText = data.message;
+        await loadGitStatus();
+    } catch (error) { alert("Git rollback failed: " + error); }
 }
 
 async function stageGitFile(path) {

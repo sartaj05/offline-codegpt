@@ -297,6 +297,66 @@ def git_commit(request):
     return JsonResponse({"success": True, "output": result.stdout.strip()})
 
 
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def git_branches(request):
+    if request.method == "POST":
+        branch = request.POST.get("branch", "").strip()
+        action = request.POST.get("action", "switch").strip().lower()
+        if not re.fullmatch(r"[A-Za-z0-9._/-]{1,120}", branch) or branch.startswith(("-", ".")) or ".." in branch:
+            return JsonResponse({"success": False, "error": "Enter a safe local branch name."}, status=400)
+        args = ["switch", branch] if action == "switch" else ["switch", "-c", branch]
+        if action not in {"switch", "create"}:
+            return JsonResponse({"success": False, "error": "Use switch or create."}, status=400)
+        result = _run_git(args)
+        if isinstance(result, tuple):
+            return JsonResponse({"success": False, "error": "Git is unavailable: " + result[1]}, status=503)
+        if result.returncode != 0:
+            return JsonResponse({"success": False, "error": (result.stderr or result.stdout).strip()}, status=400)
+    result = _run_git(["for-each-ref", "--format=%(refname:short)", "refs/heads"])
+    current = _run_git(["branch", "--show-current"])
+    if isinstance(result, tuple) or isinstance(current, tuple):
+        error = result[1] if isinstance(result, tuple) else current[1]
+        return JsonResponse({"success": False, "error": "Git is unavailable: " + error}, status=503)
+    if result.returncode != 0 or current.returncode != 0:
+        return JsonResponse({"success": False, "error": (result.stderr or current.stderr).strip()}, status=503)
+    return JsonResponse({"success": True, "current": current.stdout.strip(), "branches": [line.strip() for line in result.stdout.splitlines() if line.strip()]})
+
+
+@login_required(login_url="/login/")
+@require_GET
+def git_blame(request):
+    path = request.GET.get("path", "").strip()
+    if not _git_path_is_safe(path):
+        return JsonResponse({"success": False, "error": "Choose a repository-relative file path."}, status=400)
+    start = request.GET.get("start", "1").strip()
+    end = request.GET.get("end", start).strip()
+    if not start.isdigit() or not end.isdigit() or int(start) < 1 or int(end) < int(start) or int(end) - int(start) > 200:
+        return JsonResponse({"success": False, "error": "Blame range must contain at most 200 valid lines."}, status=400)
+    result = _run_git(["blame", "-L", f"{start},{end}", "--", path])
+    if isinstance(result, tuple):
+        return JsonResponse({"success": False, "error": "Git is unavailable: " + result[1]}, status=503)
+    if result.returncode != 0:
+        return JsonResponse({"success": False, "error": result.stderr.strip()}, status=400)
+    return JsonResponse({"success": True, "path": path, "start": int(start), "end": int(end), "blame": result.stdout[:MAX_GIT_OUTPUT_CHARS]})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def git_rollback(request):
+    path = request.POST.get("path", "").strip()
+    if not _git_path_is_safe(path):
+        return JsonResponse({"success": False, "error": "Choose a repository-relative file path."}, status=400)
+    if request.POST.get("confirm", "") != "ROLLBACK":
+        return JsonResponse({"success": False, "error": "Type ROLLBACK to confirm restoring this file from HEAD."}, status=400)
+    result = _run_git(["restore", "--source=HEAD", "--", path])
+    if isinstance(result, tuple):
+        return JsonResponse({"success": False, "error": "Git is unavailable: " + result[1]}, status=503)
+    if result.returncode != 0:
+        return JsonResponse({"success": False, "error": result.stderr.strip()}, status=400)
+    return JsonResponse({"success": True, "path": path, "message": "File restored from HEAD."})
+
+
 def _remote_connection(request):
     return request.session.get("remote_git", {})
 
