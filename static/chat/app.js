@@ -201,6 +201,10 @@ const imageInput = document.getElementById("imageInput");
 const imagePreview = document.getElementById("imagePreview");
 const ocrInput = document.getElementById("ocrInput");
 const ocrStatus = document.getElementById("ocrStatus");
+const recordVoiceBtn = document.getElementById("recordVoiceBtn");
+const speechStatus = document.getElementById("speechStatus");
+let audioRecorder = null;
+let audioChunks = [];
 const sendBtn = document.getElementById("sendBtn");
 const draftStatus = document.getElementById("draftStatus");
 const responseFormat = document.getElementById("responseFormat");
@@ -2114,6 +2118,46 @@ async function runLocalOcr() {
         if (ocrStatus) ocrStatus.innerText = "Extracted " + data.pages + " page/image(s) locally.";
     } catch (error) {
         if (ocrStatus) ocrStatus.innerText = "OCR error: " + error.message;
+    }
+}
+
+async function toggleAudioRecording() {
+    if (audioRecorder && audioRecorder.state === "recording") {
+        audioRecorder.stop();
+        recordVoiceBtn.innerText = "Record offline audio";
+        return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+        speechStatus.innerText = "Audio recording is unavailable in this browser.";
+        return;
+    }
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunks = [];
+        audioRecorder = new MediaRecorder(stream);
+        audioRecorder.ondataavailable = event => { if (event.data.size) audioChunks.push(event.data); };
+        audioRecorder.onstop = async () => {
+            stream.getTracks().forEach(track => track.stop());
+            const blob = new Blob(audioChunks, { type: audioRecorder.mimeType || "audio/webm" });
+            const formData = new FormData();
+            formData.append("audio", blob, "voice.webm");
+            speechStatus.innerText = "Transcribing with local Whisper...";
+            try {
+                const response = await fetch("/api/speech/transcribe/", { method: "POST", headers: { "X-CSRFToken": csrfToken }, body: formData });
+                const data = await response.json();
+                if (!data.success) throw new Error(data.error || "Transcription failed.");
+                promptInput.value = data.text || "";
+                scheduleDraftSave();
+                speechStatus.innerText = "Transcribed locally" + (data.language ? " · " + data.language : "");
+            } catch (error) {
+                speechStatus.innerText = "Transcription error: " + error.message;
+            }
+        };
+        audioRecorder.start();
+        recordVoiceBtn.innerText = "Stop recording";
+        speechStatus.innerText = "Recording locally...";
+    } catch (error) {
+        speechStatus.innerText = "Microphone error: " + error.message;
     }
 }
 

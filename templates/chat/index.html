@@ -700,6 +700,7 @@
             <div class="composer-controls">
                 <button id="toggleAdvancedComposer" type="button" onclick="toggleAdvancedComposer()">Add code or files</button>
                 <button type="button" onclick="toggleVoiceInput()" aria-label="Start local speech input">🎙 Voice input</button>
+                <button id="recordVoiceBtn" type="button" onclick="toggleAudioRecording()">Record offline audio</button>
                 <span>Optional tools. Send a prompt to get your answer.</span>
             </div>
             <div class="format-control">
@@ -711,6 +712,7 @@
                 </select>
                 <textarea id="outputSchema" placeholder='Optional JSON schema, e.g. {"type":"object","properties":{"answer":{"type":"string"}}}' hidden></textarea>
             </div>
+            <div id="speechStatus" class="ocr-status"></div>
             <div id="advancedComposer" class="advanced-composer" hidden>
             <div class="code-panel">
                 <div class="form-row">

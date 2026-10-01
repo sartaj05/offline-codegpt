@@ -13,6 +13,7 @@ import subprocess
 import time
 import uuid
 import zipfile
+import tempfile
 from pathlib import PurePosixPath
 from urllib.parse import quote, urlencode, urlparse
 
@@ -32,6 +33,13 @@ try:
     import fitz
 except ImportError:
     fitz = None
+
+try:
+    from faster_whisper import WhisperModel
+except ImportError:
+    WhisperModel = None
+
+_whisper_model = None
 
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -1157,6 +1165,35 @@ def local_ocr(request):
         return JsonResponse({"success": True, "files": names, "text": text, "pages": len(image_data)})
     except (requests.RequestException, ValueError, TypeError) as exc:
         return JsonResponse({"success": False, "error": "Local OCR failed: " + str(exc)}, status=503)
+
+
+@login_required(login_url="/login/")
+@require_POST
+def local_transcribe(request):
+    global _whisper_model
+    audio = request.FILES.get("audio")
+    if not audio:
+        return JsonResponse({"success": False, "error": "Record or choose an audio file first."}, status=400)
+    if WhisperModel is None:
+        return JsonResponse({"success": False, "error": "Offline speech-to-text requires the faster-whisper package."}, status=400)
+    if audio.size > 25 * 1024 * 1024:
+        return JsonResponse({"success": False, "error": "Audio is limited to 25 MB."}, status=400)
+    try:
+        if _whisper_model is None:
+            _whisper_model = WhisperModel(
+                os.environ.get("WHISPER_MODEL", "base"),
+                device=os.environ.get("WHISPER_DEVICE", "cpu"),
+                compute_type=os.environ.get("WHISPER_COMPUTE_TYPE", "int8"),
+            )
+        with tempfile.NamedTemporaryFile(suffix=PurePosixPath(audio.name).suffix or ".webm") as temporary:
+            for chunk in audio.chunks():
+                temporary.write(chunk)
+            temporary.flush()
+            segments, info = _whisper_model.transcribe(temporary.name, vad_filter=True)
+            text = " ".join(segment.text.strip() for segment in segments).strip()
+        return JsonResponse({"success": True, "text": text, "language": getattr(info, "language", "")})
+    except Exception as exc:
+        return JsonResponse({"success": False, "error": "Local transcription failed: " + str(exc)}, status=503)
 
 
 @login_required(login_url="/login/")
