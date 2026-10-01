@@ -121,6 +121,7 @@ MAX_EXECUTION_CHARS = 20_000
 MAX_TEST_CHARS = 20_000
 MAX_GIT_OUTPUT_CHARS = 50_000
 MAX_BACKUP_BYTES = 25_000_000
+MAX_MODEL_IMPORT_BYTES = 20_000_000_000
 
 EXTENSION_CATALOG = [
     {
@@ -1268,6 +1269,66 @@ def knowledge_search(request):
         "query": query,
         "results": _search_knowledge(query, owner=request.user, collection_id=collection.id if collection else None, full_document=bool(collection and collection.retrieval_mode == "full")),
     })
+
+
+def _local_model_inventory():
+    root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "local_models")
+    os.makedirs(root, exist_ok=True)
+    items = []
+    for name in sorted(os.listdir(root)):
+        path = os.path.join(root, name)
+        if os.path.isfile(path):
+            items.append({"name": name, "path": path, "size_bytes": os.path.getsize(path), "format": PurePosixPath(name).suffix.lower().lstrip(".")})
+    return items
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def model_lifecycle(request):
+    settings = _user_ollama_settings(request.user)
+    adapter = get_runtime_adapter(settings.runtime, settings.server_url)
+    if request.method == "POST":
+        action = request.POST.get("action", "").strip().lower()
+        model = request.POST.get("model", "").strip()
+        if action == "warmup":
+            if not model:
+                return JsonResponse({"success": False, "error": "Choose a model to warm up."}, status=400)
+            started = time.perf_counter()
+            try:
+                success, protocol, message = adapter.warmup(model)
+            except (requests.RequestException, ValueError, TypeError, AttributeError) as exc:
+                return JsonResponse({"success": False, "error": str(exc)}, status=503)
+            return JsonResponse({"success": success, "action": action, "model": model, "protocol": protocol, "duration_ms": round((time.perf_counter() - started) * 1000), "message": message}, status=200 if success else 503)
+        if action == "unload":
+            if settings.runtime != "ollama":
+                return JsonResponse({"success": False, "error": "Unload is currently supported by the Ollama runtime only."}, status=400)
+            try:
+                response = requests.post(f"{settings.server_url}/api/generate", json={"model": model, "prompt": "", "keep_alive": 0}, timeout=(5, 30))
+                if not response.ok:
+                    return JsonResponse({"success": False, "error": response.text[:500]}, status=400)
+            except requests.RequestException as exc:
+                return JsonResponse({"success": False, "error": str(exc)}, status=503)
+            return JsonResponse({"success": True, "action": action, "model": model, "message": "Model unloaded from the Ollama runtime."})
+        if action == "import_gguf":
+            upload = request.FILES.get("model_file")
+            if not upload or not upload.name.lower().endswith(".gguf"):
+                return JsonResponse({"success": False, "error": "Choose a .gguf model file."}, status=400)
+            if upload.size > MAX_MODEL_IMPORT_BYTES:
+                return JsonResponse({"success": False, "error": "GGUF imports are limited to 20 GB."}, status=400)
+            filename = _safe_filename(upload.name).replace("/", "-")
+            root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "local_models")
+            os.makedirs(root, exist_ok=True)
+            path = os.path.join(root, filename)
+            with open(path, "wb") as destination:
+                for chunk in upload.chunks():
+                    destination.write(chunk)
+            return JsonResponse({"success": True, "action": action, "model": {"name": filename, "path": path, "size_bytes": os.path.getsize(path)}})
+        return JsonResponse({"success": False, "error": "Use warmup, unload, or import_gguf."}, status=400)
+    try:
+        remote_models = _ollama_model_details(settings.server_url, settings.runtime)
+    except (requests.RequestException, ValueError, TypeError):
+        remote_models = []
+    return JsonResponse({"success": True, "runtime": settings.runtime, "models": remote_models, "local_models": _local_model_inventory()})
 
 
 def _collection_payload(collection):

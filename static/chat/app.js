@@ -26,6 +26,7 @@ const ollamaTemperature = document.getElementById("ollamaTemperature");
 const ollamaTopP = document.getElementById("ollamaTopP");
 const ollamaContextLength = document.getElementById("ollamaContextLength");
 const ollamaModelName = document.getElementById("ollamaModelName");
+const modelImportFile = document.getElementById("modelImportFile");
 const ollamaSettingsStatus = document.getElementById("ollamaSettingsStatus");
 const ollamaFallbackModel = document.getElementById("ollamaFallbackModel");
 const ollamaHealthStatus = document.getElementById("ollamaHealthStatus");
@@ -812,6 +813,46 @@ async function publishExtension() {
     } catch (error) {
         extensionsStatus.innerText = "SDK error: " + error;
     }
+}
+
+async function loadModelLifecycle() {
+    try {
+        const response = await fetch("/api/models/lifecycle/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load model inventory.");
+        const local = (data.local_models || []).map(item => item.name + " · " + formatBytes(item.size_bytes)).join("\n");
+        if (modelInventory) modelInventory.innerText = (modelInventory.innerText || "") + "\n\nImported GGUF models:\n" + (local || "None");
+    } catch (error) { if (ollamaSettingsStatus) ollamaSettingsStatus.innerText = "Model inventory error: " + error; }
+}
+
+async function runModelLifecycle(action) {
+    const model = ollamaModelName ? ollamaModelName.value.trim() || modelInput.value : "";
+    if (!model) { alert("Choose a model first."); return; }
+    ollamaSettingsStatus.innerText = action === "warmup" ? "Warming up model..." : "Unloading model...";
+    const response = await fetch("/api/models/lifecycle/", {
+        method: "POST",
+        headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ action, model }),
+    });
+    const data = await response.json();
+    ollamaSettingsStatus.innerText = data.success ? (data.message || (action + " complete")) + (data.duration_ms ? " " + data.duration_ms + " ms" : "") : (data.error || "Model action failed.");
+}
+function warmupLocalModel() { return runModelLifecycle("warmup"); }
+function unloadLocalModel() { return runModelLifecycle("unload"); }
+
+async function importGgufModel() {
+    if (!modelImportFile || !modelImportFile.files.length) { alert("Choose a GGUF file first."); return; }
+    const body = new FormData();
+    body.append("action", "import_gguf");
+    body.append("model_file", modelImportFile.files[0]);
+    ollamaSettingsStatus.innerText = "Importing GGUF model...";
+    try {
+        const response = await fetch("/api/models/lifecycle/", { method: "POST", headers: { "X-CSRFToken": csrfToken }, body });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "GGUF import failed.");
+        ollamaSettingsStatus.innerText = "Imported " + data.model.name + ". Configure the selected runtime to load it.";
+        await loadModelLifecycle();
+    } catch (error) { ollamaSettingsStatus.innerText = "GGUF import error: " + error; }
 }
 
 async function runLocalExtension() {

@@ -71,6 +71,7 @@ urlpatterns = [
     path("api/browser-tests/report/", views.browser_test_report, name="browser_test_report"),
     path("api/models/route/", views.model_route, name="model_route"),
     path("api/models/benchmark/", views.model_benchmark, name="model_benchmark"),
+    path("api/models/lifecycle/", views.model_lifecycle, name="model_lifecycle"),
     path("api/devcontainers/generate/", views.devcontainer_generate, name="devcontainer_generate"),
     path("api/incidents/analyze/", views.incident_analyze, name="incident_analyze"),
     path("api/architecture/analyze/", views.architecture_analyze, name="architecture_analyze"),

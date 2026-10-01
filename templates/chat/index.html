@@ -173,6 +173,13 @@
                 <input id="ollamaModelName" placeholder="Model name, e.g. qwen2.5-coder:1.5b">
                 <button type="button" onclick="manageOllamaModel('pull')">Pull model</button>
                 <button type="button" onclick="manageOllamaModel('delete')">Delete model</button>
+                <button type="button" onclick="warmupLocalModel()">Warm up</button>
+                <button type="button" onclick="unloadLocalModel()">Unload</button>
+            </div>
+            <div class="model-manager-row">
+                <input id="modelImportFile" type="file" accept=".gguf">
+                <button type="button" onclick="importGgufModel()">Import GGUF</button>
+                <button type="button" onclick="loadModelLifecycle()">Refresh model inventory</button>
             </div>
             <div class="ollama-health-row">
                 <button type="button" onclick="checkOllamaHealth()">Test connection</button>
