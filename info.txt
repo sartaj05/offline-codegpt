@@ -1,2 +1,133 @@
-pip install -r requirements.txt
-ollama pull nomic-embed-text
+Offline CodeGPT - setup and feature notes
+==========================================
+
+Prerequisites
+-------------
+- Windows PowerShell
+- Python 3.11+
+- Ollama (https://ollama.com/download)
+
+Quick setup
+-----------
+1. Create and activate the virtual environment:
+
+   py -3 -m venv venv
+   .\venv\Scripts\Activate.ps1
+
+2. Install dependencies and initialize Django:
+
+   pip install -r requirements.txt
+   Copy-Item .env.example .env
+   python manage.py migrate
+   python manage.py check
+
+3. Start Ollama and download local models:
+
+   ollama serve
+   ollama pull qwen2.5-coder:1.5b
+   ollama pull llava:latest
+   ollama pull nomic-embed-text
+
+4. Start the app in another PowerShell window:
+
+   .\venv\Scripts\Activate.ps1
+   python manage.py runserver
+
+The app is then available at http://127.0.0.1:8000/.
+
+Portable setup script
+---------------------
+The setup script automates the virtual environment, dependencies, migrations,
+health checks, and Ollama model checks:
+
+   Set-ExecutionPolicy -Scope Process Bypass
+   .\scripts\setup-offline.ps1
+
+Optional examples:
+
+   .\scripts\setup-offline.ps1 -Model qwen2.5-coder:7b
+   .\scripts\setup-offline.ps1 -SkipOllama
+   .\scripts\setup-offline.ps1 -SkipVision
+
+If Ollama is installed elsewhere or should be configured manually, use
+-SkipOllama and run the ollama commands above yourself.
+
+Project folder watcher
+----------------------
+Keep a project index up to date in the background:
+
+   python manage.py watch_project C:\path\to\project --username YOUR_USER
+
+Useful options:
+
+   python manage.py watch_project C:\path\to\project --username YOUR_USER --once
+   python manage.py watch_project C:\path\to\project --username YOUR_USER --interval 2
+
+The watcher incrementally indexes supported files and updates semantic
+embeddings when the local files change.
+
+Feature notes
+-------------
+- Semantic RAG uses the Ollama embedding endpoint and the model in
+  OLLAMA_EMBED_MODEL (default: nomic-embed-text). If embeddings are unavailable,
+  the app falls back to lexical search.
+- Document chat supports TXT, Markdown, code, PDF, and DOCX files with local
+  source citations. PDF/DOCX support uses pypdf and python-docx.
+- OCR is available from the workspace OCR control for images and scanned PDFs.
+  It uses the local vision model and PyMuPDF for PDF page rendering.
+- Offline voice input uses the local faster-whisper runtime. Use the
+  "Record offline audio" control in the workspace.
+- Live tool/job events are streamed through /api/agent/events/ and displayed in
+  Workspace > Metrics. Polling remains available as a fallback.
+- Smart model routing chooses a local model when no model is manually selected.
+  Hardware hints can be set with LOCAL_AI_MEMORY_GB and LOCAL_AI_GPU.
+- Secret redaction removes vault values and common token/password patterns before
+  indexing or sending content to a local model. Original project files are not
+  modified.
+- Encrypted backups are available from the UI or
+  /api/backup/?encrypted=1. The encryption key is derived from DJANGO_SECRET_KEY;
+  keep that setting stable or older encrypted backups cannot be restored.
+- The model benchmark is available in Ollama settings. Enter comma-separated
+  local model names; the recommendation optimizes measured speed, not quality.
+
+Useful environment variables
+----------------------------
+Set these in .env when needed:
+
+   OLLAMA_BASE_URL=http://127.0.0.1:11434
+   OLLAMA_MODEL=qwen2.5-coder:1.5b
+   OLLAMA_VISION_MODEL=llava:latest
+   OLLAMA_EMBED_MODEL=nomic-embed-text
+   WHISPER_MODEL=base
+   WHISPER_DEVICE=cpu
+   WHISPER_COMPUTE_TYPE=int8
+   LOCAL_AI_MEMORY_GB=16
+   LOCAL_AI_GPU=auto
+
+The exact model names depend on the models installed with `ollama list`.
+
+Troubleshooting
+---------------
+- Ollama connection errors: start `ollama serve`, verify `ollama list`, and
+  check OLLAMA_BASE_URL.
+- Semantic search falls back to keyword search: run
+  `ollama pull nomic-embed-text` or set OLLAMA_EMBED_MODEL to an installed
+  embedding model.
+- OCR errors: confirm PyMuPDF is installed with
+  `pip install -r requirements.txt` and that the configured vision model exists.
+- Whisper errors: install the requirements, ensure the Whisper model can be
+  downloaded once, and use WHISPER_DEVICE=cpu with WHISPER_COMPUTE_TYPE=int8
+  on CPU-only machines.
+- PowerShell blocks scripts: run
+  `Set-ExecutionPolicy -Scope Process Bypass` for the current window only.
+- To verify the project after changes, run:
+
+   python manage.py check
+   node --check static\chat\app.js
+   git diff --check
+
+Privacy reminder
+----------------
+Keep .env and local model/data directories out of Git. Do not store API keys or
+passwords in prompts or project files. The Privacy dashboard shows local mode,
+network locking, data location, and redaction controls.
