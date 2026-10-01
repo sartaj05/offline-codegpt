@@ -30,6 +30,9 @@ const ollamaFallbackModel = document.getElementById("ollamaFallbackModel");
 const ollamaHealthStatus = document.getElementById("ollamaHealthStatus");
 const ollamaPullProgress = document.getElementById("ollamaPullProgress");
 const modelInventory = document.getElementById("modelInventory");
+const benchmarkModels = document.getElementById("benchmarkModels");
+const benchmarkPrompt = document.getElementById("benchmarkPrompt");
+const benchmarkOutput = document.getElementById("benchmarkOutput");
 const setupPanel = document.getElementById("setupPanel");
 const setupStatus = document.getElementById("setupStatus");
 const setupModel = document.getElementById("setupModel");
@@ -808,6 +811,30 @@ function toggleObservability() {
     if (observabilityTimer) window.clearInterval(observabilityTimer);
     observabilityTimer = window.setInterval(loadObservability, 5000);
     startAgentEventStream();
+}
+
+async function runModelBenchmark() {
+    const models = benchmarkModels.value.split(",").map(item => item.trim()).filter(Boolean);
+    if (!models.length) {
+        benchmarkOutput.innerText = "Add at least one model.";
+        return;
+    }
+    benchmarkOutput.innerText = "Running local benchmark...";
+    try {
+        const response = await fetch("/api/models/benchmark/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ models_json: JSON.stringify(models), prompt: benchmarkPrompt.value }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Benchmark failed.");
+        const rows = data.results.map(item => item.success
+            ? `${item.model} · ${item.latency_ms} ms · ${item.chars_per_second} chars/s`
+            : `${item.model} · failed · ${item.error}`);
+        benchmarkOutput.innerText = rows.join("\n") + (data.recommendation ? `\n\nRecommended: ${data.recommendation.model}` : "");
+    } catch (error) {
+        benchmarkOutput.innerText = "Benchmark error: " + error.message;
+    }
 }
 
 function startAgentEventStream() {

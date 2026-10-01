@@ -3105,6 +3105,48 @@ def model_route(request):
 
 @login_required(login_url="/login/")
 @require_POST
+def model_benchmark(request):
+    settings = _user_ollama_settings(request.user)
+    try:
+        models = json.loads(request.POST.get("models_json", "[]"))
+        if not isinstance(models, list):
+            raise ValueError
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "models_json must be a JSON array."}, status=400)
+    models = [str(model).strip()[:100] for model in models if str(model).strip()][:8]
+    if not models:
+        return JsonResponse({"success": False, "error": "Add at least one local model."}, status=400)
+    prompt = request.POST.get("prompt", "Reply with a concise local benchmark response.").strip()[:4000]
+    results = []
+    for model in models:
+        started = time.perf_counter()
+        try:
+            response = requests.post(
+                f"{settings.server_url}/api/generate",
+                json={"model": model, "prompt": prompt, "stream": False, "options": {"temperature": 0}},
+                timeout=(10, 180),
+            )
+            elapsed_ms = round((time.perf_counter() - started) * 1000)
+            if not response.ok:
+                results.append({"model": model, "success": False, "latency_ms": elapsed_ms, "error": response.text[:300]})
+                continue
+            text = response.json().get("response", "")
+            results.append({
+                "model": model,
+                "success": True,
+                "latency_ms": elapsed_ms,
+                "output_chars": len(text),
+                "chars_per_second": round(len(text) / max(elapsed_ms / 1000, 0.001), 1),
+            })
+        except (requests.RequestException, ValueError, TypeError) as exc:
+            results.append({"model": model, "success": False, "latency_ms": round((time.perf_counter() - started) * 1000), "error": str(exc)[:300]})
+    successful = [item for item in results if item["success"]]
+    recommendation = max(successful, key=lambda item: (item.get("chars_per_second", 0), -item.get("latency_ms", 0))) if successful else None
+    return JsonResponse({"success": True, "results": results, "recommendation": recommendation})
+
+
+@login_required(login_url="/login/")
+@require_POST
 def devcontainer_generate(request):
     project_name = request.POST.get("project_name", "Syntax Local AI")
     files = []

@@ -161,6 +161,13 @@
             <div id="modelInventory" class="model-inventory">Model size and hardware guidance will appear after the local server is checked.</div>
             <div id="ollamaSettingsStatus" class="settings-status"></div>
             <button type="button" class="settings-save-button" onclick="saveOllamaSettings()">Save settings</button>
+            <div class="model-benchmark">
+                <strong>Local model benchmark</strong>
+                <input id="benchmarkModels" placeholder="Models, comma separated" value="{{ default_model }}">
+                <textarea id="benchmarkPrompt" placeholder="Short prompt used for every local model...">Explain why local inference is useful in one sentence.</textarea>
+                <button type="button" onclick="runModelBenchmark()">Benchmark models</button>
+                <pre id="benchmarkOutput">No benchmark run yet.</pre>
+            </div>
         </section>
         <section id="privacyPanel" class="privacy-panel" hidden>
             <div class="settings-heading">
