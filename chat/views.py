@@ -3902,10 +3902,38 @@ def _mcp_connector_payload(connector):
     }
 
 
+def _mcp_config_is_local(config):
+    for key in ("url", "server_url", "endpoint"):
+        value = str(config.get(key, "")).strip()
+        if value:
+            parsed = urlparse(value)
+            if parsed.hostname and parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
+                return False
+    return True
+
+
 @login_required(login_url="/login/")
 @require_http_methods(["GET", "POST"])
 def mcp_connectors(request):
     if request.method == "POST":
+        action = request.POST.get("action", "create").strip().lower()
+        if action == "import":
+            try:
+                imported = json.loads(request.POST.get("connectors_json", "[]"))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return JsonResponse({"success": False, "error": "Connector export must be valid JSON."}, status=400)
+            if not isinstance(imported, list) or len(imported) > 50:
+                return JsonResponse({"success": False, "error": "Import a JSON array with at most 50 connectors."}, status=400)
+            created = []
+            for item in imported:
+                if not isinstance(item, dict) or not item.get("name") or item.get("connector_type") not in dict(McpConnector.CONNECTOR_TYPES):
+                    continue
+                config = item.get("config") if isinstance(item.get("config"), dict) else {}
+                if not _mcp_config_is_local(config):
+                    continue
+                connector, _ = McpConnector.objects.update_or_create(owner=request.user, name=str(item["name"])[:120], defaults={"connector_type": item["connector_type"], "config": config, "enabled": bool(item.get("enabled", True)), "allow_write": bool(item.get("allow_write", False))})
+                created.append(_mcp_connector_payload(connector))
+            return JsonResponse({"success": True, "connectors": created})
         name = request.POST.get("name", "").strip()
         connector_type = request.POST.get("connector_type", "custom").strip()
         if not name or connector_type not in dict(McpConnector.CONNECTOR_TYPES):
@@ -3916,6 +3944,8 @@ def mcp_connectors(request):
                 raise ValueError
         except (TypeError, ValueError, json.JSONDecodeError):
             return JsonResponse({"success": False, "error": "Connector config must be a JSON object."}, status=400)
+        if not _mcp_config_is_local(config):
+            return JsonResponse({"success": False, "error": "Only localhost connector endpoints are allowed in offline mode."}, status=400)
         connector = McpConnector.objects.create(
             owner=request.user,
             name=name[:120],
@@ -3937,6 +3967,23 @@ def mcp_connectors(request):
             )
         ),
     })
+
+
+@login_required(login_url="/login/")
+@require_GET
+def mcp_connector_export(request):
+    connectors = list(McpConnector.objects.filter(owner=request.user).order_by("name"))
+    return JsonResponse({"format": "offline-codegpt-mcp", "version": 1, "connectors": [_mcp_connector_payload(item) for item in connectors]})
+
+
+@login_required(login_url="/login/")
+@require_GET
+def mcp_connector_health(request, connector_id):
+    connector = get_object_or_404(McpConnector, id=connector_id, owner=request.user)
+    config = connector.config if isinstance(connector.config, dict) else {}
+    path = str(config.get("path", ""))
+    path_exists = bool(path and os.path.exists(path))
+    return JsonResponse({"success": True, "connector": _mcp_connector_payload(connector), "health": {"local_only": _mcp_config_is_local(config), "path_exists": path_exists, "enabled": connector.enabled}})
 
 
 @login_required(login_url="/login/")

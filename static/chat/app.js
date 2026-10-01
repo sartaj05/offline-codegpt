@@ -58,6 +58,7 @@ const mcpSearchQuery = document.getElementById("mcpSearchQuery");
 const mcpOutput = document.getElementById("mcpOutput");
 const mcpFileName = document.getElementById("mcpFileName");
 const mcpFileContent = document.getElementById("mcpFileContent");
+const mcpConnectorBundle = document.getElementById("mcpConnectorBundle");
 const extensionsPanel = document.getElementById("extensionsPanel");
 const extensionsStatus = document.getElementById("extensionsStatus");
 const extensionsList = document.getElementById("extensionsList");
@@ -1902,7 +1903,11 @@ function renderMcpConnectors(connectors) {
         remove.type = "button";
         remove.innerText = "Remove";
         remove.onclick = () => deleteMcpConnector(connector.id);
-        row.append(label, remove);
+        const health = document.createElement("button");
+        health.type = "button";
+        health.innerText = "Health";
+        health.onclick = () => checkMcpConnectorHealth(connector.id);
+        row.append(label, health, remove);
         mcpConnectorList.appendChild(row);
     });
 }
@@ -2159,6 +2164,34 @@ function addAssistantActions(element) {
 
     actions.append(copyButton, saveButton, downloadButton, speakButton, feedbackMenu);
     element.parentElement.appendChild(actions);
+}
+
+async function exportMcpConnectors() {
+    const response = await fetch("/api/mcp/connectors/export/");
+    const data = await response.json();
+    if (mcpConnectorBundle) mcpConnectorBundle.value = JSON.stringify(data, null, 2);
+    mcpOutput.innerText = "Connector hub export ready."
+}
+
+async function importMcpConnectors() {
+    if (!mcpConnectorBundle || !mcpConnectorBundle.value.trim()) return;
+    try {
+        const response = await fetch("/api/mcp/connectors/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ action: "import", connectors_json: mcpConnectorBundle.value }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Import failed.");
+        renderMcpConnectors(data.connectors || []);
+        mcpOutput.innerText = "Imported " + (data.connectors || []).length + " local connector(s).";
+    } catch (error) { mcpOutput.innerText = "Connector import error: " + error; }
+}
+
+async function checkMcpConnectorHealth(id) {
+    const response = await fetch("/api/mcp/connectors/" + id + "/health/");
+    const data = await response.json();
+    mcpOutput.innerText = data.success ? JSON.stringify(data.health, null, 2) : (data.error || "Health check failed.");
 }
 
 function renderImagePreview(files) {

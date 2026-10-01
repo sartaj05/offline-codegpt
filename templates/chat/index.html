@@ -368,6 +368,11 @@
                 <input id="mcpConnectorConfig" placeholder='Config JSON, e.g. {"path":"./docs"}'>
             </div>
             <button type="button" class="mcp-save-button" onclick="saveMcpConnector()">Add connector</button>
+            <div class="mcp-tool-row">
+                <button type="button" onclick="exportMcpConnectors()">Export connector hub</button>
+                <button type="button" onclick="importMcpConnectors()">Import connector JSON</button>
+            </div>
+            <textarea id="mcpConnectorBundle" class="mcp-file-content" placeholder="Paste exported connector JSON here..."></textarea>
             <div id="mcpConnectorList" class="mcp-connector-list"></div>
             <div class="mcp-tool-row">
                 <input id="mcpSearchQuery" placeholder="Search project with project.search">
