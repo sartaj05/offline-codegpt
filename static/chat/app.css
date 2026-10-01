@@ -509,6 +509,9 @@ select { padding: 0 10px; }
 .image-preview { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; padding: 8px; border: 1px solid rgba(224,188,255,.24); border-radius: 8px; background: rgba(224,188,255,.04); }
 .image-preview-item { display: grid; gap: 4px; width: 120px; color: var(--muted); font-size: 9px; }
 .image-preview-item img { width: 120px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
+.format-control { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 8px 0; color: var(--muted); font-size: 10px; }
+.format-control select { padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); font-size: 10px; }
+.format-control textarea { flex: 1 1 100%; min-height: 58px; padding: 7px; border: 1px solid var(--border); border-radius: 6px; background: #11141b; color: var(--text); font-family: Consolas, monospace; font-size: 10px; }
 .source-citations { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--border); }
 .source-citations-label { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .source-citation { padding: 5px 8px; border: 1px solid rgba(99,230,190,.3); border-radius: 999px; background: rgba(99,230,190,.08); color: var(--accent); font-family: Consolas, monospace; font-size: 10px; cursor: pointer; }

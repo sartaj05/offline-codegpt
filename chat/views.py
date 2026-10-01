@@ -1,5 +1,6 @@
 import ast
 import base64
+import csv
 import difflib
 import hashlib
 import io
@@ -1451,6 +1452,22 @@ def export_session(request, session_id):
     if export_format == "pdf":
         response = HttpResponse(_session_pdf(session), content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}.pdf"'
+        return response
+
+    if export_format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["role", "content", "filename", "model", "created_at"])
+        for message in session.messages.order_by("created_at"):
+            writer.writerow([message.role, message.content, message.filename or "", message.model_name or "", message.created_at.isoformat()])
+        response = HttpResponse(output.getvalue(), content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="{filename}.csv"'
+        return response
+
+    if export_format == "code":
+        code = "\n\n".join(message.content for message in session.messages.filter(role="assistant").order_by("created_at"))
+        response = HttpResponse(code, content_type="text/plain")
+        response["Content-Disposition"] = f'attachment; filename="{filename}-answers.txt"'
         return response
 
     return JsonResponse({"success": False, "error": "Unsupported export format."}, status=400)
@@ -3281,6 +3298,18 @@ def ask_code(request):
     session_id = request.POST.get("session_id", "").strip()
     edit_message_id = request.POST.get("edit_message_id", "").strip()
     requested_model = request.POST.get("model", "").strip()
+    output_format = request.POST.get("output_format", "text").strip().lower()
+    output_schema_raw = request.POST.get("output_schema", "").strip()
+    output_schema = None
+    if output_format == "json_schema" and output_schema_raw:
+        try:
+            output_schema = json.loads(output_schema_raw)
+            if not isinstance(output_schema, dict):
+                raise ValueError
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return JsonResponse({"success": False, "error": "Output schema must be a valid JSON object."}, status=400)
+    if output_format not in {"text", "json", "json_schema"}:
+        output_format = "text"
     selected_context_files = list(dict.fromkeys(
         item.strip()[:500] for item in request.POST.getlist("context_files") if item.strip()
     ))[:50]
@@ -3471,6 +3500,9 @@ Code or additional user input (optional):
 
 {truncated_note}
 
+Output format:
+{("Return valid JSON only." if output_format == "json" else "Return JSON matching this schema exactly: " + json.dumps(output_schema) if output_format == "json_schema" else "Use normal Markdown/text.")}
+
 Instructions:
 1. Answer the user's request directly, even when no files, project context, or source code are provided.
 2. Treat uploaded files and project context as optional supporting information, not a prerequisite for an answer.
@@ -3508,6 +3540,7 @@ Instructions:
                             "top_p": user_settings.top_p if user_settings else 0.9,
                             "num_ctx": max(512, (user_settings.max_context_chars if user_settings else 24000) // 4),
                         },
+                        **({"format": output_schema or "json"} if output_format in {"json", "json_schema"} else {}),
                         **({"images": image_data} if image_data else {}),
                     },
                     timeout=(10, 300),

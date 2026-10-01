@@ -116,6 +116,8 @@
                             <button type="button" onclick="exportChat('markdown')">MD</button>
                             <button type="button" onclick="exportChat('json')">JSON</button>
                             <button type="button" onclick="exportChat('pdf')">PDF</button>
+                            <button type="button" onclick="exportChat('csv')">CSV</button>
+                            <button type="button" onclick="exportChat('code')">Answers</button>
                         </div>
                     </details>
                     <form method="post" action="{% url 'logout' %}">
@@ -699,6 +701,15 @@
                 <button id="toggleAdvancedComposer" type="button" onclick="toggleAdvancedComposer()">Add code or files</button>
                 <button type="button" onclick="toggleVoiceInput()" aria-label="Start local speech input">🎙 Voice input</button>
                 <span>Optional tools. Send a prompt to get your answer.</span>
+            </div>
+            <div class="format-control">
+                <label for="responseFormat">Response format</label>
+                <select id="responseFormat">
+                    <option value="text">Text / Markdown</option>
+                    <option value="json">JSON</option>
+                    <option value="json_schema">JSON schema</option>
+                </select>
+                <textarea id="outputSchema" placeholder='Optional JSON schema, e.g. {"type":"object","properties":{"answer":{"type":"string"}}}' hidden></textarea>
             </div>
             <div id="advancedComposer" class="advanced-composer" hidden>
             <div class="code-panel">

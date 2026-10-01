@@ -201,6 +201,8 @@ const imageInput = document.getElementById("imageInput");
 const imagePreview = document.getElementById("imagePreview");
 const sendBtn = document.getElementById("sendBtn");
 const draftStatus = document.getElementById("draftStatus");
+const responseFormat = document.getElementById("responseFormat");
+const outputSchema = document.getElementById("outputSchema");
 const sendStatus = document.createElement("div");
 sendStatus.className = "send-status";
 sendStatus.setAttribute("aria-live", "polite");
@@ -2604,6 +2606,8 @@ async function sendMessage() {
     formData.append("code", code);
     formData.append("model", modelInput.value);
     formData.append("language", languageInput.value);
+    formData.append("output_format", responseFormat ? responseFormat.value : "text");
+    if (outputSchema && outputSchema.value.trim()) formData.append("output_schema", outputSchema.value.trim());
     if (currentSessionId) formData.append("session_id", currentSessionId);
     if (editId) formData.append("edit_message_id", editId);
     files.forEach(file => {
@@ -3613,6 +3617,9 @@ promptInput.addEventListener("keydown", function (event) {
 
 promptInput.addEventListener("input", scheduleDraftSave);
 if (codeInput) codeInput.addEventListener("input", scheduleDraftSave);
+if (responseFormat) responseFormat.addEventListener("change", () => {
+    if (outputSchema) outputSchema.hidden = responseFormat.value !== "json_schema";
+});
 document.addEventListener("keydown", function (event) {
     if (event.key === "Escape" && activeRequestController) {
         event.preventDefault();
