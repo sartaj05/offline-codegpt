@@ -499,6 +499,19 @@ class KnowledgeCollectionDocument(models.Model):
         constraints = [models.UniqueConstraint(fields=["collection", "document"], name="unique_collection_document")]
 
 
+class CodeSymbol(models.Model):
+    document = models.ForeignKey(KnowledgeDocument, on_delete=models.CASCADE, related_name="symbols")
+    name = models.CharField(max_length=240)
+    kind = models.CharField(max_length=40)
+    line_start = models.PositiveIntegerField(default=1)
+    line_end = models.PositiveIntegerField(default=1)
+    signature = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["name"]), models.Index(fields=["kind"])]
+
+
 class KnowledgeChunk(models.Model):
     """
     Stores small chunks of uploaded code/text for local search.

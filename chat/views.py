@@ -61,6 +61,7 @@ from .models import (
     KnowledgeDocument,
     KnowledgeCollection,
     KnowledgeCollectionDocument,
+    CodeSymbol,
     LocalModelConfig,
     McpConnector,
     McpToolCall,
@@ -105,6 +106,7 @@ from .api_contract import analyze_api_contract
 from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
 from .runtimes import RUNTIME_CHOICES, get_runtime_adapter
+from .symbols import extract_symbols
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -712,6 +714,7 @@ def _ollama_embeddings(texts, base_url, runtime="ollama"):
 
 def _index_knowledge_document(document, owner):
     document.chunks.all().delete()
+    document.symbols.all().delete()
     indexed_text = redact_sensitive_text(owner, document.original_text)
     contents = [
         indexed_text[start:start + CHUNK_SIZE]
@@ -732,6 +735,10 @@ def _index_knowledge_document(document, owner):
             embedding=embeddings[index] if index < len(embeddings) else [],
         )
         for index, content in enumerate(contents)
+    ])
+    CodeSymbol.objects.bulk_create([
+        CodeSymbol(document=document, **symbol)
+        for symbol in extract_symbols(document.filename or document.title, indexed_text)
     ])
 
 
@@ -1355,6 +1362,44 @@ def project_document_create(request):
             "size_bytes": document.file_size_bytes,
         },
     })
+
+
+@login_required(login_url="/login/")
+@require_GET
+def project_symbols(request):
+    query = request.GET.get("q", "").strip()[:240]
+    try:
+        document_id = int(request.GET.get("document_id", "0")) or None
+    except (TypeError, ValueError):
+        document_id = None
+    symbols = CodeSymbol.objects.filter(document__owner=request.user, document__is_active=True).select_related("document")
+    if query:
+        symbols = symbols.filter(Q(name__icontains=query) | Q(signature__icontains=query))
+    if document_id:
+        symbols = symbols.filter(document_id=document_id)
+    return JsonResponse({"success": True, "symbols": [{
+        "id": symbol.id,
+        "name": symbol.name,
+        "kind": symbol.kind,
+        "filename": symbol.document.filename,
+        "line_start": symbol.line_start,
+        "line_end": symbol.line_end,
+        "signature": symbol.signature,
+    } for symbol in symbols[:200]]})
+
+
+@login_required(login_url="/login/")
+@require_GET
+def symbol_impact(request):
+    name = request.GET.get("name", "").strip()[:240]
+    if not name:
+        return JsonResponse({"success": False, "error": "Enter a symbol name."}, status=400)
+    symbols = CodeSymbol.objects.filter(document__owner=request.user, name__icontains=name).select_related("document")
+    impacted = []
+    for document in KnowledgeDocument.objects.filter(owner=request.user, is_active=True):
+        if name.lower() in document.original_text.lower():
+            impacted.append({"filename": document.filename, "matches": document.original_text.lower().count(name.lower())})
+    return JsonResponse({"success": True, "symbol": name, "definitions": [{"filename": item.document.filename, "kind": item.kind, "line_start": item.line_start, "line_end": item.line_end} for item in symbols[:100]], "impacted_files": impacted[:100]})
 
 
 @login_required(login_url="/login/")
@@ -4274,6 +4319,14 @@ def ask_code(request):
         f"{item['content']}"
         for item in relevant_chunks
     )
+    symbol_terms = [term for term in re.findall(r"[A-Za-z_][A-Za-z0-9_]{2,}", safe_prompt or safe_code)[:20]]
+    related_symbols = CodeSymbol.objects.filter(document__owner=owner, document__is_active=True).filter(
+        Q(name__in=symbol_terms) | Q(name__icontains=(symbol_terms[0] if symbol_terms else "__none__"))
+    ).select_related("document")[:30] if owner and symbol_terms else []
+    symbol_context = "\n".join(
+        f"{item.kind} {item.name} in {item.document.filename}:{item.line_start}-{item.line_end} — {item.signature}"
+        for item in related_symbols
+    )
 
     full_prompt = f"""
 You are a fully offline coding assistant running locally.
@@ -4292,6 +4345,9 @@ Conversation context (local and bounded):
 
 Relevant project context (optional):
 {knowledge_context or "None"}
+
+Related code symbols and definitions (optional):
+{symbol_context or "None"}
 
 Code or additional user input (optional):
  {safe_final_code or "None"}
