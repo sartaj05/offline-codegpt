@@ -1086,7 +1086,10 @@ def manage_session(request, session_id):
         session.is_archived = True
     elif action == "clear_context":
         session.messages.all().delete()
-        session.save(update_fields=["updated_at"])
+        session.context_summary = ""
+        session.context_message_count = 0
+        session.context_updated_at = None
+        session.save(update_fields=["context_summary", "context_message_count", "context_updated_at", "updated_at"])
         return JsonResponse({"success": True, "id": session.id, "cleared": True})
     elif action == "delete":
         session.delete()
@@ -1352,10 +1355,60 @@ def session_messages(request, session_id):
     })
 
 
+def _build_conversation_context(session, max_chars=24000, exclude_message_id=None):
+    messages = list(session.messages.order_by("created_at"))
+    if exclude_message_id:
+        messages = [message for message in messages if message.id != exclude_message_id]
+    total_chars = sum(len(message.content or "") for message in messages)
+    if not messages:
+        return "None", {"message_count": 0, "total_chars": 0, "used_chars": 0, "summarized": False}
+
+    budget = max(2000, int(max_chars or 24000) // 3)
+    recent = []
+    used_chars = 0
+    for message in reversed(messages):
+        line = f"{message.role.title()}: {(message.content or '').strip()}"
+        if recent and used_chars + len(line) > budget:
+            break
+        recent.append(line[: max(200, budget - used_chars)])
+        used_chars += len(recent[-1])
+    recent.reverse()
+    older = messages[: max(0, len(messages) - len(recent))]
+    summary = session.context_summary
+    summarized = bool(older)
+    if older:
+        highlights = []
+        for message in older[-12:]:
+            compact = " ".join((message.content or "").split())
+            if compact:
+                highlights.append(f"{message.role.title()}: {compact[:240]}")
+        summary = (
+            f"Earlier conversation summary ({len(older)} messages):\n"
+            + "\n".join(f"- {item}" for item in highlights)
+        )[: max(1000, budget)]
+        session.context_summary = summary
+        session.context_message_count = len(messages)
+        session.context_updated_at = timezone.now()
+        session.save(update_fields=["context_summary", "context_message_count", "context_updated_at", "updated_at"])
+    context_parts = []
+    if summary:
+        context_parts.append(summary)
+    if recent:
+        context_parts.append("Recent conversation:\n" + "\n\n".join(recent))
+    return "\n\n".join(context_parts) or "None", {
+        "message_count": len(messages),
+        "total_chars": total_chars,
+        "used_chars": len("\n\n".join(context_parts)),
+        "summarized": summarized,
+    }
+
+
 @login_required(login_url="/login/")
 @require_GET
 def session_summary(request, session_id):
     session = get_object_or_404(ChatSession, id=session_id, owner=request.user)
+    settings = _user_ollama_settings(request.user)
+    context, stats = _build_conversation_context(session, settings.max_context_chars)
     messages = list(session.messages.order_by("created_at"))
     user_requests = []
     for message in messages:
@@ -1379,6 +1432,9 @@ def session_summary(request, session_id):
         "success": True,
         "session_id": session.id,
         "summary": summary,
+        "context": context,
+        "context_stats": stats,
+        "stored_summary": session.context_summary,
         "message_count": len(messages),
     })
 
@@ -3733,6 +3789,12 @@ def ask_code(request):
         model_name=model_name,
     )
 
+    conversation_context, context_stats = _build_conversation_context(
+        session,
+        user_settings.max_context_chars if user_settings else 24000,
+        exclude_message_id=user_message.id,
+    )
+
     max_code_chars = 24_000
     truncated_note = ""
     if len(final_code) > max_code_chars:
@@ -3762,6 +3824,9 @@ User request:
 
 Uploaded files (optional):
 {", ".join(uploaded_filenames) or "None"}
+
+Conversation context (local and bounded):
+{conversation_context}
 
 Relevant project context (optional):
 {knowledge_context or "None"}
@@ -3868,6 +3933,7 @@ Instructions:
                     "images": len(image_data),
                     "session_id": session.id,
                     "context_chars": len(full_prompt),
+                    "conversation_context": context_stats,
                     "output_chars_per_second": round(len(answer) / max(ai_event.duration_ms / 1000, 0.001), 1),
                     "first_token_ms": first_token_ms or 0,
                     "output_format": output_format,

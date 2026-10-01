@@ -328,6 +328,9 @@ class ChatSession(models.Model):
     is_pinned = models.BooleanField(default=False)
     is_archived = models.BooleanField(default=False)
     tags = models.CharField(max_length=300, blank=True, default="")
+    context_summary = models.TextField(blank=True, default="")
+    context_message_count = models.PositiveIntegerField(default=0)
+    context_updated_at = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return self.title
