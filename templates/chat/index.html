@@ -232,9 +232,11 @@
                     <option value="phi3:mini">phi3:mini</option>
                 </select>
                 <button type="button" onclick="runSetupCheck()">Check Ollama</button>
+                <button type="button" onclick="runSetupDiagnostics()">Full diagnostics</button>
                 <button type="button" onclick="installSetupModel()">Install model</button>
                 <button type="button" onclick="finishSetup()">Mark ready</button>
             </div>
+            <pre id="setupDiagnosticsOutput" class="setup-status">Full hardware and runtime diagnostics have not run.</pre>
         </section>
         <section id="schedulerPanel" class="setup-panel" hidden>
             <div class="settings-heading">

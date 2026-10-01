@@ -39,6 +39,7 @@ const benchmarkOutput = document.getElementById("benchmarkOutput");
 const setupPanel = document.getElementById("setupPanel");
 const setupStatus = document.getElementById("setupStatus");
 const setupModel = document.getElementById("setupModel");
+const setupDiagnosticsOutput = document.getElementById("setupDiagnosticsOutput");
 const schedulerPanel = document.getElementById("schedulerPanel");
 const schedulerName = document.getElementById("schedulerName");
 const schedulerType = document.getElementById("schedulerType");
@@ -474,6 +475,34 @@ async function runSetupCheck() {
         setupStatus.innerText = "Ollama is ready. " + data.models.length + " model(s) available.";
     } catch (error) {
         setupStatus.innerText = "Ollama is not ready: " + error.message;
+    }
+}
+
+async function runSetupDiagnostics() {
+    if (setupDiagnosticsOutput) setupDiagnosticsOutput.innerText = "Running local onboarding diagnostics...";
+    try {
+        const response = await fetch("/api/setup/diagnostics/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Diagnostics failed.");
+        const runtimeLines = Object.entries(data.runtimes).map(([name, runtime]) =>
+            `${name}: ${runtime.status} · ${runtime.models.length} model(s) · ${runtime.latency_ms} ms${runtime.error ? " · " + runtime.error : ""}`
+        );
+        const lines = [
+            `Python: ${data.app.python}`,
+            `Platform: ${data.app.platform}`,
+            `Virtual environment: ${data.app.venv_detected ? "detected" : "not detected"}`,
+            `Requirements file: ${data.app.requirements_file ? "found" : "missing"}`,
+            `Configured runtime: ${data.configured_runtime}`,
+            "",
+            "Runtime probes:",
+            ...runtimeLines,
+            "",
+            `Imported local models: ${data.local_models.length}`,
+            data.recommended_next_step,
+        ];
+        if (setupDiagnosticsOutput) setupDiagnosticsOutput.innerText = lines.join("\n");
+    } catch (error) {
+        if (setupDiagnosticsOutput) setupDiagnosticsOutput.innerText = "Diagnostics error: " + error.message;
     }
 }
 

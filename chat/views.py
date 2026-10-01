@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import os
+import platform
 import re
 import secrets
 import sqlite3
@@ -1136,6 +1137,52 @@ def ollama_health(request):
             "latency_ms": round((time.perf_counter() - started) * 1000),
             "error": settings.runtime + " health check failed: " + str(exc),
         }, status=503)
+
+@login_required(login_url="/login/")
+@require_GET
+def setup_diagnostics(request):
+    user_settings = _user_ollama_settings(request.user)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    runtime_urls = {
+        "ollama": user_settings.server_url if user_settings.runtime == "ollama" else os.environ.get("LOCAL_AI_OLLAMA_URL", "http://127.0.0.1:11434"),
+        "lmstudio": user_settings.server_url if user_settings.runtime == "lmstudio" else os.environ.get("LOCAL_AI_LMSTUDIO_URL", "http://127.0.0.1:1234"),
+        "llamacpp": user_settings.server_url if user_settings.runtime == "llamacpp" else os.environ.get("LOCAL_AI_LLAMA_CPP_URL", "http://127.0.0.1:8080"),
+    }
+    runtimes = {}
+    for runtime, url in runtime_urls.items():
+        started = time.perf_counter()
+        try:
+            models = get_runtime_adapter(runtime, url).models()
+            runtimes[runtime] = {
+                "status": "ready",
+                "url": url,
+                "models": [item.get("name") for item in models if item.get("name")],
+                "latency_ms": round((time.perf_counter() - started) * 1000),
+            }
+        except (requests.RequestException, ValueError, TypeError) as exc:
+            runtimes[runtime] = {
+                "status": "offline",
+                "url": url,
+                "models": [],
+                "latency_ms": round((time.perf_counter() - started) * 1000),
+                "error": str(exc)[:300],
+            }
+    return JsonResponse({
+        "success": True,
+        "app": {
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+            "project_root": project_root,
+            "database_path": str(settings.DATABASES["default"].get("NAME", "")),
+            "venv_detected": bool(os.environ.get("VIRTUAL_ENV")) or os.path.exists(os.path.join(project_root, ".venv")),
+            "requirements_file": os.path.exists(os.path.join(project_root, "requirements.txt")),
+        },
+        "configured_runtime": user_settings.runtime,
+        "runtimes": runtimes,
+        "local_models": _local_model_inventory(),
+        "recommended_next_step": "Start the configured local runtime, choose a model, then use Test connection.",
+    })
+
 
 @login_required(login_url="/login/")
 @require_POST
