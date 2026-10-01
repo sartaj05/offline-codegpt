@@ -143,7 +143,34 @@ EXTENSION_CATALOG = [
 ]
 
 
-def _agent_plan(goal):
+def _agent_plan(goal, custom_steps=None):
+    if custom_steps:
+        plan = []
+        for raw_step in custom_steps[:12]:
+            title = str(raw_step).strip()[:160]
+            if not title:
+                continue
+            lowered = title.lower()
+            kind = "read"
+            if any(word in lowered for word in ("edit", "write", "change", "patch")):
+                kind = "file_write"
+            elif any(word in lowered for word in ("test", "run", "execute")):
+                kind = "execute"
+            elif any(word in lowered for word in ("commit", "branch", "git")):
+                kind = "git_write"
+            requires_approval = kind in {"file_write", "execute", "git_write"}
+            plan.append({
+                "title": title,
+                "description": f"Checkpoint for: {title}",
+                "kind": kind,
+                "requires_approval": requires_approval,
+                "approved": not requires_approval,
+                "completed": False,
+                "attempts": 0,
+                "checkpoint": {},
+            })
+        if plan:
+            return plan
     plan = [
         {
             "title": "Inspect project context",
@@ -1822,11 +1849,22 @@ def agent_plan(request):
         return JsonResponse({"success": False, "error": "Describe the task for the agent."}, status=400)
     if len(goal) > 4000:
         return JsonResponse({"success": False, "error": "Agent goals are limited to 4,000 characters."}, status=400)
+    custom_steps = []
+    raw_steps = request.POST.get("steps_json", "").strip()
+    if raw_steps:
+        try:
+            parsed_steps = json.loads(raw_steps)
+            if isinstance(parsed_steps, list):
+                custom_steps = parsed_steps
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return JsonResponse({"success": False, "error": "Custom plan steps must be valid JSON."}, status=400)
+    if not custom_steps:
+        custom_steps = [line.strip() for line in request.POST.get("steps", "").splitlines() if line.strip()]
     task = AgentTask.objects.create(
         owner=request.user,
         title=goal[:80],
         goal=goal,
-        plan=_agent_plan(goal),
+        plan=_agent_plan(goal, custom_steps),
     )
     return JsonResponse({"success": True, "task": _agent_payload(task)})
 

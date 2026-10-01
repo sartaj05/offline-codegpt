@@ -189,6 +189,7 @@ const remotePrHead = document.getElementById("remotePrHead");
 const remotePrBase = document.getElementById("remotePrBase");
 const remotePrBody = document.getElementById("remotePrBody");
 const agentGoal = document.getElementById("agentGoal");
+const agentSteps = document.getElementById("agentSteps");
 const agentStatus = document.getElementById("agentStatus");
 const agentPlan = document.getElementById("agentPlan");
 const agentLogs = document.getElementById("agentLogs");
@@ -3039,7 +3040,7 @@ async function createAgentPlan() {
                 "X-CSRFToken": csrfToken,
                 "Content-Type": "application/x-www-form-urlencoded",
             },
-            body: new URLSearchParams({ goal }),
+            body: new URLSearchParams({ goal, steps: agentSteps ? agentSteps.value : "" }),
         });
         const data = await response.json();
         if (!data.success) throw new Error(data.error || "Unable to create agent plan.");
