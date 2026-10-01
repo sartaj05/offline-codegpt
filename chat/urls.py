@@ -9,6 +9,7 @@ urlpatterns = [
     path("sso/<str:provider>/callback/", views.sso_callback, name="sso_callback"),
     path("", views.index, name="chat_home"),
     path("api/ask-code/", views.ask_code, name="ask_code"),
+    path("api/privacy/", views.privacy_dashboard, name="privacy_dashboard"),
     path("api/models/", views.model_list, name="model_list"),
     path("api/ollama/settings/", views.ollama_settings, name="ollama_settings"),
     path("api/ollama/health/", views.ollama_health, name="ollama_health"),

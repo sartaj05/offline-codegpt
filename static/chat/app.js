@@ -12,6 +12,12 @@ const toggleAdvancedComposerButton = document.getElementById("toggleAdvancedComp
 const codeInput = document.getElementById("codeInput");
 const modelInput = document.getElementById("model");
 const ollamaSettingsPanel = document.getElementById("ollamaSettingsPanel");
+const privacyPanel = document.getElementById("privacyPanel");
+const privacyRuntime = document.getElementById("privacyRuntime");
+const privacyNetworkLock = document.getElementById("privacyNetworkLock");
+const privacyStoreHistory = document.getElementById("privacyStoreHistory");
+const privacyRedactSecrets = document.getElementById("privacyRedactSecrets");
+const privacyStatus = document.getElementById("privacyStatus");
 const ollamaServerUrl = document.getElementById("ollamaServerUrl");
 const ollamaDefaultModel = document.getElementById("ollamaDefaultModel");
 const ollamaTemperature = document.getElementById("ollamaTemperature");
@@ -249,6 +255,50 @@ function openAdvancedComposer() {
 function toggleSetupPanel() {
     if (setupPanel) setupPanel.hidden = !setupPanel.hidden;
     if (setupPanel && !setupPanel.hidden) runSetupCheck();
+}
+
+function togglePrivacyPanel() {
+    if (privacyPanel) privacyPanel.hidden = !privacyPanel.hidden;
+    if (privacyPanel && !privacyPanel.hidden) loadPrivacySettings();
+}
+
+async function loadPrivacySettings() {
+    try {
+        const response = await fetch("/api/privacy/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load privacy status.");
+        privacyNetworkLock.checked = data.privacy.network_lock_enabled;
+        privacyStoreHistory.checked = data.privacy.store_chat_history;
+        privacyRedactSecrets.checked = data.privacy.redact_secrets;
+        privacyRuntime.innerText = [
+            "Provider: " + data.runtime.provider,
+            "Database: " + data.runtime.database_path,
+            "Remote token configured: " + (data.runtime.remote_token_configured ? "yes" : "no"),
+            data.runtime.network_lock_effect,
+        ].join("\n");
+    } catch (error) {
+        if (privacyStatus) privacyStatus.innerText = String(error);
+    }
+}
+
+async function savePrivacySettings() {
+    try {
+        const response = await fetch("/api/privacy/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                network_lock_enabled: privacyNetworkLock.checked ? "true" : "false",
+                store_chat_history: privacyStoreHistory.checked ? "true" : "false",
+                redact_secrets: privacyRedactSecrets.checked ? "true" : "false",
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to save privacy settings.");
+        privacyStatus.innerText = "Saved locally. " + data.runtime.network_lock_effect + ".";
+        await loadPrivacySettings();
+    } catch (error) {
+        privacyStatus.innerText = String(error);
+    }
 }
 
 async function runSetupCheck() {

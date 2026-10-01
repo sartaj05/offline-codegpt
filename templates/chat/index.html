@@ -91,6 +91,7 @@
                             <button type="button" onclick="toggleSetupPanel()">Setup</button>
                             <button type="button" onclick="toggleBackupPanel()">Backup</button>
                             <button type="button" onclick="toggleOllamaSettings()">Ollama</button>
+                            <button type="button" onclick="togglePrivacyPanel()">Privacy</button>
                             <button type="button" onclick="toggleMemoryPanel()">Memory</button>
                             <button type="button" onclick="toggleRemoteIntegration()">Remote</button>
                             <button type="button" onclick="toggleMcpPanel()">Tools</button>
@@ -158,6 +159,20 @@
             <div id="modelInventory" class="model-inventory">Model size and hardware guidance will appear after the local server is checked.</div>
             <div id="ollamaSettingsStatus" class="settings-status"></div>
             <button type="button" class="settings-save-button" onclick="saveOllamaSettings()">Save settings</button>
+        </section>
+        <section id="privacyPanel" class="privacy-panel" hidden>
+            <div class="settings-heading">
+                <div><strong>Privacy dashboard</strong><span>See what stays local and control remote access.</span></div>
+                <button type="button" onclick="togglePrivacyPanel()">Close</button>
+            </div>
+            <div id="privacyRuntime" class="privacy-runtime">Loading local privacy status...</div>
+            <div class="privacy-controls">
+                <label><input id="privacyNetworkLock" type="checkbox" checked> Network lock (block remote provider calls)</label>
+                <label><input id="privacyStoreHistory" type="checkbox" checked> Store chat history locally</label>
+                <label><input id="privacyRedactSecrets" type="checkbox" checked> Redact likely secrets from logs</label>
+            </div>
+            <button type="button" onclick="savePrivacySettings()">Save privacy settings</button>
+            <div id="privacyStatus" class="settings-status"></div>
         </section>
         <section id="setupPanel" class="setup-panel" hidden>
             <div class="settings-heading">

@@ -41,6 +41,17 @@ class UserOllamaSettings(models.Model):
         return f"Ollama settings for {self.user.username}"
 
 
+class PrivacyPreference(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="privacy_preferences")
+    network_lock_enabled = models.BooleanField(default=True)
+    store_chat_history = models.BooleanField(default=True)
+    redact_secrets = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Privacy preferences for {self.user.username}"
+
+
 class AgentTask(models.Model):
     STATUS_CHOICES = (
         ("planned", "Planned"),

@@ -502,6 +502,9 @@ select { padding: 0 10px; }
 .stop-generation-button { border-color: rgba(255,138,128,.65) !important; background: rgba(122,49,53,.8) !important; color: #ffd9d5 !important; }
 .composer-hint #draftStatus { color: var(--accent); }
 .model-inventory { margin-top: 8px; padding: 8px 10px; border: 1px solid rgba(99,230,190,.22); border-radius: 7px; background: rgba(99,230,190,.05); color: var(--muted); font-size: 10px; line-height: 1.45; }
+.privacy-panel { position: absolute; z-index: 6; top: 76px; right: clamp(24px, 5vw, 68px); width: min(620px, calc(100% - 48px)); padding: 15px; border: 1px solid var(--border); border-radius: 12px; background: rgba(21,25,34,.98); box-shadow: 0 18px 50px rgba(0,0,0,.35); }
+.privacy-runtime { margin: 12px 0; padding: 10px; border: 1px solid rgba(99,230,190,.22); border-radius: 8px; background: #0d1016; color: #bfe9dc; font-family: Consolas, monospace; font-size: 10px; line-height: 1.55; white-space: pre-wrap; }
+.privacy-controls { display: grid; gap: 8px; margin: 12px 0; color: var(--muted); font-size: 11px; }
 .source-citations { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--border); }
 .source-citations-label { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .source-citation { padding: 5px 8px; border: 1px solid rgba(99,230,190,.3); border-radius: 999px; background: rgba(99,230,190,.08); color: var(--accent); font-family: Consolas, monospace; font-size: 10px; cursor: pointer; }

@@ -20,6 +20,7 @@ import requests
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.conf import settings
 from django.db.models import Count, Min, Q
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -44,6 +45,7 @@ from .models import (
     AiEvent,
     AuditEvent,
     UserOllamaSettings,
+    PrivacyPreference,
     Workspace,
     WorkspaceMembership,
     WorkspacePolicy,
@@ -283,6 +285,9 @@ def _remote_headers(connection):
 
 
 def _remote_request(request, method, url, **kwargs):
+    preferences = PrivacyPreference.objects.filter(user=request.user).first()
+    if preferences and preferences.network_lock_enabled:
+        return None, JsonResponse({"success": False, "error": "Network lock is enabled. Disable it in Privacy before using remote providers."}, status=423)
     connection = _remote_connection(request)
     if not connection.get("token"):
         return None, JsonResponse({"success": False, "error": "Connect a GitHub or GitLab token first."}, status=400)
@@ -1012,6 +1017,33 @@ def project_document_create(request):
             "filename": document.filename,
             "language": document.language,
             "size_bytes": document.file_size_bytes,
+        },
+    })
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def privacy_dashboard(request):
+    preferences, _ = PrivacyPreference.objects.get_or_create(user=request.user)
+    if request.method == "POST":
+        preferences.network_lock_enabled = request.POST.get("network_lock_enabled", "true").lower() == "true"
+        preferences.store_chat_history = request.POST.get("store_chat_history", "true").lower() == "true"
+        preferences.redact_secrets = request.POST.get("redact_secrets", "true").lower() == "true"
+        preferences.save()
+    return JsonResponse({
+        "success": True,
+        "privacy": {
+            "network_lock_enabled": preferences.network_lock_enabled,
+            "store_chat_history": preferences.store_chat_history,
+            "redact_secrets": preferences.redact_secrets,
+            "updated_at": preferences.updated_at.isoformat(),
+        },
+        "runtime": {
+            "provider": "Ollama on localhost",
+            "database_path": str(settings.DATABASES["default"].get("NAME", "")),
+            "media_path": str(getattr(settings, "MEDIA_ROOT", "")),
+            "remote_token_configured": bool(_remote_connection(request).get("token")),
+            "network_lock_effect": "Remote provider calls are blocked" if preferences.network_lock_enabled else "Remote provider calls require explicit connector settings",
         },
     })
 
