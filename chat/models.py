@@ -449,6 +449,7 @@ class KnowledgeChunk(models.Model):
     # Optional fields for future improvement
     summary = models.TextField(blank=True, null=True)
     keywords = models.TextField(blank=True, null=True)
+    embedding = models.JSONField(default=list, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 

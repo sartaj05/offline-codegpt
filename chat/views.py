@@ -541,17 +541,57 @@ def _save_knowledge_document(filename, file_text, source_type, owner):
     document.content_hash = content_hash
     document.is_active = True
     document.save()
+    _index_knowledge_document(document, owner)
+    return document
+
+
+def _ollama_embeddings(texts, base_url):
+    if not texts:
+        return []
+    embedding_model = os.environ.get("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+    try:
+        response = requests.post(
+            f"{base_url}/api/embed",
+            json={"model": embedding_model, "input": texts},
+            timeout=(5, 60),
+        )
+        response.raise_for_status()
+        payload = response.json()
+        embeddings = payload.get("embeddings") or []
+        if not embeddings and payload.get("embedding"):
+            embeddings = [payload["embedding"]]
+        return embeddings if len(embeddings) == len(texts) else []
+    except (requests.RequestException, ValueError, TypeError):
+        return []
+
+
+def _index_knowledge_document(document, owner):
     document.chunks.all().delete()
+    contents = [
+        document.original_text[start:start + CHUNK_SIZE]
+        for start in range(0, len(document.original_text), CHUNK_SIZE)
+    ]
+    settings = _user_ollama_settings(owner) if owner else None
+    embeddings = _ollama_embeddings(contents, settings.server_url if settings else OLLAMA_BASE_URL)
     KnowledgeChunk.objects.bulk_create([
         KnowledgeChunk(
             document=document,
             chunk_index=index,
-            content=file_text[start:start + CHUNK_SIZE],
+            content=content,
             language=document.language,
+            embedding=embeddings[index] if index < len(embeddings) else [],
         )
-        for index, start in enumerate(range(0, len(file_text), CHUNK_SIZE))
+        for index, content in enumerate(contents)
     ])
-    return document
+
+
+def _cosine_similarity(left, right):
+    if not left or not right or len(left) != len(right):
+        return 0.0
+    numerator = sum(a * b for a, b in zip(left, right))
+    left_norm = sum(a * a for a in left) ** 0.5
+    right_norm = sum(b * b for b in right) ** 0.5
+    return numerator / (left_norm * right_norm) if left_norm and right_norm else 0.0
 
 
 def _search_knowledge(query, limit=8, owner=None, filenames=None):
@@ -560,6 +600,9 @@ def _search_knowledge(query, limit=8, owner=None, filenames=None):
     if not terms and not selected_filenames:
         return []
 
+    user_settings = _user_ollama_settings(owner) if owner else None
+    query_embedding = _ollama_embeddings([query], user_settings.server_url if user_settings else OLLAMA_BASE_URL)
+    query_embedding = query_embedding[0] if query_embedding else []
     matches = []
     chunks = KnowledgeChunk.objects.filter(
         document__is_active=True,
@@ -571,7 +614,9 @@ def _search_knowledge(query, limit=8, owner=None, filenames=None):
         filename = (chunk.document.filename or "").lower()
         if selected_filenames and filename not in selected_filenames:
             continue
-        score = sum(content.count(term) for term in terms)
+        lexical_score = sum(content.count(term) for term in terms)
+        semantic_score = _cosine_similarity(query_embedding, chunk.embedding)
+        score = lexical_score + (semantic_score * 100)
         score += 3 * sum(filename.count(term) for term in terms)
         if score or selected_filenames:
             matches.append((max(score, 1), chunk))
@@ -1127,16 +1172,7 @@ def project_document_content(request, document_id):
     document.file_size_bytes = len(content.encode("utf-8"))
     document.content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
     document.save(update_fields=["original_text", "file_size_bytes", "content_hash"])
-    document.chunks.all().delete()
-    KnowledgeChunk.objects.bulk_create([
-        KnowledgeChunk(
-            document=document,
-            chunk_index=index,
-            content=content[start:start + CHUNK_SIZE],
-            language=document.language,
-        )
-        for index, start in enumerate(range(0, len(content), CHUNK_SIZE))
-    ])
+    _index_knowledge_document(document, request.user)
     return JsonResponse({
         "success": True,
         "document_id": document.id,
