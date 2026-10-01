@@ -608,6 +608,39 @@ def _cosine_similarity(left, right):
     return numerator / (left_norm * right_norm) if left_norm and right_norm else 0.0
 
 
+def _hybrid_retrieval_weights():
+    def numeric(name, default):
+        try:
+            return max(0.0, float(os.environ.get(name, default)))
+        except (TypeError, ValueError):
+            return default
+
+    lexical = numeric("RAG_LEXICAL_WEIGHT", 0.45)
+    semantic = numeric("RAG_SEMANTIC_WEIGHT", 0.45)
+    rerank = numeric("RAG_RERANK_WEIGHT", 0.10)
+    total = lexical + semantic + rerank or 1.0
+    return lexical / total, semantic / total, rerank / total
+
+
+def _hybrid_rerank_score(query, content, filename, lexical_score, semantic_score, terms):
+    content_lower = content.lower()
+    filename_lower = filename.lower()
+    max_lexical = max(1, len(terms) * 4)
+    lexical_normalized = min(1.0, lexical_score / max_lexical)
+    semantic_normalized = max(0.0, min(1.0, (semantic_score + 1.0) / 2.0))
+    phrase_boost = 1.0 if len(terms) > 1 and " ".join(terms) in content_lower else 0.0
+    filename_boost = min(1.0, sum(1 for term in terms if term in filename_lower) / max(1, len(terms)))
+    coverage = sum(1 for term in terms if term in content_lower) / max(1, len(terms))
+    lexical_normalized = min(1.0, lexical_normalized + (coverage * 0.25))
+    lexical_weight, semantic_weight, rerank_weight = _hybrid_retrieval_weights()
+    rerank_signal = min(1.0, (phrase_boost * 0.55) + (filename_boost * 0.2) + (coverage * 0.25))
+    return (
+        (lexical_normalized * lexical_weight)
+        + (semantic_normalized * semantic_weight)
+        + (rerank_signal * rerank_weight)
+    )
+
+
 def _search_knowledge(query, limit=8, owner=None, filenames=None):
     terms = list(dict.fromkeys(re.findall(r"[a-zA-Z0-9_]{2,}", query.lower())))
     selected_filenames = {str(name).strip().lower() for name in (filenames or []) if str(name).strip()}
@@ -630,19 +663,21 @@ def _search_knowledge(query, limit=8, owner=None, filenames=None):
             continue
         lexical_score = sum(content.count(term) for term in terms)
         semantic_score = _cosine_similarity(query_embedding, chunk.embedding)
-        score = lexical_score + (semantic_score * 100)
-        score += 3 * sum(filename.count(term) for term in terms)
+        score = _hybrid_rerank_score(query, chunk.content, filename, lexical_score, semantic_score, terms)
         if score or selected_filenames:
-            matches.append((max(score, 1), chunk))
+            matches.append((max(score, 0.001), chunk, lexical_score, semantic_score))
 
-        matches.sort(key=lambda item: item[0], reverse=True)
+    matches.sort(key=lambda item: item[0], reverse=True)
     return [
         {
             "filename": chunk.document.filename,
             "language": chunk.language,
             "chunk_index": chunk.chunk_index,
             "content": chunk.content,
-            "score": score,
+            "score": round(score, 4),
+            "lexical_score": lexical_score,
+            "semantic_score": round(semantic_score, 4),
+            "retrieval": "hybrid",
             "line_start": (
                 chunk.document.original_text[:max(
                     chunk.document.original_text.find(chunk.content),
@@ -658,7 +693,7 @@ def _search_knowledge(query, limit=8, owner=None, filenames=None):
             "page_start": _page_for_offset(chunk.document.original_text, chunk.document.original_text.find(chunk.content)),
             "page_end": _page_for_offset(chunk.document.original_text, chunk.document.original_text.find(chunk.content) + len(chunk.content)),
         }
-        for score, chunk in matches[:limit]
+        for score, chunk, lexical_score, semantic_score in matches[:limit]
     ]
 
 
