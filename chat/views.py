@@ -3473,6 +3473,7 @@ def ask_code(request):
     session_id = request.POST.get("session_id", "").strip()
     edit_message_id = request.POST.get("edit_message_id", "").strip()
     requested_model = request.POST.get("model", "").strip()
+    auto_route = request.POST.get("auto_route", "true").lower() in {"1", "true", "yes", "on"}
     output_format = request.POST.get("output_format", "text").strip().lower()
     output_schema_raw = request.POST.get("output_schema", "").strip()
     output_schema = None
@@ -3569,6 +3570,17 @@ def ask_code(request):
     user_settings = _user_ollama_settings(request.user) if owner else None
     ollama_base_url = user_settings.server_url if user_settings else OLLAMA_BASE_URL
     configured_default_model = user_settings.default_model if user_settings else DEFAULT_MODEL
+    routing_reason = "manual model selection"
+    if auto_route and not requested_model:
+        task_for_routing = " ".join([prompt, code, "image" if image_data else ""]).strip()
+        try:
+            hardware_memory = max(0, float(os.environ.get("LOCAL_AI_MEMORY_GB", "0") or 0))
+        except (TypeError, ValueError):
+            hardware_memory = 0
+        hardware_gpu = os.environ.get("LOCAL_AI_GPU", "").lower() in {"1", "true", "yes", "on"}
+        routed = route_model(task_for_routing, _available_models(ollama_base_url), hardware_memory, hardware_gpu)
+        configured_default_model = routed["selected_model"]
+        routing_reason = routed["reason"]
     revision_branch_id = None
     if session_id:
         session = get_object_or_404(ChatSession, id=session_id, owner=owner)
@@ -3775,6 +3787,7 @@ Instructions:
                     "output_chars_per_second": round(len(answer) / max(ai_event.duration_ms / 1000, 0.001), 1),
                     "first_token_ms": first_token_ms or 0,
                     "output_format": output_format,
+                    "routing_reason": routing_reason,
                 }
                 ai_event.save(update_fields=["duration_ms", "output_chars", "metadata"])
                 session.save(update_fields=["updated_at"])

@@ -11,6 +11,7 @@ const advancedComposer = document.getElementById("advancedComposer");
 const toggleAdvancedComposerButton = document.getElementById("toggleAdvancedComposer");
 const codeInput = document.getElementById("codeInput");
 const modelInput = document.getElementById("model");
+const smartModelRouting = document.getElementById("smartModelRouting");
 const ollamaSettingsPanel = document.getElementById("ollamaSettingsPanel");
 const privacyPanel = document.getElementById("privacyPanel");
 const privacyRuntime = document.getElementById("privacyRuntime");
@@ -2698,7 +2699,8 @@ async function sendMessage() {
     const formData = new FormData();
     formData.append("prompt", prompt);
     formData.append("code", code);
-    formData.append("model", modelInput.value);
+    formData.append("model", smartModelRouting && smartModelRouting.checked ? "" : modelInput.value);
+    formData.append("auto_route", smartModelRouting && smartModelRouting.checked ? "true" : "false");
     formData.append("language", languageInput.value);
     formData.append("output_format", responseFormat ? responseFormat.value : "text");
     if (outputSchema && outputSchema.value.trim()) formData.append("output_schema", outputSchema.value.trim());
