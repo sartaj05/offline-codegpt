@@ -78,6 +78,14 @@ The project uses:
 
 ## Installation
 
+For a guided Windows setup, run:
+
+~~~powershell
+.\scripts\setup-offline.ps1
+~~~
+
+Use `-SkipOllama` when preparing the Python environment on a machine that will receive Ollama separately.
+
 ### Windows PowerShell
 
 From the project directory:
