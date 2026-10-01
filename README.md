@@ -171,6 +171,16 @@ For a different port:
 python manage.py runserver 127.0.0.1:8080
 ~~~
 
+### Watch a project folder
+
+Keep a local folder indexed while you work:
+
+~~~powershell
+python manage.py watch_project C:\path\to\project --username YOUR_USER
+~~~
+
+Use `--once` for a single incremental scan. The watcher reads supported local files and reuses the normal project index and document parsers.
+
 ## First-time user workflow
 
 1. Open the home page.
