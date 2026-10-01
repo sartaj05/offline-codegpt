@@ -1,3 +1,5 @@
 Django==5.2.15
 requests==2.34.2
 cryptography==50.0.1
+pypdf>=5.0,<6
+python-docx>=1.1,<2

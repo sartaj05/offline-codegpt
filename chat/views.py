@@ -17,6 +17,16 @@ from urllib.parse import quote, urlencode, urlparse
 
 import requests
 
+try:
+    from docx import Document as DocxDocument
+except ImportError:
+    DocxDocument = None
+
+try:
+    from pypdf import PdfReader
+except ImportError:
+    PdfReader = None
+
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -492,22 +502,44 @@ def _language_for_filename(filename):
     }.get(extension, "auto")
 
 
+def _extract_document_text(filename, raw_content):
+    """Extract local text while preserving page markers for citations."""
+    extension = PurePosixPath(filename).suffix.lower()
+    if extension == ".pdf":
+        if PdfReader is None:
+            raise ValueError("PDF support requires the pypdf package.")
+        pages = PdfReader(io.BytesIO(raw_content)).pages
+        return "\n\n".join(
+            f"[Page {index + 1}]\n{page.extract_text() or ''}"
+            for index, page in enumerate(pages)
+        ).strip()
+    if extension == ".docx":
+        if DocxDocument is None:
+            raise ValueError("DOCX support requires the python-docx package.")
+        document = DocxDocument(io.BytesIO(raw_content))
+        return "\n".join(
+            paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()
+        ).strip()
+    text = raw_content.decode("utf-8", errors="ignore")
+    if "\x00" in text:
+        raise ValueError("Binary files are not supported for text indexing.")
+    return text
+
+
 def _save_knowledge_document(filename, file_text, source_type, owner):
     content_hash = hashlib.sha256(file_text.encode("utf-8")).hexdigest()
-    document, _ = KnowledgeDocument.objects.update_or_create(
-        owner=owner,
-        content_hash=content_hash,
-        defaults={
-            "title": PurePosixPath(filename).name,
-            "filename": filename,
-            "file_extension": PurePosixPath(filename).suffix.lower(),
-            "source_type": source_type,
-            "language": _language_for_filename(filename),
-            "original_text": file_text,
-            "file_size_bytes": len(file_text.encode("utf-8")),
-            "is_active": True,
-        },
-    )
+    document = KnowledgeDocument.objects.filter(owner=owner, filename=filename).first()
+    if document is None:
+        document = KnowledgeDocument(owner=owner, filename=filename)
+    document.title = PurePosixPath(filename).name
+    document.file_extension = PurePosixPath(filename).suffix.lower()
+    document.source_type = source_type
+    document.language = _language_for_filename(filename)
+    document.original_text = file_text
+    document.file_size_bytes = len(file_text.encode("utf-8"))
+    document.content_hash = content_hash
+    document.is_active = True
+    document.save()
     document.chunks.all().delete()
     KnowledgeChunk.objects.bulk_create([
         KnowledgeChunk(
@@ -563,9 +595,18 @@ def _search_knowledge(query, limit=8, owner=None, filenames=None):
                     0,
                 )].count("\n") + chunk.content.count("\n") + 1
             ),
+            "page_start": _page_for_offset(chunk.document.original_text, chunk.document.original_text.find(chunk.content)),
+            "page_end": _page_for_offset(chunk.document.original_text, chunk.document.original_text.find(chunk.content) + len(chunk.content)),
         }
         for score, chunk in matches[:limit]
     ]
+
+
+def _page_for_offset(text, offset):
+    if offset < 0:
+        return None
+    pages = re.findall(r"\[Page\s+(\d+)\]", text[:offset])
+    return int(pages[-1]) if pages else None
 
 
 def signup(request):
@@ -3262,9 +3303,7 @@ def ask_code(request):
                 continue
 
             raw_content = uploaded_file.read()
-            file_text = raw_content.decode("utf-8", errors="ignore")
-            if "\x00" in file_text:
-                continue
+            file_text = _extract_document_text(filename, raw_content)
 
             source_type = "project" if "/" in filename else "upload"
             _save_knowledge_document(filename, file_text, source_type, request.user)
@@ -3516,6 +3555,8 @@ Instructions:
                             "language": item["language"],
                             "line_start": item["line_start"],
                             "line_end": item["line_end"],
+                            "page_start": item.get("page_start"),
+                            "page_end": item.get("page_end"),
                             "content": item["content"],
                         }
                         for item in relevant_chunks

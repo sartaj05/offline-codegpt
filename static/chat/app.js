@@ -2088,7 +2088,10 @@ function addSourceCitations(element, sources) {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "source-citation";
-        button.innerText = source.filename + ":" + source.line_start;
+        const location = source.page_start
+            ? "p. " + source.page_start + (source.page_end && source.page_end !== source.page_start ? "-" + source.page_end : "")
+            : "line " + source.line_start + "-" + source.line_end;
+        button.innerText = source.filename + " · " + location;
         button.title = "Open retrieved project context";
         button.onclick = () => {
             codeInput.value = source.content;
