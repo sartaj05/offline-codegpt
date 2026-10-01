@@ -29,6 +29,7 @@ class LocalModelConfig(models.Model):
 
 class UserOllamaSettings(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="ollama_settings")
+    runtime = models.CharField(max_length=20, default="ollama")
     server_url = models.URLField(default="http://127.0.0.1:11434", max_length=300)
     default_model = models.CharField(max_length=100, default="qwen2.5-coder:1.5b")
     fallback_model = models.CharField(max_length=100, default="phi3:mini", blank=True)

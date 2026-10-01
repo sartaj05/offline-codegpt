@@ -148,12 +148,13 @@
         <section id="ollamaSettingsPanel" class="ollama-settings-panel" hidden>
             <div class="settings-heading">
                 <div>
-                    <strong>Ollama settings</strong>
-                    <span>Local server and generation controls</span>
+                    <strong>Local runtime settings</strong>
+                    <span>Ollama, LM Studio, or llama.cpp generation controls</span>
                 </div>
                 <button type="button" onclick="toggleOllamaSettings()">Close</button>
             </div>
             <div class="settings-grid">
+                <label>Runtime<select id="ollamaRuntime"><option value="ollama">Ollama</option><option value="lmstudio">LM Studio</option><option value="llamacpp">llama.cpp</option></select></label>
                 <label>Server URL<input id="ollamaServerUrl" type="url" value="{{ ollama_settings.server_url }}"></label>
                 <label>Default model<select id="ollamaDefaultModel"></select></label>
                 <label>Fallback model<select id="ollamaFallbackModel"></select></label>

@@ -19,6 +19,7 @@ const privacyNetworkLock = document.getElementById("privacyNetworkLock");
 const privacyStoreHistory = document.getElementById("privacyStoreHistory");
 const privacyRedactSecrets = document.getElementById("privacyRedactSecrets");
 const privacyStatus = document.getElementById("privacyStatus");
+const ollamaRuntime = document.getElementById("ollamaRuntime");
 const ollamaServerUrl = document.getElementById("ollamaServerUrl");
 const ollamaDefaultModel = document.getElementById("ollamaDefaultModel");
 const ollamaTemperature = document.getElementById("ollamaTemperature");
@@ -529,6 +530,7 @@ async function loadOllamaSettings() {
         const data = await response.json();
         if (!data.success) throw new Error(data.error || "Unable to load settings.");
         const settings = data.settings;
+        if (ollamaRuntime) ollamaRuntime.value = settings.runtime || "ollama";
         ollamaServerUrl.value = settings.server_url;
         ollamaTemperature.value = settings.temperature;
         ollamaTopP.value = settings.top_p;
@@ -563,6 +565,7 @@ async function saveOllamaSettings() {
             },
             body: new URLSearchParams({
                 server_url: ollamaServerUrl.value.trim(),
+                runtime: ollamaRuntime ? ollamaRuntime.value : "ollama",
                 default_model: ollamaDefaultModel.value,
                 temperature: ollamaTemperature.value,
                 top_p: ollamaTopP.value,

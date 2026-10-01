@@ -101,6 +101,7 @@ from .vault import decrypt_blob, decrypt_secret, encrypt_blob, encrypt_secret, m
 from .api_contract import analyze_api_contract
 from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
+from .runtimes import RUNTIME_CHOICES, get_runtime_adapter
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -566,7 +567,7 @@ def _safe_ollama_url(value):
     return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
 
 
-def _available_models(base_url=OLLAMA_BASE_URL):
+def _available_models(base_url=OLLAMA_BASE_URL, runtime="ollama"):
     names = list(
         LocalModelConfig.objects.filter(is_active=True)
         .order_by("-is_default", "name")
@@ -579,26 +580,21 @@ def _available_models(base_url=OLLAMA_BASE_URL):
         names.append(VISION_MODEL)
 
     try:
-        response = requests.get(f"{base_url}/api/tags", timeout=3)
-        if response.ok:
-            for item in response.json().get("models", []):
-                name = item.get("name")
-                if name and name not in names:
-                    names.append(name)
-    except (requests.RequestException, ValueError):
+        for item in get_runtime_adapter(runtime, base_url).models():
+            name = item.get("name")
+            if name and name not in names:
+                names.append(name)
+    except (requests.RequestException, ValueError, TypeError, AttributeError):
         pass
 
     return names
 
 
-def _ollama_model_details(base_url=OLLAMA_BASE_URL):
+def _ollama_model_details(base_url=OLLAMA_BASE_URL, runtime="ollama"):
     """Return safe local model metadata for the model manager."""
     try:
-        response = requests.get(f"{base_url}/api/tags", timeout=3)
-        if getattr(response, "status_code", 200) >= 400:
-            return []
         details = []
-        for item in response.json().get("models", []):
+        for item in get_runtime_adapter(runtime, base_url).models():
             name = item.get("name")
             if not name:
                 continue
@@ -687,22 +683,12 @@ def _save_knowledge_document(filename, file_text, source_type, owner):
     return document
 
 
-def _ollama_embeddings(texts, base_url):
+def _ollama_embeddings(texts, base_url, runtime="ollama"):
     if not texts:
         return []
     embedding_model = os.environ.get("OLLAMA_EMBED_MODEL", "nomic-embed-text")
     try:
-        response = requests.post(
-            f"{base_url}/api/embed",
-            json={"model": embedding_model, "input": texts},
-            timeout=(5, 60),
-        )
-        if getattr(response, "status_code", 200) >= 400:
-            return []
-        payload = response.json()
-        embeddings = payload.get("embeddings") or []
-        if not embeddings and payload.get("embedding"):
-            embeddings = [payload["embedding"]]
+        embeddings = get_runtime_adapter(runtime, base_url).embeddings(texts, embedding_model)
         return embeddings if len(embeddings) == len(texts) else []
     except (requests.RequestException, ValueError, TypeError, AttributeError):
         return []
@@ -716,7 +702,11 @@ def _index_knowledge_document(document, owner):
         for start in range(0, len(indexed_text), CHUNK_SIZE)
     ]
     settings = _user_ollama_settings(owner) if owner else None
-    embeddings = _ollama_embeddings(contents, settings.server_url if settings else OLLAMA_BASE_URL)
+    embeddings = _ollama_embeddings(
+        contents,
+        settings.server_url if settings else OLLAMA_BASE_URL,
+        settings.runtime if settings else "ollama",
+    )
     KnowledgeChunk.objects.bulk_create([
         KnowledgeChunk(
             document=document,
@@ -778,7 +768,11 @@ def _search_knowledge(query, limit=8, owner=None, filenames=None):
         return []
 
     user_settings = _user_ollama_settings(owner) if owner else None
-    query_embedding = _ollama_embeddings([query], user_settings.server_url if user_settings else OLLAMA_BASE_URL)
+    query_embedding = _ollama_embeddings(
+        [query],
+        user_settings.server_url if user_settings else OLLAMA_BASE_URL,
+        user_settings.runtime if user_settings else "ollama",
+    )
     query_embedding = query_embedding[0] if query_embedding else []
     matches = []
     chunks = KnowledgeChunk.objects.filter(
@@ -1026,7 +1020,7 @@ def index(request):
     default_model = user_settings.default_model if user_settings else DEFAULT_MODEL
     return render(request, "chat/index.html", {
         "sessions": sessions,
-        "models": _available_models(server_url),
+        "models": _available_models(server_url, user_settings.runtime if user_settings else "ollama"),
         "default_model": default_model,
         "ollama_settings": user_settings,
     })
@@ -1038,14 +1032,16 @@ def model_list(request):
     default_model = user_settings.default_model if user_settings else DEFAULT_MODEL
     return JsonResponse({
         "success": True,
-        "models": _available_models(server_url),
-        "model_details": _ollama_model_details(server_url),
+        "models": _available_models(server_url, user_settings.runtime if user_settings else "ollama"),
+        "model_details": _ollama_model_details(server_url, user_settings.runtime if user_settings else "ollama"),
         "default_model": default_model,
+        "runtime": user_settings.runtime if user_settings else "ollama",
     })
 
 
 def _ollama_settings_payload(settings):
     return {
+        "runtime": settings.runtime,
         "server_url": settings.server_url,
         "default_model": settings.default_model,
         "fallback_model": settings.fallback_model,
@@ -1069,6 +1065,10 @@ def ollama_settings(request):
             max_context_chars = min(max(int(request.POST.get("max_context_chars", settings.max_context_chars)), 4000), 100000)
         except (TypeError, ValueError):
             return JsonResponse({"success": False, "error": "Temperature, top-p, and context must be valid numbers."}, status=400)
+        runtime = request.POST.get("runtime", settings.runtime).strip().lower()
+        if runtime not in RUNTIME_CHOICES:
+            return JsonResponse({"success": False, "error": "Choose Ollama, LM Studio, or llama.cpp."}, status=400)
+        settings.runtime = runtime
         settings.server_url = server_url
         settings.default_model = request.POST.get("default_model", settings.default_model).strip()[:100] or DEFAULT_MODEL
         settings.fallback_model = request.POST.get("fallback_model", settings.fallback_model).strip()[:100]
@@ -1079,8 +1079,9 @@ def ollama_settings(request):
     return JsonResponse({
         "success": True,
         "settings": _ollama_settings_payload(settings),
-        "models": _available_models(settings.server_url),
-        "model_details": _ollama_model_details(settings.server_url),
+        "models": _available_models(settings.server_url, settings.runtime),
+        "model_details": _ollama_model_details(settings.server_url, settings.runtime),
+        "runtimes": RUNTIME_CHOICES,
     })
 
 
@@ -1090,20 +1091,14 @@ def ollama_health(request):
     settings = _user_ollama_settings(request.user)
     started = time.perf_counter()
     try:
-        response = requests.get(f"{settings.server_url}/api/tags", timeout=5)
-        response.raise_for_status()
-        models = [
-            item.get("name")
-            for item in response.json().get("models", [])
-            if item.get("name")
-        ]
+        models = [item.get("name") for item in get_runtime_adapter(settings.runtime, settings.server_url).models() if item.get("name")]
         return JsonResponse({
             "success": True,
             "status": "ready",
             "server_url": settings.server_url,
             "latency_ms": round((time.perf_counter() - started) * 1000),
             "models": models,
-            "model_details": _ollama_model_details(settings.server_url),
+            "model_details": _ollama_model_details(settings.server_url, settings.runtime),
             "default_model": settings.default_model,
             "fallback_model": settings.fallback_model,
             "fallback_available": settings.fallback_model in models,
@@ -1114,13 +1109,15 @@ def ollama_health(request):
             "status": "offline",
             "server_url": settings.server_url,
             "latency_ms": round((time.perf_counter() - started) * 1000),
-            "error": "Ollama health check failed: " + str(exc),
+            "error": settings.runtime + " health check failed: " + str(exc),
         }, status=503)
 
 @login_required(login_url="/login/")
 @require_POST
 def ollama_model_action(request):
     settings = _user_ollama_settings(request.user)
+    if settings.runtime != "ollama":
+        return JsonResponse({"success": False, "error": "Pull/delete actions currently require the Ollama runtime. Use the runtime's own model manager for LM Studio or llama.cpp."}, status=400)
     action = request.POST.get("action", "").strip().lower()
     name = request.POST.get("name", "").strip()
     if not name or len(name) > 100:
@@ -1161,8 +1158,8 @@ def ollama_model_action(request):
             })
     return JsonResponse({
         "success": True,
-        "models": _available_models(settings.server_url),
-        "model_details": _ollama_model_details(settings.server_url),
+        "models": _available_models(settings.server_url, settings.runtime),
+        "model_details": _ollama_model_details(settings.server_url, settings.runtime),
         "progress": progress[-100:],
     })
 
@@ -4031,6 +4028,8 @@ def ask_code(request):
     safe_final_code = redact_sensitive_text(owner, final_code)
     user_settings = _user_ollama_settings(request.user) if owner else None
     ollama_base_url = user_settings.server_url if user_settings else OLLAMA_BASE_URL
+    runtime = user_settings.runtime if user_settings else "ollama"
+    runtime_adapter = get_runtime_adapter(runtime, ollama_base_url)
     configured_default_model = user_settings.default_model if user_settings else DEFAULT_MODEL
     routing_reason = "manual model selection"
     if auto_route and not requested_model:
@@ -4040,7 +4039,7 @@ def ask_code(request):
         except (TypeError, ValueError):
             hardware_memory = 0
         hardware_gpu = os.environ.get("LOCAL_AI_GPU", "").lower() in {"1", "true", "yes", "on"}
-        routed = route_model(task_for_routing, _available_models(ollama_base_url), hardware_memory, hardware_gpu)
+        routed = route_model(task_for_routing, _available_models(ollama_base_url, runtime), hardware_memory, hardware_gpu)
         configured_default_model = routed["selected_model"]
         routing_reason = routed["reason"]
     revision_branch_id = None
@@ -4185,30 +4184,25 @@ Instructions:
             candidate for candidate in (model_name, fallback_model) if candidate
         ))
         response = None
+        response_protocol = runtime
         last_error = None
         for candidate_model in candidate_models:
             try:
-                candidate_response = requests.post(
-                    f"{ollama_base_url}/api/generate",
-                    json={
-                        "model": candidate_model,
-                        "prompt": full_prompt,
-                        "stream": True,
-                        "options": {
-                            "temperature": user_settings.temperature if user_settings else 0.2,
-                            "top_p": user_settings.top_p if user_settings else 0.9,
-                            "num_ctx": max(512, (user_settings.max_context_chars if user_settings else 24000) // 4),
-                        },
-                        **({"format": output_schema or "json"} if output_format in {"json", "json_schema"} else {}),
-                        **({"images": image_data} if image_data else {}),
+                candidate_response, candidate_protocol = runtime_adapter.generate(
+                    candidate_model,
+                    full_prompt,
+                    images=image_data,
+                    options={
+                        "temperature": user_settings.temperature if user_settings else 0.2,
+                        "top_p": user_settings.top_p if user_settings else 0.9,
+                        "num_ctx": max(512, (user_settings.max_context_chars if user_settings else 24000) // 4),
                     },
-                    timeout=(10, 300),
-                    stream=True,
                 )
             except requests.RequestException as exc:
                 last_error = exc
                 continue
             response = candidate_response
+            response_protocol = candidate_protocol
             if response.status_code == 200:
                 model_name = candidate_model
                 break
@@ -4232,14 +4226,26 @@ Instructions:
                 for raw_line in response.iter_lines(decode_unicode=True):
                     if not raw_line:
                         continue
-                    data = json.loads(raw_line)
-                    token = data.get("response", "")
+                    line = raw_line.decode("utf-8", errors="ignore") if isinstance(raw_line, bytes) else raw_line
+                    if response_protocol == "openai":
+                        if line.startswith("data:"):
+                            line = line[5:].strip()
+                        if line == "[DONE]":
+                            break
+                        data = json.loads(line)
+                        choices = data.get("choices") or []
+                        token = ((choices[0].get("delta") or {}).get("content", "")) if choices else ""
+                        done = False
+                    else:
+                        data = json.loads(line)
+                        token = data.get("response", "")
+                        done = data.get("done")
                     if token:
                         if first_token_ms is None:
                             first_token_ms = round((time.perf_counter() - event_started) * 1000)
                         answer_parts.append(token)
                         yield _event({"type": "token", "token": token})
-                    if data.get("done"):
+                    if done:
                         break
 
                 answer = "".join(answer_parts).strip()
