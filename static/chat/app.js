@@ -3016,6 +3016,48 @@ async function runTests() {
     }
 }
 
+async function discoverProjectTests() {
+    const output = document.getElementById("projectTestCommand");
+    const select = document.getElementById("projectTestSelect");
+    if (!output || !select) return;
+    output.innerText = "Detecting local test runners...";
+    try {
+        const response = await fetch("/api/tests/discover/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to discover tests.");
+        select.innerHTML = "";
+        (data.candidates || []).forEach(candidate => {
+            const option = document.createElement("option");
+            option.value = candidate.id;
+            option.innerText = candidate.label + " · " + candidate.argv.join(" ");
+            select.appendChild(option);
+        });
+        if (!data.candidates || !data.candidates.length) {
+            select.innerHTML = "<option value=\"\">No supported runner found</option>";
+        }
+        output.innerText = data.message + (data.recommended ? " Recommended: " + data.recommended.argv.join(" ") : "");
+    } catch (error) { output.innerText = "Test discovery error: " + error; }
+}
+
+async function runProjectTests() {
+    const output = document.getElementById("testOutput");
+    const select = document.getElementById("projectTestSelect");
+    const candidate = select ? select.value : "";
+    if (!candidate) { output.innerText = "Discover and select a project test command first."; return; }
+    if (!confirm("Run the selected local project test command? It is limited to 60 seconds.")) return;
+    output.innerText = "Running approved project tests...";
+    try {
+        const response = await fetch("/api/tests/run-project/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ candidate, approved: "true" }),
+        });
+        const data = await response.json();
+        const detail = [data.summary || data.error || "Project test result.", data.stdout || "", data.stderr || "", data.duration_ms ? "Duration: " + data.duration_ms + " ms" : ""].filter(Boolean).join("\n\n");
+        output.innerText = detail;
+    } catch (error) { output.innerText = "Project test error: " + error; }
+}
+
 function renderAgentTask(task) {
     if (!agentPlan) return;
     agentTaskId = task.id;

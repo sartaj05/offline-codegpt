@@ -825,9 +825,13 @@
                             <div class="test-actions">
                                 <button type="button" onclick="generateTests()">Generate tests</button>
                                 <button type="button" onclick="runTests()">Run tests</button>
+                                <button type="button" onclick="discoverProjectTests()">Discover project tests</button>
+                                <button type="button" onclick="runProjectTests()">Run approved project tests</button>
                             </div>
                         </div>
                         <textarea id="testInput" class="test-input" placeholder="Generated tests will appear here..."></textarea>
+                        <div id="projectTestCommand" class="test-output">Project test command discovery is available here.</div>
+                        <select id="projectTestSelect" aria-label="Project test command"><option value="">Discover a project test command first</option></select>
                         <pre id="testOutput" class="test-output">Test results will appear here.</pre>
                     </div>
                     <div class="security-workspace">

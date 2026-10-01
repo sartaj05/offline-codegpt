@@ -3780,6 +3780,77 @@ def run_tests(request):
     })
 
 
+def _project_test_candidates():
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    candidates = []
+    if os.path.exists(os.path.join(project_root, "manage.py")):
+        candidates.append({"id": "django", "label": "Django tests", "argv": ["python", "manage.py", "test"]})
+    if any(os.path.exists(os.path.join(project_root, name)) for name in ("pytest.ini", "pyproject.toml", "tox.ini")) or os.path.isdir(os.path.join(project_root, "tests")):
+        candidates.append({"id": "pytest", "label": "Pytest", "argv": ["python", "-m", "pytest"]})
+    if os.path.exists(os.path.join(project_root, "package.json")):
+        candidates.append({"id": "npm", "label": "NPM test", "argv": ["npm", "test", "--", "--runInBand"]})
+    if os.path.exists(os.path.join(project_root, "Cargo.toml")):
+        candidates.append({"id": "cargo", "label": "Cargo tests", "argv": ["cargo", "test"]})
+    if os.path.exists(os.path.join(project_root, "go.mod")):
+        candidates.append({"id": "go", "label": "Go tests", "argv": ["go", "test", "./..."]})
+    return candidates
+
+
+@login_required(login_url="/login/")
+@require_GET
+def discover_project_tests(request):
+    candidates = _project_test_candidates()
+    return JsonResponse({
+        "success": True,
+        "candidates": candidates,
+        "recommended": candidates[0] if candidates else None,
+        "message": "Choose a command and approve it before running." if candidates else "No supported local test runner was detected.",
+    })
+
+
+@login_required(login_url="/login/")
+@require_POST
+def run_project_tests(request):
+    profile = _active_permission_profile(request.user)
+    if profile.mode == "read_only":
+        return JsonResponse({"success": False, "error": "Read-only permission profile blocks test execution."}, status=403)
+    candidate_id = request.POST.get("candidate", "").strip()
+    candidates = {item["id"]: item for item in _project_test_candidates()}
+    candidate = candidates.get(candidate_id)
+    if not candidate:
+        return JsonResponse({"success": False, "error": "Choose a detected test command."}, status=400)
+    if request.POST.get("approved") != "true":
+        return JsonResponse({"success": False, "error": "Approve the detected local test command before running it.", "command": candidate["argv"]}, status=428)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    started = time.perf_counter()
+    try:
+        completed = subprocess.run(
+            candidate["argv"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+            env={**os.environ, "CI": "1"},
+        )
+        stdout = completed.stdout[-MAX_TEST_CHARS:]
+        stderr = completed.stderr[-MAX_TEST_CHARS:]
+        success = completed.returncode == 0
+        return JsonResponse({
+            "success": success,
+            "candidate": candidate,
+            "returncode": completed.returncode,
+            "stdout": stdout,
+            "stderr": stderr,
+            "duration_ms": round((time.perf_counter() - started) * 1000),
+            "summary": "Project tests passed." if success else "Project tests failed.",
+        })
+    except subprocess.TimeoutExpired as exc:
+        return JsonResponse({"success": False, "candidate": candidate, "error": "Project tests timed out after 60 seconds.", "stdout": str(exc.stdout or "")[-MAX_TEST_CHARS:], "stderr": str(exc.stderr or "")[-MAX_TEST_CHARS:]}, status=408)
+    except OSError as exc:
+        return JsonResponse({"success": False, "candidate": candidate, "error": "Test runner unavailable: " + str(exc)}, status=503)
+
+
 @login_required(login_url="/login/")
 @require_POST
 def preview_patch(request):
