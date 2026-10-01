@@ -232,6 +232,9 @@ const searchInput = document.getElementById("searchInput");
 const searchResults = document.getElementById("searchResults");
 const projectStats = document.getElementById("projectStats");
 const projectFiles = document.getElementById("projectFiles");
+const knowledgeCollectionName = document.getElementById("knowledgeCollectionName");
+const knowledgeCollectionMode = document.getElementById("knowledgeCollectionMode");
+const knowledgeCollectionSelect = document.getElementById("knowledgeCollectionSelect");
 const gitBranch = document.getElementById("gitBranch");
 const gitFiles = document.getElementById("gitFiles");
 const gitDiff = document.getElementById("gitDiff");
@@ -2778,6 +2781,10 @@ async function sendMessage() {
     });
     images.forEach(image => formData.append("images", image, image.name));
     selectedFiles.forEach(filename => formData.append("context_files", filename));
+    if (knowledgeCollectionSelect && knowledgeCollectionSelect.value) {
+        formData.append("knowledge_collection_id", knowledgeCollectionSelect.value);
+        formData.append("knowledge_mode", knowledgeCollectionMode ? knowledgeCollectionMode.value : "hybrid");
+    }
 
     try {
         const response = await fetch("/api/ask-code/", {
@@ -3624,6 +3631,57 @@ async function saveProjectFile() {
     }
 }
 
+async function loadKnowledgeCollections() {
+    if (!knowledgeCollectionSelect) return;
+    try {
+        const response = await fetch("/api/knowledge/collections/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load collections.");
+        const selected = knowledgeCollectionSelect.value;
+        knowledgeCollectionSelect.innerHTML = "<option value=\"\">No collection selected</option>";
+        (data.collections || []).forEach(collection => {
+            const option = document.createElement("option");
+            option.value = collection.id;
+            option.innerText = collection.name + " · " + collection.retrieval_mode + " · " + collection.documents.length + " file(s)";
+            option.selected = String(collection.id) === selected;
+            knowledgeCollectionSelect.appendChild(option);
+        });
+    } catch (error) { if (projectStats) projectStats.innerText += " Collection error: " + error; }
+}
+
+async function createKnowledgeCollection() {
+    if (!knowledgeCollectionName || !knowledgeCollectionName.value.trim()) return;
+    try {
+        const response = await fetch("/api/knowledge/collections/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ name: knowledgeCollectionName.value.trim(), retrieval_mode: knowledgeCollectionMode.value }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to create collection.");
+        knowledgeCollectionName.value = "";
+        await loadKnowledgeCollections();
+        knowledgeCollectionSelect.value = String(data.collection.id);
+    } catch (error) { alert("Collection error: " + error); }
+}
+
+async function addSelectedToKnowledgeCollection() {
+    const collectionId = knowledgeCollectionSelect ? knowledgeCollectionSelect.value : "";
+    const filenames = [...selectedProjectFiles];
+    if (!collectionId || !filenames.length) { alert("Select a collection and at least one project file."); return; }
+    try {
+        const response = await fetch("/api/knowledge/collections/" + collectionId + "/documents/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ action: "add", filenames_json: JSON.stringify(filenames) }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to add files.");
+        await loadKnowledgeCollections();
+        knowledgeCollectionSelect.value = collectionId;
+    } catch (error) { alert("Collection files error: " + error); }
+}
+
 async function openPatchReview(updated, language) {
     openAdvancedComposer();
     if (!patchPanel) {
@@ -3855,6 +3913,7 @@ async function changeGitBranch(action) {
             headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
             body: new URLSearchParams({ action, branch }),
         });
+        loadKnowledgeCollections();
         const data = await response.json();
         if (!data.success) throw new Error(data.error || "Unable to change branch.");
         sendStatus.innerText = "Git branch changed to " + data.current + ".";

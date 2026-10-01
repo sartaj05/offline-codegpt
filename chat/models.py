@@ -474,6 +474,31 @@ class KnowledgeDocument(models.Model):
         return self.filename or self.title
 
 
+class KnowledgeCollection(models.Model):
+    RETRIEVAL_CHOICES = (("hybrid", "Hybrid RAG"), ("full", "Full document"))
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="knowledge_collections")
+    name = models.CharField(max_length=160)
+    description = models.TextField(blank=True, default="")
+    retrieval_mode = models.CharField(max_length=20, choices=RETRIEVAL_CHOICES, default="hybrid")
+    documents = models.ManyToManyField(KnowledgeDocument, through="KnowledgeCollectionDocument", related_name="collections")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["owner", "name"], name="unique_owner_collection_name")]
+        ordering = ["name"]
+
+
+class KnowledgeCollectionDocument(models.Model):
+    collection = models.ForeignKey(KnowledgeCollection, on_delete=models.CASCADE, related_name="memberships")
+    document = models.ForeignKey(KnowledgeDocument, on_delete=models.CASCADE, related_name="collection_memberships")
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["collection", "document"], name="unique_collection_document")]
+
+
 class KnowledgeChunk(models.Model):
     """
     Stores small chunks of uploaded code/text for local search.

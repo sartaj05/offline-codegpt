@@ -59,6 +59,8 @@ from .models import (
     ConversationRevision,
     KnowledgeChunk,
     KnowledgeDocument,
+    KnowledgeCollection,
+    KnowledgeCollectionDocument,
     LocalModelConfig,
     McpConnector,
     McpToolCall,
@@ -775,10 +777,10 @@ def _hybrid_rerank_score(query, content, filename, lexical_score, semantic_score
     )
 
 
-def _search_knowledge(query, limit=8, owner=None, filenames=None):
+def _search_knowledge(query, limit=8, owner=None, filenames=None, collection_id=None, full_document=False):
     terms = list(dict.fromkeys(re.findall(r"[a-zA-Z0-9_]{2,}", query.lower())))
     selected_filenames = {str(name).strip().lower() for name in (filenames or []) if str(name).strip()}
-    if not terms and not selected_filenames:
+    if not terms and not selected_filenames and not collection_id:
         return []
 
     user_settings = _user_ollama_settings(owner) if owner else None
@@ -793,6 +795,8 @@ def _search_knowledge(query, limit=8, owner=None, filenames=None):
         document__is_active=True,
         document__owner=owner,
     ).select_related("document")
+    if collection_id:
+        chunks = chunks.filter(document__collections__id=collection_id)
 
     for chunk in chunks:
         content = chunk.content.lower()
@@ -806,33 +810,29 @@ def _search_knowledge(query, limit=8, owner=None, filenames=None):
             matches.append((max(score, 0.001), chunk, lexical_score, semantic_score))
 
     matches.sort(key=lambda item: item[0], reverse=True)
-    return [
-        {
+    results = []
+    seen_documents = set()
+    for score, chunk, lexical_score, semantic_score in matches[:limit]:
+        if full_document and chunk.document_id in seen_documents:
+            continue
+        seen_documents.add(chunk.document_id)
+        content = chunk.document.original_text if full_document else chunk.content
+        offset = chunk.document.original_text.find(chunk.content)
+        results.append({
             "filename": chunk.document.filename,
             "language": chunk.language,
             "chunk_index": chunk.chunk_index,
-            "content": chunk.content,
+            "content": content,
             "score": round(score, 4),
             "lexical_score": lexical_score,
             "semantic_score": round(semantic_score, 4),
-            "retrieval": "hybrid",
-            "line_start": (
-                chunk.document.original_text[:max(
-                    chunk.document.original_text.find(chunk.content),
-                    0,
-                )].count("\n") + 1
-            ),
-            "line_end": (
-                chunk.document.original_text[:max(
-                    chunk.document.original_text.find(chunk.content),
-                    0,
-                )].count("\n") + chunk.content.count("\n") + 1
-            ),
-            "page_start": _page_for_offset(chunk.document.original_text, chunk.document.original_text.find(chunk.content)),
-            "page_end": _page_for_offset(chunk.document.original_text, chunk.document.original_text.find(chunk.content) + len(chunk.content)),
-        }
-        for score, chunk, lexical_score, semantic_score in matches[:limit]
-    ]
+            "retrieval": "full_document" if full_document else "hybrid",
+            "line_start": chunk.document.original_text[:max(offset, 0)].count("\n") + 1,
+            "line_end": chunk.document.original_text[:max(offset, 0)].count("\n") + content.count("\n") + 1,
+            "page_start": _page_for_offset(chunk.document.original_text, offset),
+            "page_end": _page_for_offset(chunk.document.original_text, offset + len(content)),
+        })
+    return results
 
 
 def _page_for_offset(text, offset):
@@ -1251,11 +1251,67 @@ def manage_session(request, session_id):
 @login_required(login_url="/login/")
 def knowledge_search(request):
     query = request.GET.get("q", "").strip()
+    try:
+        collection_id = int(request.GET.get("collection_id", "0")) or None
+    except (TypeError, ValueError):
+        collection_id = None
+    collection = KnowledgeCollection.objects.filter(id=collection_id, owner=request.user).first() if collection_id else None
     return JsonResponse({
         "success": True,
         "query": query,
-        "results": _search_knowledge(query, owner=request.user),
+        "results": _search_knowledge(query, owner=request.user, collection_id=collection.id if collection else None, full_document=bool(collection and collection.retrieval_mode == "full")),
     })
+
+
+def _collection_payload(collection):
+    return {
+        "id": collection.id,
+        "name": collection.name,
+        "description": collection.description,
+        "retrieval_mode": collection.retrieval_mode,
+        "documents": list(collection.documents.filter(is_active=True).values_list("filename", flat=True)),
+        "updated_at": collection.updated_at.isoformat(),
+    }
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def knowledge_collections(request):
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()[:160]
+        if not name:
+            return JsonResponse({"success": False, "error": "Collection name is required."}, status=400)
+        mode = request.POST.get("retrieval_mode", "hybrid").strip().lower()
+        if mode not in {"hybrid", "full"}:
+            return JsonResponse({"success": False, "error": "Use hybrid or full retrieval mode."}, status=400)
+        collection, created = KnowledgeCollection.objects.get_or_create(
+            owner=request.user,
+            name=name,
+            defaults={"description": request.POST.get("description", "")[:1000], "retrieval_mode": mode},
+        )
+        return JsonResponse({"success": True, "collection": _collection_payload(collection), "created": created}, status=201 if created else 200)
+    return JsonResponse({"success": True, "collections": [_collection_payload(item) for item in KnowledgeCollection.objects.filter(owner=request.user)]})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def knowledge_collection_documents(request, collection_id):
+    collection = get_object_or_404(KnowledgeCollection, id=collection_id, owner=request.user)
+    action = request.POST.get("action", "add").strip().lower()
+    try:
+        filenames = json.loads(request.POST.get("filenames_json", "[]"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        filenames = []
+    filenames = [_safe_filename(name) for name in filenames if str(name).strip()][:100]
+    documents = KnowledgeDocument.objects.filter(owner=request.user, filename__in=filenames, is_active=True)
+    if action == "add":
+        KnowledgeCollectionDocument.objects.bulk_create([KnowledgeCollectionDocument(collection=collection, document=document) for document in documents], ignore_conflicts=True)
+    elif action == "remove":
+        KnowledgeCollectionDocument.objects.filter(collection=collection, document__in=documents).delete()
+    else:
+        return JsonResponse({"success": False, "error": "Use add or remove."}, status=400)
+    collection.save(update_fields=["updated_at"])
+    return JsonResponse({"success": True, "collection": _collection_payload(collection)})
 
 
 @login_required(login_url="/login/")
@@ -4022,6 +4078,10 @@ def ask_code(request):
     selected_context_files = list(dict.fromkeys(
         item.strip()[:500] for item in request.POST.getlist("context_files") if item.strip()
     ))[:50]
+    try:
+        knowledge_collection_id = int(request.POST.get("knowledge_collection_id", "0")) or None
+    except (TypeError, ValueError):
+        knowledge_collection_id = None
 
     uploaded_files = request.FILES.getlist("files")
     image_files = request.FILES.getlist("images")
@@ -4100,6 +4160,7 @@ def ask_code(request):
         }, status=400)
 
     owner = request.user if request.user.is_authenticated else None
+    knowledge_collection = KnowledgeCollection.objects.filter(id=knowledge_collection_id, owner=owner).first() if owner and knowledge_collection_id else None
     safe_prompt = redact_sensitive_text(owner, prompt)
     safe_code = redact_sensitive_text(owner, code)
     safe_final_code = redact_sensitive_text(owner, final_code)
@@ -4205,6 +4266,8 @@ def ask_code(request):
         safe_prompt or safe_code,
         owner=owner,
         filenames=selected_context_files or None,
+        collection_id=knowledge_collection.id if knowledge_collection else None,
+        full_document=bool(knowledge_collection and knowledge_collection.retrieval_mode == "full"),
     )
     knowledge_context = "\n\n".join(
         f"===== PROJECT CONTEXT: {item['filename']}:{item['line_start']}-{item['line_end']} =====\n"

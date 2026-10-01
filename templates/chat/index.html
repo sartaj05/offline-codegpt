@@ -56,6 +56,13 @@
             </div>
             <div id="projectStats" class="project-stats">No indexed files yet.</div>
             <div id="projectFiles" class="project-files"></div>
+            <div class="knowledge-collection-tools">
+                <input id="knowledgeCollectionName" placeholder="Knowledge collection name">
+                <select id="knowledgeCollectionMode"><option value="hybrid">Hybrid RAG + rerank</option><option value="full">Full document</option></select>
+                <button type="button" onclick="createKnowledgeCollection()">Create collection</button>
+                <select id="knowledgeCollectionSelect"><option value="">No collection selected</option></select>
+                <button type="button" onclick="addSelectedToKnowledgeCollection()">Add selected files</button>
+            </div>
         </div>
         <div class="git-workspace">
             <div class="workspace-heading">
