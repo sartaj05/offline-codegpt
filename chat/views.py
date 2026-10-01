@@ -595,7 +595,8 @@ def _ollama_model_details(base_url=OLLAMA_BASE_URL):
     """Return safe local model metadata for the model manager."""
     try:
         response = requests.get(f"{base_url}/api/tags", timeout=3)
-        response.raise_for_status()
+        if getattr(response, "status_code", 200) >= 400:
+            return []
         details = []
         for item in response.json().get("models", []):
             name = item.get("name")
@@ -611,7 +612,7 @@ def _ollama_model_details(base_url=OLLAMA_BASE_URL):
                 "family": model_details.get("family", ""),
             })
         return details
-    except (requests.RequestException, ValueError, TypeError):
+    except (requests.RequestException, ValueError, TypeError, AttributeError):
         return []
 
 
@@ -696,13 +697,14 @@ def _ollama_embeddings(texts, base_url):
             json={"model": embedding_model, "input": texts},
             timeout=(5, 60),
         )
-        response.raise_for_status()
+        if getattr(response, "status_code", 200) >= 400:
+            return []
         payload = response.json()
         embeddings = payload.get("embeddings") or []
         if not embeddings and payload.get("embedding"):
             embeddings = [payload["embedding"]]
         return embeddings if len(embeddings) == len(texts) else []
-    except (requests.RequestException, ValueError, TypeError):
+    except (requests.RequestException, ValueError, TypeError, AttributeError):
         return []
 
 
