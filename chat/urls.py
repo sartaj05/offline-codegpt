@@ -37,6 +37,7 @@ urlpatterns = [
     path("api/agent/task/<int:task_id>/run/", views.agent_run, name="agent_run"),
     path("api/agent/task/<int:task_id>/control/", views.agent_control, name="agent_control"),
     path("api/observability/", views.ai_observability, name="ai_observability"),
+    path("api/agent/events/", views.agent_event_stream, name="agent_event_stream"),
     path("api/evaluations/tasks/", views.evaluation_tasks, name="evaluation_tasks"),
     path("api/evaluations/tasks/<int:task_id>/", views.evaluation_task_detail, name="evaluation_task_detail"),
     path("api/evaluations/tasks/<int:task_id>/run/", views.evaluation_run, name="evaluation_run"),

@@ -80,6 +80,7 @@ let evaluationTasksCache = [];
 const observabilityStats = document.getElementById("observabilityStats");
 const observabilityOutput = document.getElementById("observabilityOutput");
 let observabilityTimer = null;
+let agentEventSource = null;
 const sandboxTimeout = document.getElementById("sandboxTimeout");
 const sandboxMemory = document.getElementById("sandboxMemory");
 const sandboxOutputChars = document.getElementById("sandboxOutputChars");
@@ -794,11 +795,33 @@ function toggleObservability() {
     if (observabilityPanel.hidden) {
         if (observabilityTimer) window.clearInterval(observabilityTimer);
         observabilityTimer = null;
+        if (agentEventSource) agentEventSource.close();
+        agentEventSource = null;
         return;
     }
     loadObservability();
     if (observabilityTimer) window.clearInterval(observabilityTimer);
     observabilityTimer = window.setInterval(loadObservability, 5000);
+    startAgentEventStream();
+}
+
+function startAgentEventStream() {
+    if (!window.EventSource || agentEventSource) return;
+    agentEventSource = new EventSource("/api/agent/events/");
+    agentEventSource.addEventListener("ai", event => {
+        try {
+            const data = JSON.parse(event.data);
+            if (observabilityOutput) {
+                observabilityOutput.innerText = "Live AI event: " + (data.model || "local model") + " · " + (data.duration_ms || 0) + " ms\n\n" + observabilityOutput.innerText;
+            }
+        } catch (error) {
+            // Ignore malformed event payloads and keep the periodic metrics refresh alive.
+        }
+    });
+    agentEventSource.onerror = () => {
+        if (agentEventSource) agentEventSource.close();
+        agentEventSource = null;
+    };
 }
 
 async function loadObservability() {

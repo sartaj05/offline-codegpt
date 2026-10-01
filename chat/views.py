@@ -2086,6 +2086,37 @@ def ai_observability(request):
     })
 
 
+@login_required(login_url="/login/")
+@require_GET
+def agent_event_stream(request):
+    def stream():
+        latest_id = 0
+        for _ in range(20):
+            events = list(
+                AiEvent.objects.filter(owner=request.user, id__gt=latest_id)
+                .order_by("id")[:50]
+            )
+            for event in events:
+                latest_id = max(latest_id, event.id)
+                payload = {
+                    "id": event.id,
+                    "type": event.event_type,
+                    "model": event.model_name,
+                    "success": event.success,
+                    "duration_ms": event.duration_ms,
+                    "output_chars": event.output_chars,
+                    "created_at": event.created_at.isoformat(),
+                }
+                yield f"event: ai\ndata: {json.dumps(payload)}\n\n"
+            yield f": heartbeat {timezone.now().isoformat()}\n\n"
+            time.sleep(1)
+
+    response = StreamingHttpResponse(stream(), content_type="text/event-stream")
+    response["Cache-Control"] = "no-cache"
+    response["X-Accel-Buffering"] = "no"
+    return response
+
+
 def _evaluation_task_payload(task):
     return {
         "id": task.id,
