@@ -3204,6 +3204,21 @@ async function runAgentJob() {
     agentJobStatus.innerText = data.job.status.toUpperCase() + " job #" + agentJobId + " · attempt " + data.job.attempts;
 }
 
+async function recoverAgentJobs() {
+    if (!agentJobStatus) return;
+    agentJobStatus.innerText = "Recovering interrupted jobs...";
+    try {
+        const response = await fetch("/api/agent/jobs/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ action: "recover" }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to recover jobs.");
+        agentJobStatus.innerText = "Recovered " + data.recovered + " interrupted job(s); they are queued at their last checkpoint.";
+    } catch (error) { agentJobStatus.innerText = "Recovery error: " + error; }
+}
+
 async function controlAgentTask(action) {
     if (!agentTaskId) return;
     try {

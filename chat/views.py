@@ -2051,12 +2051,30 @@ def _agent_job_payload(job):
     }
 
 
+def _recover_agent_jobs(owner):
+    jobs = list(AgentJob.objects.filter(owner=owner, status="running"))
+    for job in jobs:
+        job.status = "queued"
+        job.checkpoint = {**(job.checkpoint or {}), "stage": "recovered", "recovered_at": timezone.now().isoformat()}
+        job.logs = [*(job.logs or []), {"level": "warning", "message": "Recovered after an interrupted worker run; queued at the last checkpoint."}][-100:]
+        job.last_error = ""
+        job.save(update_fields=["status", "checkpoint", "logs", "last_error", "updated_at"])
+    return jobs
+
+
 @login_required(login_url="/login/")
 @require_http_methods(["GET", "POST"])
 def agent_jobs(request):
+    if request.method == "POST" and request.POST.get("action", "").strip().lower() == "recover":
+        jobs = _recover_agent_jobs(request.user)
+        return JsonResponse({"success": True, "recovered": len(jobs), "jobs": [_agent_job_payload(job) for job in jobs]})
     if request.method == "GET":
         jobs = AgentJob.objects.filter(owner=request.user).select_related("task")[:100]
-        return JsonResponse({"success": True, "jobs": [_agent_job_payload(job) for job in jobs]})
+        return JsonResponse({
+            "success": True,
+            "jobs": [_agent_job_payload(job) for job in jobs],
+            "recovery": {"running": AgentJob.objects.filter(owner=request.user, status="running").count(), "queued": AgentJob.objects.filter(owner=request.user, status="queued").count()},
+        })
     task = get_object_or_404(AgentTask, id=request.POST.get("task_id"), owner=request.user)
     job = AgentJob.objects.create(
         owner=request.user,
