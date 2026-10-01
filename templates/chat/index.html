@@ -261,6 +261,26 @@
             </div>
             <pre id="memorySummary" class="memory-summary">Open a chat and choose Summarize chat to create a local memory snapshot.</pre>
             <div id="selectedContextSummary" class="selected-context-summary">No project files selected.</div>
+            <div class="memory-editor">
+                <strong>Scoped persistent memories</strong>
+                <span>Only enabled memories matching the selected scope are included in local prompts.</span>
+                <div class="memory-form-row">
+                    <input id="scopedMemoryTitle" type="text" placeholder="Memory title">
+                    <select id="scopedMemoryScope">
+                        <option value="global">Global</option>
+                        <option value="project">Project</option>
+                        <option value="session">Conversation</option>
+                        <option value="workspace">Workspace</option>
+                    </select>
+                    <input id="scopedMemoryKey" type="text" placeholder="Project/workspace key (or current chat id)">
+                </div>
+                <textarea id="scopedMemoryContent" rows="3" placeholder="Example: Prefer small Django views and keep API responses JSON."></textarea>
+                <div class="memory-actions">
+                    <button type="button" onclick="saveScopedMemory()">Save memory</button>
+                    <button type="button" onclick="loadScopedMemories()">Refresh memories</button>
+                </div>
+                <div id="scopedMemoryList" class="scoped-memory-list">No scoped memories loaded.</div>
+            </div>
         </section>
         <section id="evaluationPanel" class="evaluation-panel" hidden>
             <div class="settings-heading">

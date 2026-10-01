@@ -62,6 +62,7 @@ from .models import (
     KnowledgeCollection,
     KnowledgeCollectionDocument,
     CodeSymbol,
+    ScopedMemory,
     LocalModelConfig,
     McpConnector,
     McpToolCall,
@@ -1704,6 +1705,89 @@ def _build_conversation_context(session, max_chars=24000, exclude_message_id=Non
         "used_chars": len("\n\n".join(context_parts)),
         "summarized": summarized,
     }
+
+
+def _scoped_memory_payload(memory):
+    return {
+        "id": memory.id,
+        "scope": memory.scope,
+        "scope_key": memory.scope_key,
+        "title": memory.title,
+        "content": memory.content,
+        "is_enabled": memory.is_enabled,
+        "source": memory.source,
+        "created_at": memory.created_at.isoformat(),
+        "updated_at": memory.updated_at.isoformat(),
+    }
+
+
+def _scoped_memory_context(owner, session_id=None, project_key="", workspace_key=""):
+    if not owner:
+        return "", 0
+    memories = ScopedMemory.objects.filter(owner=owner, is_enabled=True)
+    selected = []
+    for memory in memories:
+        if memory.scope == "global":
+            selected.append(memory)
+        elif memory.scope == "session" and session_id and memory.scope_key == str(session_id):
+            selected.append(memory)
+        elif memory.scope == "project" and project_key and memory.scope_key == project_key:
+            selected.append(memory)
+        elif memory.scope == "workspace" and workspace_key and memory.scope_key == workspace_key:
+            selected.append(memory)
+    lines = [f"- {memory.title}: {memory.content}" for memory in selected]
+    return "\n".join(lines), len(selected)
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def scoped_memories(request):
+    if request.method == "GET":
+        scope = request.GET.get("scope", "").strip()
+        scope_key = request.GET.get("scope_key", "").strip()
+        queryset = ScopedMemory.objects.filter(owner=request.user)
+        if scope in {choice[0] for choice in ScopedMemory.SCOPE_CHOICES}:
+            queryset = queryset.filter(scope=scope)
+        if scope_key:
+            queryset = queryset.filter(scope_key=scope_key)
+        return JsonResponse({"success": True, "memories": [_scoped_memory_payload(item) for item in queryset]})
+
+    title = request.POST.get("title", "").strip()[:200]
+    content = request.POST.get("content", "").strip()
+    scope = request.POST.get("scope", "global").strip()
+    scope_key = request.POST.get("scope_key", "").strip()[:240]
+    if scope not in {choice[0] for choice in ScopedMemory.SCOPE_CHOICES}:
+        return JsonResponse({"success": False, "error": "Unknown memory scope."}, status=400)
+    if not title or not content:
+        return JsonResponse({"success": False, "error": "Memory title and content are required."}, status=400)
+    if scope in {"project", "session", "workspace"} and not scope_key:
+        return JsonResponse({"success": False, "error": "A key is required for this memory scope."}, status=400)
+    memory = ScopedMemory.objects.create(
+        owner=request.user,
+        scope=scope,
+        scope_key=scope_key,
+        title=title,
+        content=content[:8000],
+    )
+    return JsonResponse({"success": True, "memory": _scoped_memory_payload(memory)}, status=201)
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["POST", "DELETE"])
+def scoped_memory_detail(request, memory_id):
+    memory = get_object_or_404(ScopedMemory, id=memory_id, owner=request.user)
+    if request.method == "DELETE":
+        memory.delete()
+        return JsonResponse({"success": True, "deleted": memory_id})
+    memory.title = request.POST.get("title", memory.title).strip()[:200]
+    memory.content = request.POST.get("content", memory.content).strip()[:8000]
+    memory.scope = request.POST.get("scope", memory.scope).strip()
+    memory.scope_key = request.POST.get("scope_key", memory.scope_key).strip()[:240]
+    memory.is_enabled = request.POST.get("is_enabled", "true").lower() in {"1", "true", "yes", "on"}
+    if memory.scope not in {choice[0] for choice in ScopedMemory.SCOPE_CHOICES} or not memory.title or not memory.content:
+        return JsonResponse({"success": False, "error": "Invalid memory update."}, status=400)
+    memory.save()
+    return JsonResponse({"success": True, "memory": _scoped_memory_payload(memory)})
 
 
 @login_required(login_url="/login/")
@@ -4435,6 +4519,15 @@ def ask_code(request):
         f"{item.kind} {item.name} in {item.document.filename}:{item.line_start}-{item.line_end} — {item.signature}"
         for item in related_symbols
     )
+    memory_project_key = request.POST.get("memory_project_key", "").strip()[:240]
+    memory_workspace_key = request.POST.get("memory_workspace_key", "").strip()[:240]
+    scoped_memory_context, scoped_memory_count = _scoped_memory_context(
+        owner,
+        session_id=session.id if session else None,
+        project_key=memory_project_key,
+        workspace_key=memory_workspace_key,
+    )
+    scoped_memory_context = redact_sensitive_text(owner, scoped_memory_context)
 
     full_prompt = f"""
 You are a fully offline coding assistant running locally.
@@ -4456,6 +4549,9 @@ Relevant project context (optional):
 
 Related code symbols and definitions (optional):
 {symbol_context or "None"}
+
+Scoped local memory (user-controlled; optional):
+{scoped_memory_context or "None"}
 
 Code or additional user input (optional):
  {safe_final_code or "None"}
@@ -4567,6 +4663,7 @@ Instructions:
                     "session_id": session.id,
                     "context_chars": len(full_prompt),
                     "conversation_context": context_stats,
+                    "scoped_memories": scoped_memory_count,
                     "output_chars_per_second": round(len(answer) / max(ai_event.duration_ms / 1000, 0.001), 1),
                     "first_token_ms": first_token_ms or 0,
                     "output_format": output_format,

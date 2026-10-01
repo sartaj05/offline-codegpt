@@ -583,6 +583,23 @@ class AssistantMemory(models.Model):
         return self.title
 
 
+class ScopedMemory(models.Model):
+    SCOPE_CHOICES = (("global", "Global"), ("project", "Project"), ("session", "Conversation"), ("workspace", "Workspace"))
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="scoped_memories")
+    scope = models.CharField(max_length=20, choices=SCOPE_CHOICES, default="global")
+    scope_key = models.CharField(max_length=240, blank=True, default="")
+    title = models.CharField(max_length=200)
+    content = models.TextField()
+    is_enabled = models.BooleanField(default=True)
+    source = models.CharField(max_length=40, default="user")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+
+
 class MessageFeedback(models.Model):
     """
     Stores user feedback on assistant answers.

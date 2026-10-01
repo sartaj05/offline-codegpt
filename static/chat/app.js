@@ -44,6 +44,11 @@ const backupStatus = document.getElementById("backupStatus");
 const memoryPanel = document.getElementById("memoryPanel");
 const memorySummary = document.getElementById("memorySummary");
 const selectedContextSummary = document.getElementById("selectedContextSummary");
+const scopedMemoryTitle = document.getElementById("scopedMemoryTitle");
+const scopedMemoryScope = document.getElementById("scopedMemoryScope");
+const scopedMemoryKey = document.getElementById("scopedMemoryKey");
+const scopedMemoryContent = document.getElementById("scopedMemoryContent");
+const scopedMemoryList = document.getElementById("scopedMemoryList");
 const remoteIntegrationPanel = document.getElementById("remoteIntegrationPanel");
 const remoteProvider = document.getElementById("remoteProvider");
 const remoteRepository = document.getElementById("remoteRepository");
@@ -432,6 +437,72 @@ async function restoreProjectBackup() {
 function toggleMemoryPanel() {
     if (memoryPanel) memoryPanel.hidden = !memoryPanel.hidden;
     renderSelectedContextSummary();
+    if (memoryPanel && !memoryPanel.hidden) loadScopedMemories();
+}
+
+async function loadScopedMemories() {
+    if (!scopedMemoryList) return;
+    scopedMemoryList.innerText = "Loading scoped memories...";
+    try {
+        const response = await fetch("/api/memory/scoped/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load memories.");
+        if (!data.memories.length) {
+            scopedMemoryList.innerText = "No scoped memories saved.";
+            return;
+        }
+        scopedMemoryList.innerHTML = data.memories.map(memory => `
+            <div class="scoped-memory-item">
+                <div><strong>${escapeHtml(memory.title)}</strong> <small>${escapeHtml(memory.scope)}${memory.scope_key ? " · " + escapeHtml(memory.scope_key) : ""}</small></div>
+                <div>${escapeHtml(memory.content)}</div>
+                <button type="button" onclick="deleteScopedMemory(${memory.id})">Delete</button>
+            </div>`).join("");
+    } catch (error) {
+        scopedMemoryList.innerText = "Memory load error: " + error.message;
+    }
+}
+
+async function saveScopedMemory() {
+    if (!scopedMemoryTitle || !scopedMemoryContent) return;
+    const scope = scopedMemoryScope ? scopedMemoryScope.value : "global";
+    const scopeKey = scopedMemoryKey && scopedMemoryKey.value.trim()
+        ? scopedMemoryKey.value.trim()
+        : (scope === "session" ? String(currentSessionId || "") : "");
+    const body = new URLSearchParams({
+        title: scopedMemoryTitle.value.trim(),
+        content: scopedMemoryContent.value.trim(),
+        scope,
+        scope_key: scopeKey,
+    });
+    try {
+        const response = await fetch("/api/memory/scoped/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body,
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to save memory.");
+        scopedMemoryTitle.value = "";
+        scopedMemoryContent.value = "";
+        await loadScopedMemories();
+    } catch (error) {
+        if (memorySummary) memorySummary.innerText = "Memory save error: " + error.message;
+    }
+}
+
+async function deleteScopedMemory(memoryId) {
+    if (!confirm("Delete this persistent memory?")) return;
+    try {
+        const response = await fetch("/api/memory/scoped/" + memoryId + "/", {
+            method: "DELETE",
+            headers: { "X-CSRFToken": csrfToken },
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to delete memory.");
+        await loadScopedMemories();
+    } catch (error) {
+        if (memorySummary) memorySummary.innerText = "Memory delete error: " + error.message;
+    }
 }
 
 function renderSelectedContextSummary() {
@@ -2847,6 +2918,12 @@ async function sendMessage() {
     formData.append("output_format", responseFormat ? responseFormat.value : "text");
     if (outputSchema && outputSchema.value.trim()) formData.append("output_schema", outputSchema.value.trim());
     if (currentSessionId) formData.append("session_id", currentSessionId);
+    if (scopedMemoryScope && scopedMemoryScope.value === "project" && scopedMemoryKey && scopedMemoryKey.value.trim()) {
+        formData.append("memory_project_key", scopedMemoryKey.value.trim());
+    }
+    if (scopedMemoryScope && scopedMemoryScope.value === "workspace" && scopedMemoryKey && scopedMemoryKey.value.trim()) {
+        formData.append("memory_workspace_key", scopedMemoryKey.value.trim());
+    }
     if (editId) formData.append("edit_message_id", editId);
     files.forEach(file => {
         const relativePath = file.webkitRelativePath || file.name;

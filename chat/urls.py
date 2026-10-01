@@ -107,6 +107,8 @@ urlpatterns = [
     path("api/session/<int:session_id>/", views.session_messages, name="session_messages"),
     path("api/session/<int:session_id>/summary/", views.session_summary, name="session_summary"),
     path("api/session/<int:session_id>/revisions/", views.session_revisions, name="session_revisions"),
+    path("api/memory/scoped/", views.scoped_memories, name="scoped_memories"),
+    path("api/memory/scoped/<int:memory_id>/", views.scoped_memory_detail, name="scoped_memory_detail"),
     path("api/backup/", views.project_backup, name="project_backup"),
     path("api/session/<int:session_id>/export/", views.export_session, name="export_session"),
 ]
