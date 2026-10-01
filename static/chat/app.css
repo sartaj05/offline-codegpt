@@ -512,6 +512,7 @@ select { padding: 0 10px; }
 .format-control { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 8px 0; color: var(--muted); font-size: 10px; }
 .format-control select { padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); font-size: 10px; }
 .format-control textarea { flex: 1 1 100%; min-height: 58px; padding: 7px; border: 1px solid var(--border); border-radius: 6px; background: #11141b; color: var(--text); font-family: Consolas, monospace; font-size: 10px; }
+.ocr-status { min-height: 16px; margin-top: 7px; color: var(--accent); font-size: 10px; }
 .source-citations { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--border); }
 .source-citations-label { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .source-citation { padding: 5px 8px; border: 1px solid rgba(99,230,190,.3); border-radius: 999px; background: rgba(99,230,190,.08); color: var(--accent); font-family: Consolas, monospace; font-size: 10px; cursor: pointer; }

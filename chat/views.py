@@ -28,6 +28,11 @@ try:
 except ImportError:
     PdfReader = None
 
+try:
+    import fitz
+except ImportError:
+    fitz = None
+
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -1106,6 +1111,52 @@ def project_document_create(request):
             "size_bytes": document.file_size_bytes,
         },
     })
+
+
+@login_required(login_url="/login/")
+@require_POST
+def local_ocr(request):
+    uploaded_files = request.FILES.getlist("files")
+    if not uploaded_files:
+        return JsonResponse({"success": False, "error": "Choose an image or scanned PDF first."}, status=400)
+    settings = _user_ollama_settings(request.user)
+    image_data = []
+    names = []
+    for uploaded_file in uploaded_files[:5]:
+        if uploaded_file.size > MAX_IMAGE_BYTES * 2:
+            return JsonResponse({"success": False, "error": f"{uploaded_file.name} is too large for local OCR."}, status=400)
+        raw = uploaded_file.read()
+        extension = PurePosixPath(uploaded_file.name).suffix.lower()
+        if extension == ".pdf":
+            if fitz is None:
+                return JsonResponse({"success": False, "error": "Scanned PDF OCR requires the PyMuPDF package."}, status=400)
+            document = fitz.open(stream=raw, filetype="pdf")
+            for page_index in range(min(5, document.page_count)):
+                page = document.load_page(page_index)
+                pixmap = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False)
+                image_data.append(base64.b64encode(pixmap.tobytes("png")).decode("ascii"))
+            names.append(uploaded_file.name)
+        elif uploaded_file.content_type.startswith("image/"):
+            image_data.append(base64.b64encode(raw).decode("ascii"))
+            names.append(uploaded_file.name)
+        else:
+            return JsonResponse({"success": False, "error": f"{uploaded_file.name} is not an image or PDF."}, status=400)
+    try:
+        response = requests.post(
+            f"{settings.server_url}/api/generate",
+            json={
+                "model": VISION_MODEL,
+                "prompt": "Transcribe all visible text exactly. Preserve headings, line breaks, tables, and code. Return only the transcription.",
+                "images": image_data,
+                "stream": False,
+            },
+            timeout=(10, 300),
+        )
+        response.raise_for_status()
+        text = response.json().get("response", "").strip()
+        return JsonResponse({"success": True, "files": names, "text": text, "pages": len(image_data)})
+    except (requests.RequestException, ValueError, TypeError) as exc:
+        return JsonResponse({"success": False, "error": "Local OCR failed: " + str(exc)}, status=503)
 
 
 @login_required(login_url="/login/")

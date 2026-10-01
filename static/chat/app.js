@@ -199,6 +199,8 @@ const fileInput = document.getElementById("fileInput");
 const folderInput = document.getElementById("folderInput");
 const imageInput = document.getElementById("imageInput");
 const imagePreview = document.getElementById("imagePreview");
+const ocrInput = document.getElementById("ocrInput");
+const ocrStatus = document.getElementById("ocrStatus");
 const sendBtn = document.getElementById("sendBtn");
 const draftStatus = document.getElementById("draftStatus");
 const responseFormat = document.getElementById("responseFormat");
@@ -2092,6 +2094,27 @@ function toggleVoiceInput() {
     };
     setDraftStatus("Listening… speak your request");
     recognition.start();
+}
+
+async function runLocalOcr() {
+    if (!ocrInput || !ocrInput.files.length) {
+        if (ocrStatus) ocrStatus.innerText = "Choose an image or scanned PDF first.";
+        return;
+    }
+    const formData = new FormData();
+    [...ocrInput.files].forEach(file => formData.append("files", file, file.name));
+    if (ocrStatus) ocrStatus.innerText = "Running OCR with the local vision model...";
+    try {
+        const response = await fetch("/api/ocr/", { method: "POST", headers: { "X-CSRFToken": csrfToken }, body: formData });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "OCR failed.");
+        codeInput.value = data.text || "";
+        openAdvancedComposer();
+        syncEditorPreview();
+        if (ocrStatus) ocrStatus.innerText = "Extracted " + data.pages + " page/image(s) locally.";
+    } catch (error) {
+        if (ocrStatus) ocrStatus.innerText = "OCR error: " + error.message;
+    }
 }
 
 async function callMcpTool(tool, args) {

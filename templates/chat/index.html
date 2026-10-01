@@ -734,9 +734,12 @@
                         <label class="file-picker">＋ Code files<input type="file" id="fileInput" multiple></label>
                         <label class="file-picker">＋ Project folder<input type="file" id="folderInput" webkitdirectory directory multiple></label>
                         <label class="file-picker image-picker">＋ Image<input type="file" id="imageInput" accept="image/*" multiple></label>
+                        <label class="file-picker image-picker">＋ OCR file<input type="file" id="ocrInput" accept="image/*,.pdf"></label>
+                        <button type="button" onclick="runLocalOcr()">Extract text locally</button>
                     {% endif %}
                 </div>
                 <div id="imagePreview" class="image-preview" hidden></div>
+                <div id="ocrStatus" class="ocr-status"></div>
 
                 <div class="editor-shell">
                     <div class="editor-toolbar">
