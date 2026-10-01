@@ -69,6 +69,31 @@ class NetworkLedger(models.Model):
         ordering = ["-created_at", "-id"]
 
 
+class ScheduledTask(models.Model):
+    TASK_TYPES = (
+        ("reindex", "Re-index project files"),
+        ("health", "Runtime health check"),
+        ("benchmark", "Model benchmark"),
+        ("backup", "Local backup reminder"),
+        ("tests", "Run project tests"),
+    )
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="scheduled_tasks")
+    name = models.CharField(max_length=160)
+    task_type = models.CharField(max_length=30, choices=TASK_TYPES, default="health")
+    payload = models.JSONField(default=dict, blank=True)
+    interval_minutes = models.PositiveIntegerField(default=60)
+    next_run_at = models.DateTimeField(default=None, null=True, blank=True)
+    enabled = models.BooleanField(default=True)
+    last_run_at = models.DateTimeField(null=True, blank=True)
+    last_result = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["next_run_at", "-id"]
+
+
 class AgentTask(models.Model):
     STATUS_CHOICES = (
         ("planned", "Planned"),

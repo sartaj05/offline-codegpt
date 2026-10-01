@@ -67,6 +67,7 @@ from .models import (
     McpConnector,
     McpToolCall,
     NetworkLedger,
+    ScheduledTask,
     AgentTask,
     AgentWorktree,
     AgentTeam,
@@ -1641,6 +1642,83 @@ def privacy_report(request):
     response = JsonResponse(report)
     response["Content-Disposition"] = 'attachment; filename="offline-privacy-report.json"'
     return response
+
+
+def _scheduled_task_payload(task):
+    return {
+        "id": task.id,
+        "name": task.name,
+        "task_type": task.task_type,
+        "payload": task.payload or {},
+        "interval_minutes": task.interval_minutes,
+        "next_run_at": task.next_run_at.isoformat() if task.next_run_at else None,
+        "enabled": task.enabled,
+        "last_run_at": task.last_run_at.isoformat() if task.last_run_at else None,
+        "last_result": task.last_result,
+    }
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def scheduler_tasks(request):
+    if request.method == "GET":
+        return JsonResponse({
+            "success": True,
+            "tasks": [_scheduled_task_payload(task) for task in ScheduledTask.objects.filter(owner=request.user)],
+            "runner_command": "python manage.py run_scheduler",
+        })
+    name = request.POST.get("name", "").strip()[:160]
+    task_type = request.POST.get("task_type", "health").strip()
+    try:
+        interval_minutes = max(5, min(10080, int(request.POST.get("interval_minutes", "60"))))
+    except (TypeError, ValueError):
+        return JsonResponse({"success": False, "error": "Interval must be a number of minutes."}, status=400)
+    allowed_types = {choice[0] for choice in ScheduledTask.TASK_TYPES}
+    if task_type not in allowed_types or not name:
+        return JsonResponse({"success": False, "error": "Provide a name and supported task type."}, status=400)
+    payload = {}
+    payload_raw = request.POST.get("payload", "").strip()
+    if payload_raw:
+        try:
+            payload = json.loads(payload_raw)
+            if not isinstance(payload, dict):
+                raise ValueError
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return JsonResponse({"success": False, "error": "Payload must be a JSON object."}, status=400)
+    task = ScheduledTask.objects.create(
+        owner=request.user,
+        name=name,
+        task_type=task_type,
+        payload=payload,
+        interval_minutes=interval_minutes,
+        next_run_at=timezone.now(),
+    )
+    return JsonResponse({"success": True, "task": _scheduled_task_payload(task)}, status=201)
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["POST", "DELETE"])
+def scheduler_task_control(request, task_id):
+    task = get_object_or_404(ScheduledTask, id=task_id, owner=request.user)
+    if request.method == "DELETE":
+        task.delete()
+        return JsonResponse({"success": True, "deleted": task_id})
+    action = request.POST.get("action", "").strip().lower()
+    if action == "pause":
+        task.enabled = False
+        task.last_result = "Paused by user."
+    elif action == "resume":
+        task.enabled = True
+        task.next_run_at = timezone.now()
+        task.last_result = "Resumed; queued for the next local scheduler run."
+    elif action == "run_now":
+        task.enabled = True
+        task.next_run_at = timezone.now()
+        task.last_result = "Queued for an immediate local scheduler run."
+    else:
+        return JsonResponse({"success": False, "error": "Use pause, resume, or run_now."}, status=400)
+    task.save(update_fields=["enabled", "next_run_at", "last_result", "updated_at"])
+    return JsonResponse({"success": True, "task": _scheduled_task_payload(task)})
 
 @login_required(login_url="/login/")
 @require_http_methods(["DELETE"])

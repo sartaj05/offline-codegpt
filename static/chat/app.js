@@ -39,6 +39,12 @@ const benchmarkOutput = document.getElementById("benchmarkOutput");
 const setupPanel = document.getElementById("setupPanel");
 const setupStatus = document.getElementById("setupStatus");
 const setupModel = document.getElementById("setupModel");
+const schedulerPanel = document.getElementById("schedulerPanel");
+const schedulerName = document.getElementById("schedulerName");
+const schedulerType = document.getElementById("schedulerType");
+const schedulerInterval = document.getElementById("schedulerInterval");
+const schedulerStatus = document.getElementById("schedulerStatus");
+const schedulerList = document.getElementById("schedulerList");
 const backupPanel = document.getElementById("backupPanel");
 const backupFile = document.getElementById("backupFile");
 const backupStatus = document.getElementById("backupStatus");
@@ -294,6 +300,83 @@ function openAdvancedComposer() {
 function toggleSetupPanel() {
     if (setupPanel) setupPanel.hidden = !setupPanel.hidden;
     if (setupPanel && !setupPanel.hidden) runSetupCheck();
+}
+
+function toggleSchedulerPanel() {
+    if (schedulerPanel) schedulerPanel.hidden = !schedulerPanel.hidden;
+    if (schedulerPanel && !schedulerPanel.hidden) loadScheduledTasks();
+}
+
+async function loadScheduledTasks() {
+    if (!schedulerList) return;
+    schedulerList.innerText = "Loading scheduled jobs...";
+    try {
+        const response = await fetch("/api/scheduler/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load scheduler jobs.");
+        if (schedulerStatus) schedulerStatus.innerText = "Scheduler runner: " + data.runner_command;
+        if (!data.tasks.length) {
+            schedulerList.innerText = "No scheduled jobs loaded.";
+            return;
+        }
+        schedulerList.innerHTML = data.tasks.map(task => `
+            <div class="scheduler-item">
+                <div><strong>${escapeHtml(task.name)}</strong> · ${escapeHtml(task.task_type)} · every ${task.interval_minutes} min</div>
+                <small>Next: ${task.next_run_at || "not scheduled"} · ${task.enabled ? "enabled" : "paused"}</small>
+                <div>${escapeHtml(task.last_result || "Not run yet.")}</div>
+                <button type="button" onclick="controlScheduledTask(${task.id}, '${task.enabled ? "pause" : "resume"}')">${task.enabled ? "Pause" : "Resume"}</button>
+                <button type="button" onclick="controlScheduledTask(${task.id}, 'run_now')">Run now</button>
+                <button type="button" onclick="deleteScheduledTask(${task.id})">Delete</button>
+            </div>`).join("");
+    } catch (error) {
+        schedulerList.innerText = "Scheduler error: " + error.message;
+    }
+}
+
+async function createScheduledTask() {
+    try {
+        const response = await fetch("/api/scheduler/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                name: schedulerName.value.trim(),
+                task_type: schedulerType.value,
+                interval_minutes: schedulerInterval.value,
+            }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to create scheduler job.");
+        await loadScheduledTasks();
+    } catch (error) {
+        if (schedulerStatus) schedulerStatus.innerText = "Scheduler error: " + error.message;
+    }
+}
+
+async function controlScheduledTask(taskId, action) {
+    try {
+        const response = await fetch("/api/scheduler/" + taskId + "/control/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ action }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to update scheduler job.");
+        await loadScheduledTasks();
+    } catch (error) {
+        if (schedulerStatus) schedulerStatus.innerText = "Scheduler error: " + error.message;
+    }
+}
+
+async function deleteScheduledTask(taskId) {
+    if (!confirm("Delete this scheduled job?")) return;
+    try {
+        const response = await fetch("/api/scheduler/" + taskId + "/control/", { method: "DELETE", headers: { "X-CSRFToken": csrfToken } });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to delete scheduler job.");
+        await loadScheduledTasks();
+    } catch (error) {
+        if (schedulerStatus) schedulerStatus.innerText = "Scheduler error: " + error.message;
+    }
 }
 
 function togglePrivacyPanel() {

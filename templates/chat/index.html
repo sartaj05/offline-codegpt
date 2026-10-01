@@ -109,6 +109,7 @@
                         <summary>Workspace tools</summary>
                         <div class="workspace-tools-grid">
                             <button type="button" onclick="toggleSetupPanel()">Setup</button>
+                            <button type="button" onclick="toggleSchedulerPanel()">Scheduler</button>
                             <button type="button" onclick="toggleBackupPanel()">Backup</button>
                             <button type="button" onclick="toggleOllamaSettings()">Ollama</button>
                             <button type="button" onclick="togglePrivacyPanel()">Privacy</button>
@@ -234,6 +235,30 @@
                 <button type="button" onclick="installSetupModel()">Install model</button>
                 <button type="button" onclick="finishSetup()">Mark ready</button>
             </div>
+        </section>
+        <section id="schedulerPanel" class="setup-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Offline automation scheduler</strong>
+                    <span>Persisted local jobs for re-indexing, health checks, warm-ups, tests, and backup reminders.</span>
+                </div>
+                <button type="button" onclick="toggleSchedulerPanel()">Close</button>
+            </div>
+            <div class="setup-row">
+                <input id="schedulerName" type="text" placeholder="Job name" value="Hourly runtime health">
+                <select id="schedulerType">
+                    <option value="health">Health check</option>
+                    <option value="reindex">Re-index files</option>
+                    <option value="benchmark">Model warm-up</option>
+                    <option value="tests">Run project tests</option>
+                    <option value="backup">Backup reminder</option>
+                </select>
+                <input id="schedulerInterval" type="number" min="5" value="60" aria-label="Interval in minutes">
+                <button type="button" onclick="createScheduledTask()">Add job</button>
+                <button type="button" onclick="loadScheduledTasks()">Refresh</button>
+            </div>
+            <div id="schedulerStatus" class="setup-status">Scheduler runner: python manage.py run_scheduler</div>
+            <div id="schedulerList" class="scheduler-list">No scheduled jobs loaded.</div>
         </section>
 
         <section id="backupPanel" class="backup-panel" hidden>
