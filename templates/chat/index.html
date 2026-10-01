@@ -206,7 +206,8 @@
             </div>
             <div class="backup-row">
                 <button type="button" onclick="downloadProjectBackup()">Download backup ZIP</button>
-                <input id="backupFile" type="file" accept=".zip,application/zip">
+                <button type="button" onclick="downloadEncryptedBackup()">Download encrypted backup</button>
+                <input id="backupFile" type="file" accept=".zip,.enc,application/zip,application/octet-stream">
                 <button type="button" onclick="restoreProjectBackup()">Restore backup</button>
             </div>
             <div id="backupStatus" class="backup-status">No backup action yet.</div>

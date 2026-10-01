@@ -22,6 +22,17 @@ def decrypt_secret(ciphertext):
     return _fernet().decrypt(ciphertext.encode("ascii")).decode("utf-8")
 
 
+def encrypt_blob(value):
+    return b"SYNTAX-LOCAL-ENCRYPTED-1\n" + _fernet().encrypt(value)
+
+
+def decrypt_blob(value):
+    prefix = b"SYNTAX-LOCAL-ENCRYPTED-1\n"
+    if not value.startswith(prefix):
+        return value
+    return _fernet().decrypt(value[len(prefix):])
+
+
 def workspace_for_user(user):
     membership = WorkspaceMembership.objects.filter(user=user).select_related("workspace").order_by("workspace_id").first()
     return membership.workspace if membership else None

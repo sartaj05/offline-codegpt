@@ -96,7 +96,7 @@ from .deployment import generate_deployment_kit, validate_deployment_environment
 from .incident import analyze_incident
 from .architecture import analyze_architecture
 from .cross_repository import analyze_cross_repository
-from .vault import decrypt_secret, encrypt_secret, mask_json, redact_sensitive_text
+from .vault import decrypt_blob, decrypt_secret, encrypt_blob, encrypt_secret, mask_json, redact_sensitive_text
 from .api_contract import analyze_api_contract
 from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
@@ -1297,9 +1297,6 @@ def project_document_reindex(request, document_id):
 
 def session_messages(request, session_id):
     owner = request.user if request.user.is_authenticated else None
-    safe_prompt = redact_sensitive_text(owner, prompt)
-    safe_code = redact_sensitive_text(owner, code)
-    safe_final_code = redact_sensitive_text(owner, final_code)
     session = get_object_or_404(ChatSession, id=session_id, owner=owner)
     messages = [
         {
@@ -1475,8 +1472,10 @@ def project_backup(request):
                     "max_context_chars": settings.max_context_chars,
                 }, indent=2),
             )
-        response = HttpResponse(archive.getvalue(), content_type="application/zip")
-        response["Content-Disposition"] = 'attachment; filename="syntax-local-ai-backup.zip"'
+        archive_bytes = archive.getvalue()
+        encrypted = request.GET.get("encrypted", "").lower() in {"1", "true", "yes"}
+        response = HttpResponse(encrypt_blob(archive_bytes) if encrypted else archive_bytes, content_type="application/octet-stream" if encrypted else "application/zip")
+        response["Content-Disposition"] = 'attachment; filename="syntax-local-ai-backup.enc"' if encrypted else 'attachment; filename="syntax-local-ai-backup.zip"'
         return response
 
     upload = request.FILES.get("backup")
@@ -1486,7 +1485,7 @@ def project_backup(request):
         return JsonResponse({"success": False, "error": "Backup files are limited to 25 MB."}, status=400)
 
     try:
-        with zipfile.ZipFile(io.BytesIO(upload.read())) as bundle:
+        with zipfile.ZipFile(io.BytesIO(decrypt_blob(upload.read()))) as bundle:
             names = bundle.namelist()
             for name in names:
                 parts = PurePosixPath(name).parts
@@ -3571,6 +3570,9 @@ def ask_code(request):
         }, status=400)
 
     owner = request.user if request.user.is_authenticated else None
+    safe_prompt = redact_sensitive_text(owner, prompt)
+    safe_code = redact_sensitive_text(owner, code)
+    safe_final_code = redact_sensitive_text(owner, final_code)
     user_settings = _user_ollama_settings(request.user) if owner else None
     ollama_base_url = user_settings.server_url if user_settings else OLLAMA_BASE_URL
     configured_default_model = user_settings.default_model if user_settings else DEFAULT_MODEL

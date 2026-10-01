@@ -382,6 +382,10 @@ function downloadProjectBackup() {
     window.location.href = "/api/backup/";
 }
 
+function downloadEncryptedBackup() {
+    window.location.href = "/api/backup/?encrypted=1";
+}
+
 async function restoreProjectBackup() {
     if (!backupFile || !backupFile.files.length) {
         if (backupStatus) backupStatus.innerText = "Choose a backup ZIP first.";
