@@ -50,6 +50,8 @@ const mcpConnectorConfig = document.getElementById("mcpConnectorConfig");
 const mcpConnectorList = document.getElementById("mcpConnectorList");
 const mcpSearchQuery = document.getElementById("mcpSearchQuery");
 const mcpOutput = document.getElementById("mcpOutput");
+const mcpFileName = document.getElementById("mcpFileName");
+const mcpFileContent = document.getElementById("mcpFileContent");
 const extensionsPanel = document.getElementById("extensionsPanel");
 const extensionsStatus = document.getElementById("extensionsStatus");
 const extensionsList = document.getElementById("extensionsList");
@@ -2006,6 +2008,50 @@ function addAssistantActions(element) {
 
     actions.append(copyButton, saveButton, downloadButton, feedbackMenu);
     element.parentElement.appendChild(actions);
+}
+
+async function callMcpTool(tool, args) {
+    const response = await fetch("/api/mcp/", {
+        method: "POST",
+        headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/json" },
+        body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: Date.now(),
+            method: "tools/call",
+            params: { name: tool, arguments: args },
+        }),
+    });
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message || "Tool call failed.");
+    const text = data.result && data.result.content && data.result.content[0]
+        ? data.result.content[0].text
+        : "{}";
+    return { result: JSON.parse(text) };
+}
+
+async function readMcpFile() {
+    try {
+        const data = await callMcpTool("project.read", { filename: mcpFileName.value.trim() });
+        mcpFileContent.value = data.result.content || "";
+        mcpOutput.innerText = JSON.stringify(data.result, null, 2);
+    } catch (error) {
+        mcpOutput.innerText = "Read failed: " + error;
+    }
+}
+
+async function writeMcpFile() {
+    if (!confirm("Write this content to the indexed project file?")) return;
+    try {
+        const data = await callMcpTool("project.write", {
+            filename: mcpFileName.value.trim(),
+            content: mcpFileContent.value,
+            approved: true,
+        });
+        mcpOutput.innerText = JSON.stringify(data.result, null, 2);
+        await loadProjectWorkspace();
+    } catch (error) {
+        mcpOutput.innerText = "Write failed: " + error;
+    }
 }
 
 function extractGeneratedCode(content) {

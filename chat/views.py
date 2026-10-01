@@ -3020,6 +3020,8 @@ def provenance_verify(request):
 def _mcp_tools():
     return [
         {"name": "project.search", "description": "Search indexed project code.", "write": False},
+        {"name": "project.read", "description": "Read one indexed project file.", "write": False},
+        {"name": "project.write", "description": "Replace one indexed project file after approval.", "write": True, "approval_required": True},
         {"name": "git.status", "description": "Read local Git status.", "write": False},
         {"name": "git.diff", "description": "Read the local Git diff.", "write": False},
         {"name": "sandbox.run", "description": "Run code in the guarded sandbox.", "write": False, "approval_required": True},
@@ -3037,6 +3039,25 @@ def _mcp_call(user, tool_name, arguments):
     try:
         if tool_name == "project.search":
             return True, {"results": _search_knowledge(str(arguments.get("query", "")), owner=user)}, ""
+        if tool_name == "project.read":
+            filename = _safe_filename(arguments.get("filename", ""))
+            document = KnowledgeDocument.objects.filter(owner=user, filename=filename, is_active=True).first()
+            if not document:
+                return False, {}, "Indexed file not found."
+            return True, {"filename": document.filename, "content": document.original_text, "content_hash": document.content_hash}, ""
+        if tool_name == "project.write":
+            filename = _safe_filename(arguments.get("filename", ""))
+            content = str(arguments.get("content", ""))
+            if not filename or filename == "uploaded-file":
+                return False, {}, "A safe project filename is required."
+            if len(content.encode("utf-8")) > MAX_FILE_BYTES:
+                return False, {}, "Project files are limited to 1 MB."
+            existing = KnowledgeDocument.objects.filter(owner=user, filename=filename, is_active=True).first()
+            expected_hash = str(arguments.get("expected_hash", "")).strip()
+            if existing and expected_hash and existing.content_hash != expected_hash:
+                return False, {}, "File changed since it was read; refresh before writing."
+            document = _save_knowledge_document(filename, content, "manual", user)
+            return True, {"filename": document.filename, "content_hash": document.content_hash, "chunks": document.chunks.count()}, ""
         if tool_name == "sandbox.run":
             result = run_sandboxed_code(
                 str(arguments.get("language", "python")),

@@ -335,6 +335,12 @@
                 <input id="mcpSearchQuery" placeholder="Search project with project.search">
                 <button type="button" onclick="callMcpSearch()">Run read-only search</button>
             </div>
+            <div class="mcp-tool-row">
+                <input id="mcpFileName" placeholder="Project file, e.g. app.py">
+                <button type="button" onclick="readMcpFile()">Read file</button>
+                <button type="button" onclick="writeMcpFile()">Write approved file</button>
+            </div>
+            <textarea id="mcpFileContent" class="mcp-file-content" placeholder="File content for an approved project.write operation..."></textarea>
             <pre id="mcpOutput" class="mcp-output">MCP tools are ready.</pre>
         </section>
         <section id="extensionsPanel" class="extensions-panel" hidden>
