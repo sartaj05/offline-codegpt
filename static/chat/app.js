@@ -809,13 +809,17 @@ async function loadObservability() {
             ["Avg. latency", summary.average_duration_ms + " ms"],
             ["Input chars", summary.input_chars],
             ["Output chars", summary.output_chars],
+            ["Output rate", summary.output_chars_per_second + " chars/s"],
+            ["First token", summary.average_first_token_ms + " ms"],
             ["Active jobs", data.agent_summary.active_jobs],
             ["Tool calls", data.resource_usage.tool_calls],
         ].map(item => "<div><strong>" + item[1] + "</strong><span>" + item[0] + "</span></div>").join("");
         const agentHeader = "Agent center: " + data.agent_summary.tasks + " tasks, " + data.agent_summary.teams + " teams, " + data.agent_summary.jobs + " jobs, " + data.agent_summary.failed_jobs + " failed jobs.";
         const timeline = data.timeline.map(item => item.created_at + " | " + item.kind + " | " + item.status + " | " + item.name + " | " + item.message);
-        const aiEvents = data.events.map(event => event.created_at + " | AI " + (event.success ? "ok" : "failed") + " | " + (event.model || "local model") + " | " + event.duration_ms + " ms | in " + event.input_chars + " / out " + event.output_chars);
+        const modelRows = (data.model_metrics || []).map(model => model.model + " | " + model.requests + " request(s) | " + model.success_rate + "% ok | " + model.average_duration_ms + " ms avg | " + model.output_chars_per_second + " chars/s | first token " + model.average_first_token_ms + " ms");
+        const aiEvents = data.events.map(event => event.created_at + " | AI " + (event.success ? "ok" : "failed") + " | " + (event.model || "local model") + " | " + event.duration_ms + " ms | in " + event.input_chars + " / out " + event.output_chars + " | " + ((event.metadata || {}).output_format || "text"));
         observabilityOutput.innerText = agentHeader + "\nResource usage: " + data.resource_usage.cpu_ms + " CPU ms, " + data.resource_usage.memory_mb_peak + " MB peak memory.\n\n" +
+            "Model performance:\n" + (modelRows.length ? modelRows.join("\n") : "No model performance data yet.") + "\n\n" +
             (timeline.length ? timeline.join("\n") : "No agent timeline events yet.") + "\n\n" +
             (aiEvents.length ? aiEvents.join("\n") : "No AI activity recorded yet.");
     } catch (error) {

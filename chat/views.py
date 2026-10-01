@@ -1867,6 +1867,23 @@ def ai_observability(request):
     total = len(events)
     successful = sum(1 for event in events if event.success)
     durations = [event.duration_ms for event in events if event.duration_ms]
+    model_metrics = {}
+    for event in events:
+        key = event.model_name or "unknown"
+        row = model_metrics.setdefault(key, {"model": key, "requests": 0, "successful": 0, "duration_ms": 0, "output_chars": 0, "first_token_ms": []})
+        row["requests"] += 1
+        row["successful"] += 1 if event.success else 0
+        row["duration_ms"] += event.duration_ms or 0
+        row["output_chars"] += event.output_chars or 0
+        first_token_ms = (event.metadata or {}).get("first_token_ms")
+        if first_token_ms:
+            row["first_token_ms"].append(int(first_token_ms))
+    for row in model_metrics.values():
+        row["success_rate"] = round((row["successful"] / row["requests"]) * 100, 1) if row["requests"] else 0
+        row["average_duration_ms"] = round(row["duration_ms"] / row["requests"]) if row["requests"] else 0
+        row["output_chars_per_second"] = round(row["output_chars"] / max(row["duration_ms"] / 1000, 0.001), 1)
+        first_tokens = row.pop("first_token_ms")
+        row["average_first_token_ms"] = round(sum(first_tokens) / len(first_tokens)) if first_tokens else 0
     timeline = []
     for task in tasks:
         for item in (task.logs or [])[-10:]:
@@ -1909,6 +1926,8 @@ def ai_observability(request):
             "average_duration_ms": round(sum(durations) / len(durations)) if durations else 0,
             "input_chars": sum(event.input_chars for event in events),
             "output_chars": sum(event.output_chars for event in events),
+            "output_chars_per_second": round(sum(event.output_chars for event in events) / max(sum(durations) / 1000, 0.001), 1) if durations else 0,
+            "average_first_token_ms": round(sum((event.metadata or {}).get("first_token_ms", 0) for event in events if (event.metadata or {}).get("first_token_ms") ) / max(sum(1 for event in events if (event.metadata or {}).get("first_token_ms")), 1)),
         },
         "agent_summary": {
             "tasks": len(tasks),
@@ -1924,6 +1943,7 @@ def ai_observability(request):
             "memory_mb_peak": max([int((event.metadata or {}).get("memory_mb", 0) or 0) for event in events] or [0]),
             "tool_calls": sum(int((event.metadata or {}).get("tool_calls", 0) or 0) for event in events),
         },
+        "model_metrics": list(model_metrics.values()),
         "timeline": timeline[:120],
         "events": [
             {
@@ -3568,6 +3588,7 @@ Instructions:
 
         def stream_answer():
             answer_parts = []
+            first_token_ms = None
             try:
                 for raw_line in response.iter_lines(decode_unicode=True):
                     if not raw_line:
@@ -3575,6 +3596,8 @@ Instructions:
                     data = json.loads(raw_line)
                     token = data.get("response", "")
                     if token:
+                        if first_token_ms is None:
+                            first_token_ms = round((time.perf_counter() - event_started) * 1000)
                         answer_parts.append(token)
                         yield _event({"type": "token", "token": token})
                     if data.get("done"):
@@ -3593,6 +3616,10 @@ Instructions:
                     "sources": len(relevant_chunks),
                     "images": len(image_data),
                     "session_id": session.id,
+                    "context_chars": len(full_prompt),
+                    "output_chars_per_second": round(len(answer) / max(ai_event.duration_ms / 1000, 0.001), 1),
+                    "first_token_ms": first_token_ms or 0,
+                    "output_format": output_format,
                 }
                 ai_event.save(update_fields=["duration_ms", "output_chars", "metadata"])
                 session.save(update_fields=["updated_at"])
