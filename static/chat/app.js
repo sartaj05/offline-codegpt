@@ -92,6 +92,7 @@ const sandboxTimeout = document.getElementById("sandboxTimeout");
 const sandboxMemory = document.getElementById("sandboxMemory");
 const sandboxOutputChars = document.getElementById("sandboxOutputChars");
 const sandboxApproval = document.getElementById("sandboxApproval");
+const permissionProfile = document.getElementById("permissionProfile");
 const sandboxPolicyStatus = document.getElementById("sandboxPolicyStatus");
 const workspacePanel = document.getElementById("workspacePanel");
 const workspaceName = document.getElementById("workspaceName");
@@ -2813,7 +2814,17 @@ async function loadSandboxPolicy() {
         sandboxMemory.value = data.policy.memory_mb;
         sandboxOutputChars.value = data.policy.output_chars;
         sandboxApproval.checked = data.policy.require_approval;
-        sandboxPolicyStatus.innerText = "Network blocked · policy ready.";
+        if (permissionProfile) {
+            permissionProfile.innerHTML = "";
+            (data.permission_profiles || []).forEach(item => {
+                const option = document.createElement("option");
+                option.value = item.id;
+                option.innerText = item.name + " · " + item.mode;
+                option.selected = item.is_active;
+                permissionProfile.appendChild(option);
+            });
+        }
+        sandboxPolicyStatus.innerText = "Network blocked · " + (data.permission_profile ? data.permission_profile.name : "Developer") + " profile active.";
     } catch (error) {
         sandboxPolicyStatus.innerText = "Policy error: " + error;
     }
@@ -2829,6 +2840,7 @@ async function saveSandboxPolicy() {
                 memory_mb: sandboxMemory.value,
                 output_chars: sandboxOutputChars.value,
                 require_approval: sandboxApproval.checked ? "true" : "false",
+                permission_profile: permissionProfile ? permissionProfile.value : "",
             }),
         });
         const data = await response.json();

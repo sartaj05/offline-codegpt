@@ -65,6 +65,7 @@ from .models import (
     AgentTask,
     AgentTeam,
     SandboxPolicy,
+    PermissionProfile,
     AgentJob,
     AiEvent,
     AuditEvent,
@@ -256,6 +257,37 @@ def _git_path_is_safe(path):
     return bool(normalized) and not parsed.is_absolute() and ".." not in parsed.parts
 
 
+def _active_permission_profile(user):
+    builtins = (
+        ("Read only", "read_only", True),
+        ("Developer", "developer", True),
+        ("Unrestricted", "unrestricted", False),
+    )
+    for name, mode, confirmation in builtins:
+        PermissionProfile.objects.get_or_create(
+            user=user,
+            name=name,
+            defaults={"mode": mode, "is_active": name == "Developer", "require_confirmation": confirmation},
+        )
+    profile = PermissionProfile.objects.filter(user=user, is_active=True).first()
+    if profile:
+        return profile
+    profile = PermissionProfile.objects.get(user=user, name="Developer")
+    profile.is_active = True
+    profile.save(update_fields=["is_active", "updated_at"])
+    return profile
+
+
+def _permission_profile_payload(profile):
+    return {
+        "id": profile.id,
+        "name": profile.name,
+        "mode": profile.mode,
+        "is_active": profile.is_active,
+        "require_confirmation": profile.require_confirmation,
+    }
+
+
 @login_required(login_url="/login/")
 def git_status(request):
     branch_result = _run_git(["rev-parse", "--abbrev-ref", "HEAD"])
@@ -295,6 +327,9 @@ def git_diff(request):
 @login_required(login_url="/login/")
 @require_POST
 def git_stage(request):
+    profile = _active_permission_profile(request.user)
+    if profile.mode == "read_only":
+        return JsonResponse({"success": False, "error": "Read-only permission profile blocks Git writes."}, status=403)
     paths = request.POST.getlist("paths")
     if not paths:
         paths = [request.POST.get("path", "").strip()] if request.POST.get("path") else []
@@ -311,6 +346,9 @@ def git_stage(request):
 @login_required(login_url="/login/")
 @require_POST
 def git_commit(request):
+    profile = _active_permission_profile(request.user)
+    if profile.mode == "read_only":
+        return JsonResponse({"success": False, "error": "Read-only permission profile blocks Git commits."}, status=403)
     message = request.POST.get("message", "").strip()
     if not message:
         return JsonResponse({"success": False, "error": "Enter a commit message."}, status=400)
@@ -371,6 +409,9 @@ def git_blame(request):
 @login_required(login_url="/login/")
 @require_POST
 def git_rollback(request):
+    profile = _active_permission_profile(request.user)
+    if profile.mode == "read_only":
+        return JsonResponse({"success": False, "error": "Read-only permission profile blocks file rollback."}, status=403)
     path = request.POST.get("path", "").strip()
     if not _git_path_is_safe(path):
         return JsonResponse({"success": False, "error": "Choose a repository-relative file path."}, status=400)
@@ -1806,6 +1847,9 @@ def execute_code(request):
         }, status=400)
 
     policy, _ = SandboxPolicy.objects.get_or_create(user=request.user)
+    profile = _active_permission_profile(request.user)
+    if profile.mode == "read_only":
+        return JsonResponse({"success": False, "error": "Read-only permission profile blocks code execution."}, status=403)
     return JsonResponse(run_sandboxed_code(language, code, limits={
         "timeout_seconds": policy.timeout_seconds,
         "memory_mb": policy.memory_mb,
@@ -1828,6 +1872,7 @@ def _sandbox_policy_payload(policy):
 @require_http_methods(["GET", "POST"])
 def sandbox_policy_api(request):
     policy, _ = SandboxPolicy.objects.get_or_create(user=request.user)
+    profile = _active_permission_profile(request.user)
     if request.method == "POST":
         try:
             policy.timeout_seconds = min(10, max(1, int(request.POST.get("timeout_seconds", policy.timeout_seconds))))
@@ -1838,7 +1883,19 @@ def sandbox_policy_api(request):
         policy.require_approval = request.POST.get("require_approval", "true").lower() in {"1", "true", "yes", "on"}
         policy.network_blocked = True
         policy.save()
-    return JsonResponse({"success": True, "policy": _sandbox_policy_payload(policy)})
+        requested_profile = request.POST.get("permission_profile", "").strip()
+        if requested_profile:
+            profile = get_object_or_404(PermissionProfile, id=requested_profile, user=request.user)
+            PermissionProfile.objects.filter(user=request.user).exclude(id=profile.id).update(is_active=False)
+            profile.is_active = True
+            profile.save(update_fields=["is_active", "updated_at"])
+    profiles = PermissionProfile.objects.filter(user=request.user)
+    return JsonResponse({
+        "success": True,
+        "policy": _sandbox_policy_payload(policy),
+        "permission_profile": _permission_profile_payload(profile),
+        "permission_profiles": [_permission_profile_payload(item) for item in profiles],
+    })
 
 
 @login_required(login_url="/login/")

@@ -116,6 +116,31 @@ class SandboxPolicy(models.Model):
         return f"Sandbox policy for {self.user.username}"
 
 
+class PermissionProfile(models.Model):
+    MODE_CHOICES = (
+        ("read_only", "Read only"),
+        ("developer", "Developer"),
+        ("unrestricted", "Unrestricted"),
+    )
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="permission_profiles")
+    name = models.CharField(max_length=80)
+    mode = models.CharField(max_length=20, choices=MODE_CHOICES, default="developer")
+    is_active = models.BooleanField(default=False)
+    require_confirmation = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "name"], name="unique_user_permission_profile"),
+        ]
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.user.username}: {self.name}"
+
+
 class AgentJob(models.Model):
     STATUS_CHOICES = (
         ("queued", "Queued"),
