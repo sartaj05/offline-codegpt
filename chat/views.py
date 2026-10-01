@@ -434,6 +434,30 @@ def _available_models(base_url=OLLAMA_BASE_URL):
     return names
 
 
+def _ollama_model_details(base_url=OLLAMA_BASE_URL):
+    """Return safe local model metadata for the model manager."""
+    try:
+        response = requests.get(f"{base_url}/api/tags", timeout=3)
+        response.raise_for_status()
+        details = []
+        for item in response.json().get("models", []):
+            name = item.get("name")
+            if not name:
+                continue
+            model_details = item.get("details") or {}
+            details.append({
+                "name": name,
+                "size_bytes": int(item.get("size") or 0),
+                "modified_at": item.get("modified_at") or "",
+                "parameter_size": model_details.get("parameter_size", ""),
+                "quantization": model_details.get("quantization_level", ""),
+                "family": model_details.get("family", ""),
+            })
+        return details
+    except (requests.RequestException, ValueError, TypeError):
+        return []
+
+
 def _event(payload):
     return json.dumps(payload, ensure_ascii=False) + "\n"
 
@@ -744,6 +768,7 @@ def model_list(request):
     return JsonResponse({
         "success": True,
         "models": _available_models(server_url),
+        "model_details": _ollama_model_details(server_url),
         "default_model": default_model,
     })
 
@@ -784,6 +809,7 @@ def ollama_settings(request):
         "success": True,
         "settings": _ollama_settings_payload(settings),
         "models": _available_models(settings.server_url),
+        "model_details": _ollama_model_details(settings.server_url),
     })
 
 
@@ -806,6 +832,7 @@ def ollama_health(request):
             "server_url": settings.server_url,
             "latency_ms": round((time.perf_counter() - started) * 1000),
             "models": models,
+            "model_details": _ollama_model_details(settings.server_url),
             "default_model": settings.default_model,
             "fallback_model": settings.fallback_model,
             "fallback_available": settings.fallback_model in models,
@@ -864,6 +891,7 @@ def ollama_model_action(request):
     return JsonResponse({
         "success": True,
         "models": _available_models(settings.server_url),
+        "model_details": _ollama_model_details(settings.server_url),
         "progress": progress[-100:],
     })
 

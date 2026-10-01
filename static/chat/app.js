@@ -22,6 +22,7 @@ const ollamaSettingsStatus = document.getElementById("ollamaSettingsStatus");
 const ollamaFallbackModel = document.getElementById("ollamaFallbackModel");
 const ollamaHealthStatus = document.getElementById("ollamaHealthStatus");
 const ollamaPullProgress = document.getElementById("ollamaPullProgress");
+const modelInventory = document.getElementById("modelInventory");
 const setupPanel = document.getElementById("setupPanel");
 const setupStatus = document.getElementById("setupStatus");
 const setupModel = document.getElementById("setupModel");
@@ -396,7 +397,31 @@ async function clearConversationContext() {
     }
 }
 
-function renderOllamaModels(models, selected, fallback) {
+function formatBytes(value) {
+    if (!value) return "size unknown";
+    const units = ["B", "MB", "GB", "TB"];
+    let size = Number(value);
+    let unit = 0;
+    while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit += 1; }
+    return size.toFixed(size >= 10 || unit === 0 ? 0 : 1) + " " + units[unit];
+}
+
+function renderModelGuidance(details, selected) {
+    if (!modelInventory) return;
+    const model = (details || []).find(item => item.name === selected);
+    if (!model) {
+        modelInventory.innerText = "No metadata available. Check the local Ollama server to see installed model sizes.";
+        return;
+    }
+    const estimatedRam = model.size_bytes ? Math.max(2, Math.ceil((model.size_bytes / (1024 ** 3)) * 1.25)) : null;
+    const facts = [formatBytes(model.size_bytes)];
+    if (model.parameter_size) facts.push(model.parameter_size);
+    if (model.quantization) facts.push(model.quantization);
+    if (model.family) facts.push(model.family);
+    modelInventory.innerText = `${model.name} · ${facts.join(" · ")}${estimatedRam ? ` · recommended RAM ${estimatedRam}+ GB` : ""}. Context length uses additional memory.`;
+}
+
+function renderOllamaModels(models, selected, fallback, details = []) {
     const names = [...new Set([...(models || []), fallback].filter(Boolean))];
     [
         [modelInput, selected],
@@ -413,6 +438,7 @@ function renderOllamaModels(models, selected, fallback) {
             select.appendChild(option);
         });
     });
+    renderModelGuidance(details, selected);
     updateActiveModel();
 }
 
@@ -427,7 +453,7 @@ async function loadOllamaSettings() {
         ollamaTemperature.value = settings.temperature;
         ollamaTopP.value = settings.top_p;
         ollamaContextLength.value = settings.max_context_chars;
-        renderOllamaModels(data.models, settings.default_model, settings.fallback_model);
+        renderOllamaModels(data.models, settings.default_model, settings.fallback_model, data.model_details);
     } catch (error) {
         ollamaSettingsStatus.innerText = String(error);
     }
@@ -441,7 +467,7 @@ async function checkOllamaHealth() {
         if (!data.success) throw new Error(data.error || "Ollama is unavailable.");
         const fallbackState = data.fallback_available ? "fallback ready" : "fallback model not installed";
         ollamaHealthStatus.innerText = "Ready · " + data.latency_ms + " ms · " + data.models.length + " model(s) · " + fallbackState;
-        renderOllamaModels(data.models, data.default_model, data.fallback_model);
+        renderOllamaModels(data.models, data.default_model, data.fallback_model, data.model_details);
     } catch (error) {
         if (ollamaHealthStatus) ollamaHealthStatus.innerText = "Offline: " + error.message;
     }
@@ -493,7 +519,7 @@ async function manageOllamaModel(action) {
         });
         const data = await response.json();
         if (!data.success) throw new Error(data.error || "Model action failed.");
-        renderOllamaModels(data.models, modelInput.value, ollamaFallbackModel.value);
+        renderOllamaModels(data.models, modelInput.value, ollamaFallbackModel.value, data.model_details);
         if (ollamaPullProgress && data.progress && data.progress.length) {
             const last = data.progress[data.progress.length - 1];
             const percent = last.total ? " " + Math.round((last.completed / last.total) * 100) + "%" : "";
