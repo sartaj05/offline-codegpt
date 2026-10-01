@@ -165,3 +165,70 @@ Latest workspace features
 
 Recovery returns jobs left in `running` to a queued checkpoint so they can be
 reviewed and run again safely.
+
+Next workspace feature set
+--------------------------
+- Multi-runtime adapters share chat, embeddings, vision, and streaming tool
+  payloads across Ollama, LM Studio, and llama.cpp. Select the runtime in
+  Settings. OpenAI-compatible runtimes should expose /v1/models,
+  /v1/embeddings, and /v1/chat/completions locally.
+- Agent worktrees are created from the Agent workspace under
+  .agent-worktrees. Review or compare a task before using the explicit Merge
+  or Discard action. Git must be installed and the project must be a Git repo.
+- Knowledge Collections provide named project RAG sets. Choose Hybrid RAG or
+  Full document mode, then add project files to the collection before chatting.
+- Code indexing extracts Python AST symbols and regex symbols for other common
+  languages. Inspect them with /api/project/symbols/ and impact hints with
+  /api/project/symbol-impact/.
+- Model lifecycle controls support local model warm-up, Ollama unload, GGUF
+  import into local_models, and inventory refresh. GGUF import stores the file;
+  configure the runtime's own model path to load it.
+- MCP Connector Hub supports local JSON import/export, health checks, and
+  localhost-only endpoint enforcement. Remote connector endpoints are rejected
+  while offline mode is active.
+- Scoped persistent memory is managed from the Memory panel or
+  /api/memory/scoped/. Supported scopes are global, project, conversation, and
+  workspace. Matching enabled memories are included in local prompts and can
+  be edited or deleted.
+- Privacy Proof records local runtime endpoint, status, purpose, and prompt
+  size without storing prompt contents. View /api/privacy/ledger/ or download
+  the hashed JSON report from /api/privacy/report/.
+- Offline scheduler jobs are created in the Scheduler panel. Run due jobs once
+  with `python manage.py run_scheduler`, or keep a local worker alive with
+  `python manage.py run_scheduler --loop`. Jobs support health checks, file
+  re-indexing, model warm-up, project tests, and backup reminders.
+- Native onboarding diagnostics probe all three local runtime URLs and report
+  Python, platform, virtual environment, model, and dependency readiness.
+  Run the Windows launcher with:
+
+   Set-ExecutionPolicy -Scope Process Bypass
+   .\scripts\launch-offline.ps1
+
+  The launcher creates .venv when needed, applies migrations, and starts the
+  server on http://127.0.0.1:8000/. Install dependencies separately with
+  `pip install -r requirements.txt` when setting up a new machine.
+
+Runtime URL overrides
+---------------------
+The configured runtime uses the URL saved in Local runtime settings. For
+diagnostics of the other local servers, optional environment overrides are:
+
+   LOCAL_AI_OLLAMA_URL=http://127.0.0.1:11434
+   LOCAL_AI_LMSTUDIO_URL=http://127.0.0.1:1234
+   LOCAL_AI_LLAMA_CPP_URL=http://127.0.0.1:8080
+
+Feature verification
+--------------------
+Run the following after migrations or feature updates:
+
+   python manage.py migrate
+   python manage.py check
+   python -m py_compile chat\views.py chat\models.py
+   node --check static\chat\app.js
+   python manage.py test chat
+   git diff --check
+
+The privacy proof and local runtime adapters are designed for localhost
+endpoints. Pull/delete remains Ollama-specific; LM Studio and llama.cpp model
+installation is managed by their local runtime. Desktop onboarding currently
+provides diagnostics and a PowerShell launcher rather than a compiled MSI.
