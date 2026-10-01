@@ -1,6 +1,8 @@
 let currentSessionId = null;
 let editingMessage = null;
 let editingMessageId = "";
+let activeRequestController = null;
+let draftSaveTimer = null;
 
 const chatBox = document.getElementById("chatBox");
 const promptInput = document.getElementById("promptInput");
@@ -188,6 +190,7 @@ const fileInput = document.getElementById("fileInput");
 const folderInput = document.getElementById("folderInput");
 const imageInput = document.getElementById("imageInput");
 const sendBtn = document.getElementById("sendBtn");
+const draftStatus = document.getElementById("draftStatus");
 const sendStatus = document.createElement("div");
 sendStatus.className = "send-status";
 sendStatus.setAttribute("aria-live", "polite");
@@ -2160,6 +2163,7 @@ function setPrompt(text) {
 }
 
 function newChat() {
+    clearDraft();
     currentSessionId = null;
     editingMessage = null;
     editingMessageId = "";
@@ -2187,6 +2191,64 @@ function newChat() {
     if (saveFileBtn) saveFileBtn.disabled = true;
     renderEditorTabs();
     syncEditorPreview();
+}
+
+function draftStorageKey() {
+    return "syntax-local-draft:" + (currentSessionId || "new");
+}
+
+function setDraftStatus(text) {
+    if (draftStatus) draftStatus.innerText = text;
+}
+
+function saveDraft() {
+    if (!promptInput) return;
+    const draft = {
+        prompt: promptInput.value,
+        code: codeInput ? codeInput.value : "",
+        savedAt: new Date().toISOString(),
+    };
+    if (!draft.prompt && !draft.code) {
+        clearDraft();
+        return;
+    }
+    window.localStorage.setItem(draftStorageKey(), JSON.stringify(draft));
+    setDraftStatus("Draft saved locally");
+}
+
+function scheduleDraftSave() {
+    window.clearTimeout(draftSaveTimer);
+    draftSaveTimer = window.setTimeout(saveDraft, 250);
+}
+
+function restoreDraft() {
+    if (!promptInput) return;
+    try {
+        const raw = window.localStorage.getItem(draftStorageKey());
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        if (draft.prompt || draft.code) {
+            promptInput.value = draft.prompt || "";
+            if (codeInput) codeInput.value = draft.code || "";
+            setDraftStatus("Recovered local draft");
+            syncEditorPreview();
+        }
+    } catch (error) {
+        window.localStorage.removeItem(draftStorageKey());
+    }
+}
+
+function clearDraft() {
+    if (typeof window !== "undefined" && window.localStorage) {
+        window.localStorage.removeItem(draftStorageKey());
+    }
+    setDraftStatus("Drafts stay on this device");
+}
+
+function stopGeneration() {
+    if (!activeRequestController) return;
+    activeRequestController.abort();
+    setDraftStatus("Generation stopped");
 }
 
 function addMessage(role, content, options = {}) {
@@ -2267,6 +2329,10 @@ async function readStream(response, output, userWrapper) {
 }
 
 async function sendMessage() {
+    if (activeRequestController) {
+        stopGeneration();
+        return;
+    }
     if (sendBtn.disabled) return;
 
     const prompt = promptInput.value.trim();
@@ -2321,8 +2387,11 @@ async function sendMessage() {
     const userBody = addMessage("user", userText.trim(), { payload });
     const userWrapper = userBody.closest(".message");
     promptInput.value = "";
+    clearDraft();
     sendBtn.disabled = true;
-    sendBtn.innerText = "Generating...";
+    sendBtn.innerText = "Stop";
+    sendBtn.classList.add("stop-generation-button");
+    activeRequestController = new AbortController();
     const output = addMessage("assistant", "Generating response...");
     output.classList.add("generating-output");
     sendStatus.textContent = "Message sent - Generating response...";
@@ -2347,6 +2416,7 @@ async function sendMessage() {
             method: "POST",
             headers: { "X-CSRFToken": csrfToken },
             body: formData,
+            signal: activeRequestController.signal,
         });
 
         if (!response.ok) {
@@ -2358,11 +2428,15 @@ async function sendMessage() {
             await readStream(response, output, userWrapper);
         }
     } catch (error) {
-        output.innerText = "Error: Backend or Ollama not available.\n\n" + error;
+        output.innerText = error.name === "AbortError"
+            ? "Generation stopped. You can edit the prompt and try again."
+            : "Error: Backend or Ollama not available.\n\n" + error;
     } finally {
         output.classList.remove("generating-output");
+        activeRequestController = null;
         sendBtn.disabled = false;
-        sendBtn.innerText = "Send";
+        sendBtn.innerText = "Send ↗";
+        sendBtn.classList.remove("stop-generation-button");
         sendStatus.textContent = "";
     }
 }
@@ -3321,6 +3395,20 @@ promptInput.addEventListener("keydown", function (event) {
     }
 });
 
+promptInput.addEventListener("input", scheduleDraftSave);
+if (codeInput) codeInput.addEventListener("input", scheduleDraftSave);
+document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && activeRequestController) {
+        event.preventDefault();
+        stopGeneration();
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        newChat();
+        promptInput.focus();
+    }
+});
+
 modelInput.addEventListener("change", updateActiveModel);
 codeInput.addEventListener("input", syncEditorPreview);
 languageInput.addEventListener("change", function () {
@@ -3336,3 +3424,4 @@ if (ollamaSettingsPanel) loadOllamaSettings();
 if (setupPanel) maybeShowSetup();
 if (chatHistory) loadChatHistory();
 if (sandboxPolicyStatus) loadSandboxPolicy();
+restoreDraft();

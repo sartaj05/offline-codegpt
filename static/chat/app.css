@@ -499,6 +499,8 @@ select { padding: 0 10px; }
 .code-actions, .message-actions { display: flex; gap: 7px; margin-top: 7px; }
 .code-copy-button, .message-actions button { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--muted); font-size: 11px; }
 .code-copy-button:hover, .message-actions button:hover { color: var(--text); background: var(--surface-3); } .generated-run-output { max-height: 180px; overflow: auto; margin: 8px 0 0; padding: 9px; border: 1px solid rgba(99,230,190,.25); border-radius: 7px; background: #0d1016; color: #c9f5e7; font-family: Consolas, monospace; font-size: 10px; line-height: 1.45; white-space: pre-wrap; }
+.stop-generation-button { border-color: rgba(255,138,128,.65) !important; background: rgba(122,49,53,.8) !important; color: #ffd9d5 !important; }
+.composer-hint #draftStatus { color: var(--accent); }
 .source-citations { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--border); }
 .source-citations-label { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .source-citation { padding: 5px 8px; border: 1px solid rgba(99,230,190,.3); border-radius: 999px; background: rgba(99,230,190,.08); color: var(--accent); font-family: Consolas, monospace; font-size: 10px; cursor: pointer; }
