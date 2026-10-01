@@ -198,6 +198,7 @@ const languageInput = document.getElementById("language");
 const fileInput = document.getElementById("fileInput");
 const folderInput = document.getElementById("folderInput");
 const imageInput = document.getElementById("imageInput");
+const imagePreview = document.getElementById("imagePreview");
 const sendBtn = document.getElementById("sendBtn");
 const draftStatus = document.getElementById("draftStatus");
 const sendStatus = document.createElement("div");
@@ -1993,6 +1994,11 @@ function addAssistantActions(element) {
     downloadButton.innerText = "Download .md";
     downloadButton.onclick = () => downloadText("syntax-local-ai-answer.md", element.dataset.rawContent || element.innerText);
 
+    const speakButton = document.createElement("button");
+    speakButton.type = "button";
+    speakButton.innerText = "Speak";
+    speakButton.onclick = () => speakText(element.dataset.rawContent || element.innerText, speakButton);
+
     const feedbackMenu = document.createElement("details");
     feedbackMenu.className = "feedback-menu";
     const feedbackSummary = document.createElement("summary");
@@ -2006,8 +2012,80 @@ function addAssistantActions(element) {
         feedbackMenu.appendChild(button);
     });
 
-    actions.append(copyButton, saveButton, downloadButton, feedbackMenu);
+    actions.append(copyButton, saveButton, downloadButton, speakButton, feedbackMenu);
     element.parentElement.appendChild(actions);
+}
+
+function renderImagePreview(files) {
+    if (!imagePreview) return;
+    imagePreview.innerHTML = "";
+    if (!files || !files.length) {
+        imagePreview.hidden = true;
+        return;
+    }
+    imagePreview.hidden = false;
+    files.forEach(file => {
+        if (!file.type.startsWith("image/")) return;
+        const wrapper = document.createElement("div");
+        wrapper.className = "image-preview-item";
+        const image = document.createElement("img");
+        image.src = URL.createObjectURL(file);
+        image.alt = file.name;
+        const caption = document.createElement("span");
+        caption.innerText = file.name;
+        wrapper.append(image, caption);
+        imagePreview.appendChild(wrapper);
+    });
+}
+
+function speakText(text, button) {
+    if (!window.speechSynthesis) {
+        button.innerText = "Speech unavailable";
+        return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text.slice(0, 12000));
+    utterance.onstart = () => { button.innerText = "Stop speaking"; };
+    utterance.onend = () => { button.innerText = "Speak"; };
+    utterance.onerror = () => { button.innerText = "Speak"; };
+    button.onclick = () => {
+        window.speechSynthesis.cancel();
+        button.innerText = "Speak";
+        button.onclick = () => speakText(text, button);
+    };
+    window.speechSynthesis.speak(utterance);
+}
+
+function toggleVoiceInput() {
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Recognition) {
+        setDraftStatus("Speech input is unavailable in this browser");
+        return;
+    }
+    if (window.localSpeechRecognition) {
+        window.localSpeechRecognition.stop();
+        return;
+    }
+    const recognition = new Recognition();
+    window.localSpeechRecognition = recognition;
+    recognition.lang = document.documentElement.lang || "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.onresult = event => {
+        const transcript = [...event.results].map(result => result[0].transcript).join("");
+        promptInput.value = transcript;
+        scheduleDraftSave();
+    };
+    recognition.onend = () => {
+        window.localSpeechRecognition = null;
+        setDraftStatus("Voice input captured locally by the browser");
+    };
+    recognition.onerror = event => {
+        window.localSpeechRecognition = null;
+        setDraftStatus("Voice input error: " + event.error);
+    };
+    setDraftStatus("Listening… speak your request");
+    recognition.start();
 }
 
 async function callMcpTool(tool, args) {
@@ -3507,6 +3585,19 @@ async function deleteProjectFile(documentId, filename) {
 
 if (searchInput) searchInput.addEventListener("keydown", function (event) {
     if (event.key === "Enter") searchProject();
+});
+
+if (imageInput) imageInput.addEventListener("change", () => renderImagePreview([...imageInput.files]));
+document.addEventListener("paste", event => {
+    const image = [...(event.clipboardData?.items || [])].find(item => item.type.startsWith("image/"));
+    if (!image || !imageInput || typeof DataTransfer === "undefined") return;
+    const file = image.getAsFile();
+    if (!file) return;
+    const transfer = new DataTransfer();
+    [...imageInput.files, file].forEach(item => transfer.items.add(item));
+    imageInput.files = transfer.files;
+    renderImagePreview([...imageInput.files]);
+    setDraftStatus("Screenshot pasted locally");
 });
 
 if (chatSearch) chatSearch.addEventListener("keydown", function (event) {

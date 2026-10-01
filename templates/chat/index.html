@@ -697,6 +697,7 @@
             </div>
             <div class="composer-controls">
                 <button id="toggleAdvancedComposer" type="button" onclick="toggleAdvancedComposer()">Add code or files</button>
+                <button type="button" onclick="toggleVoiceInput()" aria-label="Start local speech input">🎙 Voice input</button>
                 <span>Optional tools. Send a prompt to get your answer.</span>
             </div>
             <div id="advancedComposer" class="advanced-composer" hidden>
@@ -724,6 +725,7 @@
                         <label class="file-picker image-picker">＋ Image<input type="file" id="imageInput" accept="image/*" multiple></label>
                     {% endif %}
                 </div>
+                <div id="imagePreview" class="image-preview" hidden></div>
 
                 <div class="editor-shell">
                     <div class="editor-toolbar">
