@@ -209,6 +209,11 @@
                 <label><input id="privacyRedactSecrets" type="checkbox" checked> Redact likely secrets from logs</label>
             </div>
             <button type="button" onclick="savePrivacySettings()">Save privacy settings</button>
+            <div class="privacy-proof-actions">
+                <button type="button" onclick="loadPrivacyProof()">Refresh local network proof</button>
+                <button type="button" onclick="downloadPrivacyReport()">Download privacy report</button>
+            </div>
+            <pre id="privacyProofOutput" class="privacy-proof-output">No local network events loaded.</pre>
             <div id="privacyStatus" class="settings-status"></div>
         </section>
         <section id="setupPanel" class="setup-panel" hidden>

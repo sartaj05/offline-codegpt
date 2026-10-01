@@ -19,6 +19,7 @@ const privacyNetworkLock = document.getElementById("privacyNetworkLock");
 const privacyStoreHistory = document.getElementById("privacyStoreHistory");
 const privacyRedactSecrets = document.getElementById("privacyRedactSecrets");
 const privacyStatus = document.getElementById("privacyStatus");
+const privacyProofOutput = document.getElementById("privacyProofOutput");
 const ollamaRuntime = document.getElementById("ollamaRuntime");
 const ollamaServerUrl = document.getElementById("ollamaServerUrl");
 const ollamaDefaultModel = document.getElementById("ollamaDefaultModel");
@@ -297,7 +298,10 @@ function toggleSetupPanel() {
 
 function togglePrivacyPanel() {
     if (privacyPanel) privacyPanel.hidden = !privacyPanel.hidden;
-    if (privacyPanel && !privacyPanel.hidden) loadPrivacySettings();
+    if (privacyPanel && !privacyPanel.hidden) {
+        loadPrivacySettings();
+        loadPrivacyProof();
+    }
 }
 
 async function loadPrivacySettings() {
@@ -337,6 +341,33 @@ async function savePrivacySettings() {
     } catch (error) {
         privacyStatus.innerText = String(error);
     }
+}
+
+async function loadPrivacyProof() {
+    if (!privacyProofOutput) return;
+    privacyProofOutput.innerText = "Loading local network ledger...";
+    try {
+        const response = await fetch("/api/privacy/ledger/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load privacy proof.");
+        const lines = [
+            "Summary: " + data.summary.status,
+            "Recorded requests: " + data.summary.total,
+            "Allowed local runtime requests: " + data.summary.local_runtime_requests,
+            "Blocked requests: " + data.summary.blocked_requests,
+            "",
+            ...(data.events.length ? data.events.slice(0, 20).map(event =>
+                `${event.created_at} · ${event.runtime} · ${event.method} ${event.endpoint} · ${event.response_status || "no response"} · ${event.purpose}`
+            ) : ["No runtime requests recorded yet."]),
+        ];
+        privacyProofOutput.innerText = lines.join("\n");
+    } catch (error) {
+        privacyProofOutput.innerText = "Privacy proof error: " + error.message;
+    }
+}
+
+function downloadPrivacyReport() {
+    window.location.href = "/api/privacy/report/";
 }
 
 async function runSetupCheck() {

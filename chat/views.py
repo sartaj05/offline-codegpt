@@ -66,6 +66,7 @@ from .models import (
     LocalModelConfig,
     McpConnector,
     McpToolCall,
+    NetworkLedger,
     AgentTask,
     AgentWorktree,
     AgentTeam,
@@ -1548,6 +1549,7 @@ def privacy_dashboard(request):
         preferences.store_chat_history = request.POST.get("store_chat_history", "true").lower() == "true"
         preferences.redact_secrets = request.POST.get("redact_secrets", "true").lower() == "true"
         preferences.save()
+    local_settings = _user_ollama_settings(request.user)
     return JsonResponse({
         "success": True,
         "privacy": {
@@ -1557,13 +1559,88 @@ def privacy_dashboard(request):
             "updated_at": preferences.updated_at.isoformat(),
         },
         "runtime": {
-            "provider": "Ollama on localhost",
+            "provider": f"{local_settings.runtime} on localhost",
+            "server_url": local_settings.server_url,
             "database_path": str(settings.DATABASES["default"].get("NAME", "")),
             "media_path": str(getattr(settings, "MEDIA_ROOT", "")),
             "remote_token_configured": bool(_remote_connection(request).get("token")),
             "network_lock_effect": "Remote provider calls are blocked" if preferences.network_lock_enabled else "Remote provider calls require explicit connector settings",
         },
     })
+
+
+def _record_network_event(owner, runtime, method, endpoint, purpose, allowed=True, response_status=0, request_chars=0, metadata=None):
+    if not owner:
+        return
+    try:
+        NetworkLedger.objects.create(
+            owner=owner,
+            runtime=(runtime or "local")[:20],
+            method=(method or "GET")[:12],
+            endpoint=(endpoint or "")[:400],
+            purpose=(purpose or "local runtime")[:80],
+            allowed=bool(allowed),
+            response_status=max(0, int(response_status or 0)),
+            request_chars=max(0, int(request_chars or 0)),
+            metadata=metadata if isinstance(metadata, dict) else {},
+        )
+    except Exception:
+        pass
+
+
+def _network_ledger_payload(event):
+    return {
+        "id": event.id,
+        "runtime": event.runtime,
+        "method": event.method,
+        "endpoint": event.endpoint,
+        "purpose": event.purpose,
+        "allowed": event.allowed,
+        "response_status": event.response_status,
+        "request_chars": event.request_chars,
+        "metadata": event.metadata or {},
+        "created_at": event.created_at.isoformat(),
+    }
+
+
+@login_required(login_url="/login/")
+@require_GET
+def privacy_ledger(request):
+    events = list(NetworkLedger.objects.filter(owner=request.user)[:100])
+    return JsonResponse({
+        "success": True,
+        "events": [_network_ledger_payload(event) for event in events],
+        "summary": {
+            "total": NetworkLedger.objects.filter(owner=request.user).count(),
+            "local_runtime_requests": NetworkLedger.objects.filter(owner=request.user, allowed=True).count(),
+            "blocked_requests": NetworkLedger.objects.filter(owner=request.user, allowed=False).count(),
+            "status": "local runtime activity is recorded; no remote provider request is made by chat",
+        },
+    })
+
+
+@login_required(login_url="/login/")
+@require_GET
+def privacy_report(request):
+    preferences, _ = PrivacyPreference.objects.get_or_create(user=request.user)
+    ledger = list(NetworkLedger.objects.filter(owner=request.user)[:500])
+    report = {
+        "generated_at": timezone.now().isoformat(),
+        "offline_mode": preferences.network_lock_enabled,
+        "privacy": {
+            "network_lock_enabled": preferences.network_lock_enabled,
+            "store_chat_history": preferences.store_chat_history,
+            "redact_secrets": preferences.redact_secrets,
+        },
+        "database_path_hash": hashlib.sha256(str(settings.DATABASES["default"].get("NAME", "")).encode("utf-8")).hexdigest(),
+        "media_path_hash": hashlib.sha256(str(getattr(settings, "MEDIA_ROOT", "")).encode("utf-8")).hexdigest(),
+        "network_events": [_network_ledger_payload(event) for event in ledger],
+        "claim": "Prompts, files, embeddings, logs, and chat history remain on this device unless the user explicitly configures a remote integration.",
+    }
+    report["report_sha256"] = hashlib.sha256(json.dumps(report, sort_keys=True).encode("utf-8")).hexdigest()
+    response = JsonResponse(report)
+    response["Content-Disposition"] = 'attachment; filename="offline-privacy-report.json"'
+    return response
 
 @login_required(login_url="/login/")
 @require_http_methods(["DELETE"])
@@ -4405,6 +4482,7 @@ def ask_code(request):
     ollama_base_url = user_settings.server_url if user_settings else OLLAMA_BASE_URL
     runtime = user_settings.runtime if user_settings else "ollama"
     runtime_adapter = get_runtime_adapter(runtime, ollama_base_url)
+    runtime_endpoint = f"{runtime_adapter.base_url}/api/generate" if runtime == "ollama" else f"{runtime_adapter.base_url}/v1/chat/completions"
     configured_default_model = user_settings.default_model if user_settings else DEFAULT_MODEL
     routing_reason = "manual model selection"
     if auto_route and not requested_model:
@@ -4598,7 +4676,27 @@ Instructions:
                         "num_ctx": max(512, (user_settings.max_context_chars if user_settings else 24000) // 4),
                     },
                 )
+                _record_network_event(
+                    owner,
+                    runtime,
+                    "POST",
+                    runtime_endpoint,
+                    "local chat generation",
+                    allowed=True,
+                    response_status=getattr(candidate_response, "status_code", 0),
+                    request_chars=len(full_prompt),
+                    metadata={"model": candidate_model, "protocol": candidate_protocol},
+                )
             except requests.RequestException as exc:
+                _record_network_event(
+                    owner,
+                    runtime,
+                    "POST",
+                    runtime_endpoint,
+                    "local chat generation",
+                    allowed=True,
+                    metadata={"error": str(exc)[:300], "model": candidate_model},
+                )
                 last_error = exc
                 continue
             response = candidate_response

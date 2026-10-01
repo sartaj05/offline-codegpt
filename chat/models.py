@@ -53,6 +53,22 @@ class PrivacyPreference(models.Model):
         return f"Privacy preferences for {self.user.username}"
 
 
+class NetworkLedger(models.Model):
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="network_ledger")
+    runtime = models.CharField(max_length=20, default="local")
+    method = models.CharField(max_length=12, default="GET")
+    endpoint = models.CharField(max_length=400)
+    purpose = models.CharField(max_length=80, default="local runtime")
+    allowed = models.BooleanField(default=True)
+    response_status = models.PositiveIntegerField(default=0)
+    request_chars = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+
 class AgentTask(models.Model):
     STATUS_CHOICES = (
         ("planned", "Planned"),
