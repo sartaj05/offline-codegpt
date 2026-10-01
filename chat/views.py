@@ -3661,6 +3661,36 @@ def preview_patch(request):
     })
 
 
+@login_required(login_url="/login/")
+@require_POST
+def apply_patch(request):
+    original = request.POST.get("original", "")
+    updated = request.POST.get("updated", "")
+    document_id = request.POST.get("document_id", "").strip()
+    if len(updated.encode("utf-8")) > MAX_FILE_BYTES:
+        return JsonResponse({"success": False, "error": "Patched files are limited to 1 MB."}, status=400)
+    if original == updated:
+        return JsonResponse({"success": True, "changed": False, "persisted": False, "message": "No changes to apply."})
+    if not document_id:
+        return JsonResponse({"success": True, "changed": True, "persisted": False, "message": "Patch applied to the scratch buffer."})
+    document = get_object_or_404(KnowledgeDocument, id=document_id, owner=request.user)
+    if document.original_text != original:
+        return JsonResponse({"success": False, "error": "The file changed since this patch was previewed. Reload it before applying."}, status=409)
+    document.original_text = updated
+    document.file_size_bytes = len(updated.encode("utf-8"))
+    document.content_hash = hashlib.sha256(updated.encode("utf-8")).hexdigest()
+    document.save(update_fields=["original_text", "file_size_bytes", "content_hash"])
+    _index_knowledge_document(document, request.user)
+    return JsonResponse({
+        "success": True,
+        "changed": True,
+        "persisted": True,
+        "document_id": document.id,
+        "chunks": document.chunks.count(),
+        "message": "Patch applied and the project index was refreshed.",
+    })
+
+
 @require_POST
 def ask_code(request):
     prompt = request.POST.get("prompt", "").strip()

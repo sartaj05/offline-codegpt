@@ -79,6 +79,7 @@ urlpatterns = [
     path("api/tests/generate/", views.generate_tests, name="generate_tests"),
     path("api/tests/run/", views.run_tests, name="run_tests"),
     path("api/patch/preview/", views.preview_patch, name="preview_patch"),
+    path("api/patch/apply/", views.apply_patch, name="apply_patch"),
     path("api/git/status/", views.git_status, name="git_status"),
     path("api/git/diff/", views.git_diff, name="git_diff"),
     path("api/git/stage/", views.git_stage, name="git_stage"),

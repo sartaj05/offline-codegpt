@@ -3497,7 +3497,7 @@ async function openPatchReview(updated, language) {
         });
         const data = await response.json();
         if (!data.success) throw new Error(data.error || "Unable to create patch.");
-        pendingPatch = { updated, language };
+        pendingPatch = { updated, language, original: codeInput.value };
         codeBeforePatch = codeInput.value;
         patchDiff.innerText = data.diff;
         patchStatus.innerText = data.changed ? "Review the changes before applying." : "No changes detected.";
@@ -3508,8 +3508,33 @@ async function openPatchReview(updated, language) {
     }
 }
 
-function acceptPatch() {
+async function acceptPatch() {
     if (!pendingPatch) return;
+    if (activeEditorDocumentId) {
+        try {
+            const response = await fetch("/api/patch/apply/", {
+                method: "POST",
+                headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({
+                    original: pendingPatch.original,
+                    updated: pendingPatch.updated,
+                    document_id: String(activeEditorDocumentId),
+                }),
+            });
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || "Unable to apply patch safely.");
+            patchStatus.innerText = data.message || "Patch applied and indexed.";
+            pendingPatch.accepted = true;
+            codeInput.value = pendingPatch.updated;
+            syncActiveEditorTab();
+            syncEditorPreview();
+            await loadProjectWorkspace();
+            return;
+        } catch (error) {
+            alert("Patch was not applied: " + error);
+            return;
+        }
+    }
     codeInput.value = pendingPatch.updated;
     if (pendingPatch.language && [...languageInput.options].some(option => option.value === pendingPatch.language)) {
         languageInput.value = pendingPatch.language;
@@ -3524,8 +3549,27 @@ function acceptPatch() {
     }
 }
 
-function rollbackPatch() {
+async function rollbackPatch() {
     if (!pendingPatch) return;
+    if (activeEditorDocumentId && pendingPatch.accepted) {
+        try {
+            const response = await fetch("/api/patch/apply/", {
+                method: "POST",
+                headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({
+                    original: pendingPatch.updated,
+                    updated: codeBeforePatch,
+                    document_id: String(activeEditorDocumentId),
+                }),
+            });
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || "Unable to roll back the saved patch.");
+            await loadProjectWorkspace();
+        } catch (error) {
+            alert("Patch rollback failed: " + error);
+            return;
+        }
+    }
     codeInput.value = codeBeforePatch;
     pendingPatch.accepted = false;
     syncActiveEditorTab();
