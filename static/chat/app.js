@@ -63,6 +63,9 @@ const extensionName = document.getElementById("extensionName");
 const extensionSlug = document.getElementById("extensionSlug");
 const extensionPermissions = document.getElementById("extensionPermissions");
 const extensionManifest = document.getElementById("extensionManifest");
+const extensionRunSlug = document.getElementById("extensionRunSlug");
+const extensionRunArguments = document.getElementById("extensionRunArguments");
+const extensionRunOutput = document.getElementById("extensionRunOutput");
 const observabilityPanel = document.getElementById("observabilityPanel");
 const evaluationPanel = document.getElementById("evaluationPanel");
 const evaluationTaskName = document.getElementById("evaluationTaskName");
@@ -801,6 +804,26 @@ async function publishExtension() {
     } catch (error) {
         extensionsStatus.innerText = "SDK error: " + error;
     }
+}
+
+async function runLocalExtension() {
+    if (!extensionRunSlug || !extensionRunOutput) return;
+    let argumentsJson = extensionRunArguments.value.trim() || "{}";
+    try { JSON.parse(argumentsJson); } catch (error) {
+        extensionRunOutput.innerText = "Arguments must be valid JSON.";
+        return;
+    }
+    extensionRunOutput.innerText = "Running local plugin...";
+    try {
+        const response = await fetch("/api/extensions/run/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ slug: extensionRunSlug.value.trim(), arguments: argumentsJson }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Plugin execution failed.");
+        extensionRunOutput.innerText = JSON.stringify(data.result, null, 2);
+    } catch (error) { extensionRunOutput.innerText = "Plugin error: " + error; }
 }
 
 function toggleObservability() {

@@ -3043,6 +3043,50 @@ def extension_marketplace(request):
     return JsonResponse({"success": True, "extensions": packages, "sdk": {"permissions": ["project.read", "agent.read", "agent.approve", "index.write"], "manifest_fields": ["name", "slug", "version", "description", "permissions", "manifest"]}})
 
 
+@login_required(login_url="/login/")
+@require_POST
+def extension_run(request):
+    slug = request.POST.get("slug", "").strip()
+    package = get_object_or_404(ExtensionPackage, slug=slug, is_active=True)
+    install = get_object_or_404(ExtensionInstall, owner=request.user, package=package, status="installed")
+    manifest = package.manifest if isinstance(package.manifest, dict) else {}
+    tool_name = str(manifest.get("tool", "")).strip()
+    try:
+        arguments = json.loads(request.POST.get("arguments", "{}"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "Plugin arguments must be valid JSON."}, status=400)
+    if not isinstance(arguments, dict):
+        return JsonResponse({"success": False, "error": "Plugin arguments must be a JSON object."}, status=400)
+
+    if tool_name == "project.search":
+        if "project.read" not in install.approved_permissions:
+            return JsonResponse({"success": False, "error": "This plugin is not approved for project.read."}, status=403)
+        query = str(arguments.get("query", "")).strip()[:500]
+        try:
+            limit = min(20, max(1, int(arguments.get("limit", 8))))
+        except (TypeError, ValueError):
+            limit = 8
+        result = _search_knowledge(query, limit=limit, owner=request.user)
+        return JsonResponse({"success": True, "tool": tool_name, "result": result})
+    if tool_name == "project.read":
+        if "project.read" not in install.approved_permissions:
+            return JsonResponse({"success": False, "error": "This plugin is not approved for project.read."}, status=403)
+        filename = _safe_filename(arguments.get("filename", ""))
+        document = KnowledgeDocument.objects.filter(owner=request.user, filename=filename, is_active=True).first()
+        if not document:
+            return JsonResponse({"success": False, "error": "Indexed project file not found."}, status=404)
+        return JsonResponse({"success": True, "tool": tool_name, "result": {"filename": filename, "content": document.original_text[:MAX_FILE_BYTES]}})
+    if tool_name == "agent.plan":
+        if not {"agent.read", "agent.approve"}.issubset(set(install.approved_permissions)):
+            return JsonResponse({"success": False, "error": "This plugin requires approved agent.read and agent.approve permissions."}, status=403)
+        goal = str(arguments.get("goal", "")).strip()[:4000]
+        if not goal:
+            return JsonResponse({"success": False, "error": "agent.plan requires a goal."}, status=400)
+        task = AgentTask.objects.create(owner=request.user, title=goal[:80], goal=goal, plan=_agent_plan(goal))
+        return JsonResponse({"success": True, "tool": tool_name, "result": _agent_payload(task)}, status=201)
+    return JsonResponse({"success": False, "error": "Unsupported local plugin tool. Use project.search, project.read, or agent.plan."}, status=400)
+
+
 def _scim_workspace(request):
     workspace_id = request.headers.get("X-Workspace-ID") or request.GET.get("workspace_id")
     if workspace_id:
