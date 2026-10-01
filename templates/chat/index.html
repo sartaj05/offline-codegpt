@@ -859,6 +859,7 @@
                                 <button type="button" onclick="resetAgentTask()">Undo / reset</button>
                                 <button type="button" onclick="queueAgentJob()">Queue background job</button>
                                 <button type="button" onclick="recoverAgentJobs()">Recover interrupted jobs</button>
+                                <button type="button" onclick="createAgentWorktree()">Create isolated worktree</button>
                             </div>
                         </div>
                         <textarea id="agentGoal" class="agent-goal" placeholder="Describe a multi-step coding task..."></textarea>
@@ -868,6 +869,7 @@
                         <div id="agentPlan" class="agent-plan"></div>
                         <pre id="agentLogs" class="agent-logs">Agent logs will appear here.</pre>
                         <div id="agentJobStatus" class="agent-status">No background job queued.</div>
+                        <pre id="agentWorktreeStatus" class="agent-logs">No isolated worktree yet.</pre>
                     </div>
                     <div class="agent-team-workspace">
                         <div class="agent-heading">

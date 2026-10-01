@@ -63,6 +63,7 @@ from .models import (
     McpConnector,
     McpToolCall,
     AgentTask,
+    AgentWorktree,
     AgentTeam,
     SandboxPolicy,
     PermissionProfile,
@@ -286,6 +287,19 @@ def _permission_profile_payload(profile):
         "mode": profile.mode,
         "is_active": profile.is_active,
         "require_confirmation": profile.require_confirmation,
+    }
+
+
+def _worktree_payload(worktree):
+    return {
+        "id": worktree.id,
+        "task_id": worktree.task_id,
+        "task_title": worktree.task.title,
+        "branch": worktree.branch,
+        "path": worktree.path,
+        "base_ref": worktree.base_ref,
+        "status": worktree.status,
+        "created_at": worktree.created_at.isoformat(),
     }
 
 
@@ -1895,6 +1909,69 @@ def sandbox_policy_api(request):
         "permission_profile": _permission_profile_payload(profile),
         "permission_profiles": [_permission_profile_payload(item) for item in profiles],
     })
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def agent_worktrees(request):
+    if request.method == "GET":
+        items = AgentWorktree.objects.filter(owner=request.user).select_related("task")[:50]
+        return JsonResponse({"success": True, "worktrees": [_worktree_payload(item) for item in items]})
+    task = get_object_or_404(AgentTask, id=request.POST.get("task_id"), owner=request.user)
+    existing = AgentWorktree.objects.filter(task=task).first()
+    if existing and existing.status == "active":
+        return JsonResponse({"success": True, "worktree": _worktree_payload(existing), "existing": True})
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    slug = re.sub(r"[^a-z0-9-]+", "-", task.title.lower()).strip("-")[:40] or "task"
+    branch = request.POST.get("branch", "").strip() or f"agent/{task.id}-{slug}"
+    if not re.fullmatch(r"[A-Za-z0-9._/-]{1,180}", branch) or ".." in branch:
+        return JsonResponse({"success": False, "error": "Enter a safe branch name."}, status=400)
+    worktree_root = os.path.join(project_root, ".agent-worktrees")
+    path = os.path.join(worktree_root, f"task-{task.id}")
+    os.makedirs(worktree_root, exist_ok=True)
+    result = _run_git(["worktree", "add", "-b", branch, path, "HEAD"])
+    if isinstance(result, tuple):
+        return JsonResponse({"success": False, "error": result[1]}, status=503)
+    if result.returncode != 0:
+        return JsonResponse({"success": False, "error": (result.stderr or result.stdout).strip()}, status=400)
+    worktree = AgentWorktree.objects.create(owner=request.user, task=task, branch=branch, path=path)
+    task.source_branch = branch
+    task.save(update_fields=["source_branch", "updated_at"])
+    return JsonResponse({"success": True, "worktree": _worktree_payload(worktree)}, status=201)
+
+
+@login_required(login_url="/login/")
+@require_POST
+def agent_worktree_action(request, worktree_id):
+    worktree = get_object_or_404(AgentWorktree, id=worktree_id, owner=request.user)
+    action = request.POST.get("action", "compare").strip().lower()
+    if action == "compare":
+        result = _run_git(["diff", "HEAD", worktree.branch, "--"])
+        if isinstance(result, tuple):
+            return JsonResponse({"success": False, "error": result[1]}, status=503)
+        return JsonResponse({"success": result.returncode == 0, "worktree": _worktree_payload(worktree), "diff": result.stdout[:MAX_GIT_OUTPUT_CHARS], "error": result.stderr[:1000]})
+    if worktree.status != "active":
+        return JsonResponse({"success": False, "error": "This worktree is no longer active."}, status=400)
+    if action == "merge":
+        if request.POST.get("confirm") != "MERGE":
+            return JsonResponse({"success": False, "error": "Type MERGE to confirm bringing the agent branch into the current branch."}, status=400)
+        result = _run_git(["merge", "--no-ff", worktree.branch, "-m", f"Merge agent task {worktree.task_id}"])
+        if isinstance(result, tuple) or result.returncode != 0:
+            return JsonResponse({"success": False, "error": (result[1] if isinstance(result, tuple) else result.stderr).strip()}, status=400)
+        worktree.status = "merged"
+        worktree.save(update_fields=["status", "updated_at"])
+        return JsonResponse({"success": True, "worktree": _worktree_payload(worktree), "output": result.stdout})
+    if action == "discard":
+        if request.POST.get("confirm") != "DISCARD":
+            return JsonResponse({"success": False, "error": "Type DISCARD to confirm deleting the agent worktree."}, status=400)
+        remove = _run_git(["worktree", "remove", "--force", worktree.path])
+        if isinstance(remove, tuple) or remove.returncode != 0:
+            return JsonResponse({"success": False, "error": (remove[1] if isinstance(remove, tuple) else remove.stderr).strip()}, status=400)
+        _run_git(["branch", "-D", worktree.branch])
+        worktree.status = "discarded"
+        worktree.save(update_fields=["status", "updated_at"])
+        return JsonResponse({"success": True, "worktree": _worktree_payload(worktree)})
+    return JsonResponse({"success": False, "error": "Use compare, merge, or discard."}, status=400)
 
 
 @login_required(login_url="/login/")

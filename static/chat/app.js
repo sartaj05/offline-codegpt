@@ -199,6 +199,7 @@ const agentStatus = document.getElementById("agentStatus");
 const agentPlan = document.getElementById("agentPlan");
 const agentLogs = document.getElementById("agentLogs");
 const agentJobStatus = document.getElementById("agentJobStatus");
+const agentWorktreeStatus = document.getElementById("agentWorktreeStatus");
 const agentTeamRoles = document.getElementById("agentTeamRoles");
 const agentTeamStatus = document.getElementById("agentTeamStatus");
 const agentTeamLogs = document.getElementById("agentTeamLogs");
@@ -3220,6 +3221,57 @@ async function recoverAgentJobs() {
         if (!data.success) throw new Error(data.error || "Unable to recover jobs.");
         agentJobStatus.innerText = "Recovered " + data.recovered + " interrupted job(s); they are queued at their last checkpoint.";
     } catch (error) { agentJobStatus.innerText = "Recovery error: " + error; }
+}
+
+async function createAgentWorktree() {
+    if (!agentTaskId || !agentWorktreeStatus) return;
+    agentWorktreeStatus.innerText = "Creating isolated Git worktree...";
+    try {
+        const response = await fetch("/api/agent/worktrees/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ task_id: agentTaskId }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to create worktree.");
+        renderAgentWorktree(data.worktree);
+    } catch (error) { agentWorktreeStatus.innerText = "Worktree error: " + error; }
+}
+
+function renderAgentWorktree(worktree) {
+    if (!agentWorktreeStatus) return;
+    agentWorktreeStatus.innerText = worktree.status.toUpperCase() + " · " + worktree.branch + "\n" + worktree.path;
+    if (worktree.status !== "active") return;
+    const compare = document.createElement("button");
+    compare.type = "button";
+    compare.innerText = "Compare worktree";
+    compare.onclick = () => actionAgentWorktree(worktree.id, "compare");
+    const merge = document.createElement("button");
+    merge.type = "button";
+    merge.innerText = "Merge worktree";
+    merge.onclick = () => actionAgentWorktree(worktree.id, "merge");
+    const discard = document.createElement("button");
+    discard.type = "button";
+    discard.innerText = "Discard worktree";
+    discard.onclick = () => actionAgentWorktree(worktree.id, "discard");
+    agentWorktreeStatus.append(document.createElement("br"), compare, merge, discard);
+}
+
+async function actionAgentWorktree(id, action) {
+    let confirmValue = "";
+    if (action === "merge" || action === "discard") {
+        confirmValue = prompt("Type " + action.toUpperCase() + " to confirm:");
+        if (confirmValue !== action.toUpperCase()) return;
+    }
+    const response = await fetch("/api/agent/worktree/" + id + "/action/", {
+        method: "POST",
+        headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ action, confirm: confirmValue }),
+    });
+    const data = await response.json();
+    if (!data.success) { alert(data.error || "Worktree action failed."); return; }
+    if (action === "compare") agentWorktreeStatus.innerText = data.diff || "No worktree differences.";
+    else renderAgentWorktree(data.worktree);
 }
 
 async function controlAgentTask(action) {

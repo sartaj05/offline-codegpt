@@ -79,6 +79,22 @@ class AgentTask(models.Model):
         return self.title
 
 
+class AgentWorktree(models.Model):
+    STATUS_CHOICES = (("active", "Active"), ("merged", "Merged"), ("discarded", "Discarded"))
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="agent_worktrees")
+    task = models.OneToOneField(AgentTask, on_delete=models.CASCADE, related_name="worktree")
+    branch = models.CharField(max_length=200)
+    path = models.CharField(max_length=500)
+    base_ref = models.CharField(max_length=200, default="HEAD")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.task.title} · {self.branch}"
+
+
 class AgentTeam(models.Model):
     STATUS_CHOICES = (
         ("planned", "Planned"),
