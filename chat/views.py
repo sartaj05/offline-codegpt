@@ -2655,12 +2655,13 @@ def evaluation_dashboard(request):
     durations = [run.duration_ms for run in completed if run.duration_ms]
     models = {}
     for run in runs:
-        item = models.setdefault(run.model_name, {"model_name": run.model_name, "runs": 0, "completed": 0, "scores": [], "durations": []})
+        item = models.setdefault(run.model_name, {"model_name": run.model_name, "runs": 0, "completed": 0, "scores": [], "durations": [], "throughput": []})
         item["runs"] += 1
         if run.status == "completed":
             item["completed"] += 1
             if run.duration_ms:
                 item["durations"].append(run.duration_ms)
+                item["throughput"].append(run.output_chars / max(run.duration_ms / 1000, 0.001))
         if hasattr(run, "score"):
             item["scores"].append(run.score.overall)
     model_rows = []
@@ -2671,6 +2672,8 @@ def evaluation_dashboard(request):
             "completed": item["completed"],
             "average_score": round(sum(item["scores"]) / len(item["scores"]), 1) if item["scores"] else 0,
             "average_duration_ms": round(sum(item["durations"]) / len(item["durations"])) if item["durations"] else 0,
+            "average_output_chars_per_second": round(sum(item["throughput"]) / len(item["throughput"]), 1) if item["throughput"] else 0,
+            "score_coverage": round((len(item["scores"]) / max(item["completed"], 1)) * 100, 1),
         })
     suites = list(EvaluationRegressionSuite.objects.filter(owner=request.user))
     return JsonResponse({
@@ -2686,7 +2689,7 @@ def evaluation_dashboard(request):
             "regression_suites": len(suites),
             "regressions_needing_review": sum(1 for suite in suites if suite.last_result and not suite.last_result.get("passed", False)),
         },
-        "models": sorted(model_rows, key=lambda row: (-row["average_score"], row["model_name"])),
+        "models": sorted(model_rows, key=lambda row: (-row["average_score"], row["average_duration_ms"], row["model_name"])),
         "recent_runs": [
             {
                 "id": run.id,

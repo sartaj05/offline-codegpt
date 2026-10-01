@@ -944,7 +944,7 @@ async function loadEvaluationDashboard() {
             ["Needs review", summary.regressions_needing_review],
         ].map(item => "<div><strong>" + item[1] + "</strong><span>" + item[0] + "</span></div>").join("");
         evaluationDashboardModels.innerText = data.models.length
-            ? data.models.map(item => item.model_name + " · score " + item.average_score + " · " + item.average_duration_ms + " ms · " + item.completed + "/" + item.runs + " completed").join("\n")
+            ? data.models.map((item, index) => (index + 1) + ". " + item.model_name + " · score " + item.average_score + " · " + item.average_duration_ms + " ms · " + item.average_output_chars_per_second + " chars/s · " + item.score_coverage + "% scored · " + item.completed + "/" + item.runs + " completed").join("\n")
             : "No model runs yet.";
         evaluationDashboardRecent.innerText = data.recent_runs.length
             ? data.recent_runs.map(item => item.created_at.slice(0, 19).replace("T", " ") + " · " + item.task + " · " + item.model_name + " · " + item.status + " · " + (item.score === null ? "unscored" : item.score + "/100")).join("\n")
