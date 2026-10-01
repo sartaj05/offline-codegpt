@@ -96,7 +96,7 @@ from .deployment import generate_deployment_kit, validate_deployment_environment
 from .incident import analyze_incident
 from .architecture import analyze_architecture
 from .cross_repository import analyze_cross_repository
-from .vault import decrypt_secret, encrypt_secret, mask_json
+from .vault import decrypt_secret, encrypt_secret, mask_json, redact_sensitive_text
 from .api_contract import analyze_api_contract
 from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
@@ -580,9 +580,10 @@ def _ollama_embeddings(texts, base_url):
 
 def _index_knowledge_document(document, owner):
     document.chunks.all().delete()
+    indexed_text = redact_sensitive_text(owner, document.original_text)
     contents = [
-        document.original_text[start:start + CHUNK_SIZE]
-        for start in range(0, len(document.original_text), CHUNK_SIZE)
+        indexed_text[start:start + CHUNK_SIZE]
+        for start in range(0, len(indexed_text), CHUNK_SIZE)
     ]
     settings = _user_ollama_settings(owner) if owner else None
     embeddings = _ollama_embeddings(contents, settings.server_url if settings else OLLAMA_BASE_URL)
@@ -1296,6 +1297,9 @@ def project_document_reindex(request, document_id):
 
 def session_messages(request, session_id):
     owner = request.user if request.user.is_authenticated else None
+    safe_prompt = redact_sensitive_text(owner, prompt)
+    safe_code = redact_sensitive_text(owner, code)
+    safe_final_code = redact_sensitive_text(owner, final_code)
     session = get_object_or_404(ChatSession, id=session_id, owner=owner)
     messages = [
         {
@@ -3632,7 +3636,7 @@ def ask_code(request):
 
     user_message_parts = []
     if prompt:
-        user_message_parts.append(f"Prompt:\n{prompt}")
+        user_message_parts.append(f"Prompt:\n{safe_prompt}")
     if uploaded_filenames:
         user_message_parts.append("Uploaded Files:\n" + "\n".join(uploaded_filenames))
     if selected_context_files:
@@ -3640,7 +3644,7 @@ def ask_code(request):
     if image_filenames:
         user_message_parts.append("Uploaded Images:\n" + "\n".join(image_filenames))
     if final_code:
-        user_message_parts.append(f"Code:\n{final_code[:6000]}")
+        user_message_parts.append(f"Code:\n{safe_final_code[:6000]}")
 
     user_message = ChatMessage.objects.create(
         session=session,
@@ -3655,9 +3659,10 @@ def ask_code(request):
     if len(final_code) > max_code_chars:
         final_code = final_code[:max_code_chars]
         truncated_note = "\n\nNote: the uploaded code was truncated for the local model."
+    safe_final_code = redact_sensitive_text(owner, final_code)
 
     relevant_chunks = _search_knowledge(
-        prompt or code,
+        safe_prompt or safe_code,
         owner=owner,
         filenames=selected_context_files or None,
     )
@@ -3674,7 +3679,7 @@ Language:
 {language}
 
 User request:
-{prompt or "(No separate prompt was provided. Interpret the Code section as the user's request if it contains natural language.)"}
+ {safe_prompt or "(No separate prompt was provided. Interpret the Code section as the user's request if it contains natural language.)"}
 
 Uploaded files (optional):
 {", ".join(uploaded_filenames) or "None"}
@@ -3683,7 +3688,7 @@ Relevant project context (optional):
 {knowledge_context or "None"}
 
 Code or additional user input (optional):
-{final_code or "None"}
+ {safe_final_code or "None"}
 
 {truncated_note}
 

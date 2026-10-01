@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import json
+import re
 
 from cryptography.fernet import Fernet
 from django.conf import settings
@@ -50,3 +51,22 @@ def mask_json(user, value):
     if isinstance(value, str):
         return mask_sensitive_text(user, value)
     return value
+
+
+def redact_sensitive_text(user, text):
+    """Mask vault values and common secret formats before model-facing use."""
+    from .models import PrivacyPreference
+    preference = PrivacyPreference.objects.filter(user=user).first() if user and getattr(user, "is_authenticated", False) else None
+    if preference and not preference.redact_secrets:
+        return str(text)
+    masked = mask_sensitive_text(user, str(text)) if user else str(text)
+    patterns = [
+        (r"(?i)(authorization\s*:\s*bearer\s+)[A-Za-z0-9._~+/=-]+", r"\1[REDACTED_TOKEN]"),
+        (r"(?i)\b(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{16,})\b", "[REDACTED_API_KEY]"),
+        (r"\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b", "[REDACTED_JWT]"),
+        (r"-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+ PRIVATE KEY-----", "[REDACTED_PRIVATE_KEY]"),
+        (r"(?i)(\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*)([^\s,;]+)", r"\1[REDACTED_SECRET]"),
+    ]
+    for pattern, replacement in patterns:
+        masked = re.sub(pattern, replacement, masked)
+    return masked
