@@ -131,3 +131,37 @@ Privacy reminder
 Keep .env and local model/data directories out of Git. Do not store API keys or
 passwords in prompts or project files. The Privacy dashboard shows local mode,
 network locking, data location, and redaction controls.
+
+Latest workspace features
+-------------------------
+- Hybrid RAG combines lexical matching, semantic embeddings, phrase matching,
+  filename boosts, and reranking. Optional weights are
+  RAG_LEXICAL_WEIGHT, RAG_SEMANTIC_WEIGHT, and RAG_RERANK_WEIGHT.
+- The Memory panel automatically keeps recent conversation turns within the
+  model context budget and stores a local summary of older turns.
+- Git workspace controls include local branch create/switch, blame, staged
+  commits, and guarded file rollback. Rollback requires typing ROLLBACK.
+- AI patch review uses optimistic concurrency. If an indexed file changed after
+  preview, the patch is rejected until the file is reloaded. Accepted patches
+  refresh the local index and can be rolled back.
+- Agent plans accept custom one-line checkpoints. Write, execute, and Git steps
+  are approval-gated; plans can be paused, resumed, retried, or reset.
+- Local plugins use approved manifests and permissions. Supported local tools are
+  project.search, project.read, and agent.plan. Plugin execution never calls a
+  remote provider.
+- Permission profiles are available in the secure runtime policy: Read only,
+  Developer, and Unrestricted. Read-only mode blocks code execution, Git writes,
+  rollback, and project test execution.
+- Test workspace can discover Django, Pytest, NPM, Cargo, and Go test runners.
+  Select a detected command and explicitly approve it before running; execution
+  is capped at 60 seconds.
+- Evaluation Lab compares model score, latency, throughput, completion rate,
+  and score coverage. Scores are local evaluation signals, not a guarantee of
+  answer quality.
+- Interrupted agent jobs can be recovered from the Agent workspace or with:
+
+   python manage.py recover_jobs
+   python manage.py recover_jobs --username YOUR_USER
+
+Recovery returns jobs left in `running` to a queued checkpoint so they can be
+reviewed and run again safely.
