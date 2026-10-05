@@ -865,3 +865,23 @@ class EvaluationRegressionSuite(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class EvaluationReplay(models.Model):
+    STATUS_CHOICES = (("running", "Running"), ("completed", "Completed"), ("failed", "Failed"))
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="evaluation_replays")
+    suite = models.ForeignKey(EvaluationRegressionSuite, on_delete=models.CASCADE, related_name="replays")
+    model_name = models.CharField(max_length=120)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="running")
+    results = models.JSONField(default=list)
+    metrics = models.JSONField(default=dict)
+    error = models.TextField(blank=True, default="")
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-started_at", "-id"]
+
+    def __str__(self):
+        return f"Replay {self.id} · {self.model_name}"

@@ -60,6 +60,7 @@ urlpatterns = [
     path("api/evaluations/regressions/", views.evaluation_regressions, name="evaluation_regressions"),
     path("api/evaluations/regressions/<int:suite_id>/run/", views.evaluation_regression_run, name="evaluation_regression_run"),
     path("api/evaluations/dashboard/", views.evaluation_dashboard, name="evaluation_dashboard"),
+    path("api/evaluations/replays/", views.evaluation_replays, name="evaluation_replays"),
     path("api/workspace/", views.workspace_api, name="workspace_api"),
     path("api/identity/policy/", views.identity_policy_api, name="identity_policy_api"),
     path("api/identity/enterprise/", views.enterprise_identity_api, name="enterprise_identity_api"),

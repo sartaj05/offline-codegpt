@@ -94,6 +94,7 @@ from .models import (
     EvaluationRun,
     EvaluationScore,
     EvaluationRegressionSuite,
+    EvaluationReplay,
     SecretVaultItem,
     ExtensionPackage,
     ExtensionInstall,
@@ -3381,6 +3382,104 @@ def evaluation_regression_run(request, suite_id):
     suite.last_run_at = timezone.now()
     suite.save(update_fields=["baseline", "last_result", "last_run_at", "updated_at"])
     return JsonResponse({"success": True, "suite": _regression_suite_payload(suite)})
+
+
+def _evaluation_replay_payload(replay):
+    return {
+        "id": replay.id,
+        "suite_id": replay.suite_id,
+        "model_name": replay.model_name,
+        "status": replay.status,
+        "results": replay.results or [],
+        "metrics": replay.metrics or {},
+        "error": replay.error,
+        "started_at": replay.started_at.isoformat(),
+        "finished_at": replay.finished_at.isoformat() if replay.finished_at else None,
+    }
+
+
+def _collect_runtime_answer(response, protocol):
+    parts = []
+    for raw_line in response.iter_lines(decode_unicode=True):
+        if not raw_line:
+            continue
+        line = raw_line.decode("utf-8", errors="ignore") if isinstance(raw_line, bytes) else raw_line
+        try:
+            if protocol == "openai":
+                if line.startswith("data:"):
+                    line = line[5:].strip()
+                if line == "[DONE]":
+                    break
+                payload = json.loads(line)
+                choices = payload.get("choices") or []
+                parts.append(((choices[0].get("delta") or {}).get("content", "")) if choices else "")
+            else:
+                payload = json.loads(line)
+                parts.append(payload.get("response", ""))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+    return "".join(parts).strip()
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def evaluation_replays(request):
+    if request.method == "GET":
+        return JsonResponse({"success": True, "replays": [_evaluation_replay_payload(item) for item in EvaluationReplay.objects.filter(owner=request.user)[:50]]})
+    try:
+        suite_id = int(request.POST.get("suite_id", "0"))
+    except (TypeError, ValueError):
+        suite_id = 0
+    suite = get_object_or_404(EvaluationRegressionSuite, id=suite_id, owner=request.user)
+    settings = _user_ollama_settings(request.user)
+    model_name = request.POST.get("model", "").strip()[:120] or settings.default_model
+    tasks = list(EvaluationTask.objects.filter(owner=request.user, is_active=True, id__in=[int(item) for item in (suite.task_ids or [])]))
+    replay = EvaluationReplay.objects.create(owner=request.user, suite=suite, model_name=model_name)
+    results = []
+    started_replay = time.perf_counter()
+    try:
+        adapter = get_runtime_adapter(settings.runtime, settings.server_url)
+        for task in tasks:
+            prompt = f"You are being evaluated as a local coding assistant.\nLanguage: {task.language}\nTask: {task.prompt}\nCode fixture:\n{task.code}\nReturn a practical answer with corrected code where appropriate."
+            started = time.perf_counter()
+            run = EvaluationRun.objects.create(owner=request.user, task=task, model_name=model_name, input_chars=len(prompt))
+            try:
+                response, protocol = adapter.generate(model_name, prompt, options={"temperature": settings.temperature, "top_p": settings.top_p, "num_ctx": max(512, settings.max_context_chars // 4)})
+                if response.status_code != 200:
+                    raise ValueError(response.text[:500])
+                answer = _collect_runtime_answer(response, protocol)
+                run.response = answer
+                run.status = "completed"
+                run.output_chars = len(answer)
+            except (requests.RequestException, ValueError, TypeError) as exc:
+                run.status = "failed"
+                run.response = str(exc)[:4000]
+            run.duration_ms = round((time.perf_counter() - started) * 1000)
+            run.metadata = {"replay_id": replay.id, "runtime": settings.runtime}
+            run.save(update_fields=["response", "status", "output_chars", "duration_ms", "metadata"])
+            score = None
+            if run.status == "completed":
+                values = _automatic_evaluation_scores(run)
+                score = EvaluationScore.objects.create(run=run, correctness=values[0], relevance=values[1], completeness=values[2], safety=values[3], overall=values[4], method="automatic")
+            results.append({"task_id": task.id, "run_id": run.id, "status": run.status, "score": score.overall if score else 0, "duration_ms": run.duration_ms, "output_chars": run.output_chars})
+        completed = [item for item in results if item["status"] == "completed"]
+        replay.metrics = {
+            "task_count": len(results),
+            "completed": len(completed),
+            "success_rate": round(len(completed) / max(1, len(results)) * 100, 1),
+            "average_score": round(sum(item["score"] for item in completed) / max(1, len(completed)), 1),
+            "average_duration_ms": round(sum(item["duration_ms"] for item in completed) / max(1, len(completed))),
+            "total_duration_ms": round((time.perf_counter() - started_replay) * 1000),
+            "regression_passed": all(item["score"] >= 60 for item in completed) and bool(completed),
+        }
+        replay.results = results
+        replay.status = "completed"
+    except Exception as exc:
+        replay.status = "failed"
+        replay.error = str(exc)[:2000]
+    replay.finished_at = timezone.now()
+    replay.save(update_fields=["status", "results", "metrics", "error", "finished_at"])
+    return JsonResponse({"success": replay.status == "completed", "replay": _evaluation_replay_payload(replay)}, status=200 if replay.status == "completed" else 502)
 
 
 @login_required(login_url="/login/")
