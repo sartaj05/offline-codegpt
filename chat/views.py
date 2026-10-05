@@ -41,6 +41,11 @@ try:
 except ImportError:
     WhisperModel = None
 
+try:
+    import pyttsx3
+except ImportError:
+    pyttsx3 = None
+
 _whisper_model = None
 
 from django.contrib.auth import authenticate, login, logout
@@ -1761,6 +1766,55 @@ def local_transcribe(request):
         return JsonResponse({"success": True, "text": text, "language": getattr(info, "language", "")})
     except Exception as exc:
         return JsonResponse({"success": False, "error": "Local transcription failed: " + str(exc)}, status=503)
+
+
+@login_required(login_url="/login/")
+@require_POST
+def screen_understand(request):
+    image = request.FILES.get("image")
+    if not image:
+        return JsonResponse({"success": False, "error": "Choose a screenshot or image first."}, status=400)
+    if image.size > MAX_IMAGE_BYTES:
+        return JsonResponse({"success": False, "error": "Screenshots are limited to 5 MB."}, status=400)
+    if not image.content_type.startswith("image/"):
+        return JsonResponse({"success": False, "error": "The screen capture must be an image."}, status=400)
+    settings = _user_ollama_settings(request.user)
+    model = request.POST.get("model", "").strip()[:100] or VISION_MODEL
+    prompt = request.POST.get("prompt", "Describe this screen, visible text, UI controls, errors, and actionable next steps.").strip()[:4000]
+    adapter = get_runtime_adapter(settings.runtime, settings.server_url)
+    try:
+        response, protocol = adapter.generate(model, prompt, images=[base64.b64encode(image.read()).decode("ascii")], options={"temperature": 0.1, "top_p": 0.9, "num_ctx": max(2048, settings.max_context_chars // 4)})
+        if response.status_code != 200:
+            return JsonResponse({"success": False, "error": response.text[:1000]}, status=503)
+        answer = _collect_runtime_answer(response, protocol)
+        return JsonResponse({"success": True, "model": model, "runtime": settings.runtime, "answer": answer})
+    except (requests.RequestException, ValueError, TypeError) as exc:
+        return JsonResponse({"success": False, "error": "Local screen analysis failed: " + str(exc)}, status=503)
+
+
+@login_required(login_url="/login/")
+@require_POST
+def local_tts(request):
+    text = request.POST.get("text", "").strip()[:6000]
+    if not text:
+        return JsonResponse({"success": False, "error": "Enter text for offline speech."}, status=400)
+    if pyttsx3 is None:
+        return JsonResponse({"success": False, "error": "Install pyttsx3 to enable local text-to-speech."}, status=400)
+    temporary_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temporary:
+            temporary_path = temporary.name
+        engine = pyttsx3.init()
+        engine.save_to_file(text, temporary_path)
+        engine.runAndWait()
+        with open(temporary_path, "rb") as audio_file:
+            encoded = base64.b64encode(audio_file.read()).decode("ascii")
+        return JsonResponse({"success": True, "mime": "audio/wav", "audio_base64": encoded})
+    except Exception as exc:
+        return JsonResponse({"success": False, "error": "Local text-to-speech failed: " + str(exc)}, status=503)
+    finally:
+        if temporary_path and os.path.exists(temporary_path):
+            os.unlink(temporary_path)
 
 
 @login_required(login_url="/login/")

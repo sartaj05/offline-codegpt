@@ -228,6 +228,8 @@ const imageInput = document.getElementById("imageInput");
 const imagePreview = document.getElementById("imagePreview");
 const ocrInput = document.getElementById("ocrInput");
 const ocrStatus = document.getElementById("ocrStatus");
+const screenInput = document.getElementById("screenInput");
+const screenStatus = document.getElementById("screenStatus");
 const recordVoiceBtn = document.getElementById("recordVoiceBtn");
 const speechStatus = document.getElementById("speechStatus");
 let audioRecorder = null;
@@ -2498,6 +2500,50 @@ async function runLocalOcr() {
         if (ocrStatus) ocrStatus.innerText = "Extracted " + data.pages + " page/image(s) locally.";
     } catch (error) {
         if (ocrStatus) ocrStatus.innerText = "OCR error: " + error.message;
+    }
+}
+
+async function analyzeLocalScreen() {
+    if (!screenInput || !screenInput.files.length) {
+        if (screenStatus) screenStatus.innerText = "Choose a screenshot first.";
+        return;
+    }
+    const formData = new FormData();
+    formData.append("image", screenInput.files[0], screenInput.files[0].name);
+    formData.append("prompt", "Analyze this screen locally. Extract visible text, identify errors or important controls, and suggest the next action.");
+    if (screenStatus) screenStatus.innerText = "Analyzing screenshot with the local vision model...";
+    try {
+        const response = await fetch("/api/screen/understand/", { method: "POST", headers: { "X-CSRFToken": csrfToken }, body: formData });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Screen analysis failed.");
+        promptInput.value = data.answer || "";
+        scheduleDraftSave();
+        if (screenStatus) screenStatus.innerText = "Screen analyzed locally. Review the result in the prompt box.";
+    } catch (error) {
+        if (screenStatus) screenStatus.innerText = "Screen analysis error: " + error.message;
+    }
+}
+
+async function speakLocalAnswer() {
+    const text = (codeInput && codeInput.value.trim()) || (promptInput && promptInput.value.trim());
+    if (!text) {
+        if (screenStatus) screenStatus.innerText = "Enter or generate text before speaking it.";
+        return;
+    }
+    if (screenStatus) screenStatus.innerText = "Synthesizing speech locally...";
+    try {
+        const response = await fetch("/api/speech/synthesize/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ text }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Text-to-speech failed.");
+        const audio = new Audio("data:" + data.mime + ";base64," + data.audio_base64);
+        await audio.play();
+        if (screenStatus) screenStatus.innerText = "Speech played locally.";
+    } catch (error) {
+        if (screenStatus) screenStatus.innerText = "Speech error: " + error.message;
     }
 }
 
