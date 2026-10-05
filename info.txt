@@ -416,6 +416,10 @@ After these migrations and feature updates, run:
   Submit local coverage data to calculate per-file heatmap percentages,
   uncovered-line priorities, and focused test-generation targets. Generated
   tests remain reviewable artifacts and are never applied automatically.
+- Local trace-to-code debugging is available at `/api/coding/trace-debugging/`.
+  Submit OpenTelemetry-style spans and local files to correlate slow/error spans
+  with source paths and lines. The response reports hotspots and supported
+  semantic fields without sending telemetry to an external service.
 
 - Agent lifecycle hook evaluation is available at `/api/coding/agent-hooks/`.
   It supports session, prompt, pre-tool, post-tool, error, and session-end

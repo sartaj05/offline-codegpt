@@ -1106,3 +1106,30 @@ def analyze_coverage_guidance(coverage):
         "test_generation": {"mode": "coverage-guided", "requires_review": True, "avoid": ["testing implementation details only", "duplicating existing cases"]},
         "offline_only": True,
     }
+
+
+def correlate_traces(traces, files=None, slow_threshold_ms=500):
+    source_files = {str(item.get("filename") or "").replace("\\", "/"): str(item.get("content") or "") for item in (files or []) if isinstance(item, dict)}
+    spans = []
+    for trace in (traces or [])[:2000]:
+        if not isinstance(trace, dict):
+            continue
+        attrs = trace.get("attributes") if isinstance(trace.get("attributes"), dict) else {}
+        filename = str(trace.get("filename") or attrs.get("code.filepath") or attrs.get("code.file") or "").replace("\\", "/")
+        line = trace.get("line") or attrs.get("code.lineno")
+        try:
+            duration = float(trace.get("duration_ms", trace.get("duration", 0)) or 0)
+        except (TypeError, ValueError):
+            duration = 0
+        spans.append({"trace_id": trace.get("trace_id", ""), "span_id": trace.get("span_id", ""), "name": trace.get("name", "unknown"), "duration_ms": duration, "status": trace.get("status", "ok"), "filename": filename, "line": line, "source_available": filename in source_files})
+    slow = [span for span in spans if span["duration_ms"] >= float(slow_threshold_ms)]
+    errors = [span for span in spans if str(span["status"]).lower() in {"error", "failed", "exception"}]
+    return {
+        "spans": spans,
+        "slow_spans": sorted(slow, key=lambda item: -item["duration_ms"])[:100],
+        "error_spans": errors[:100],
+        "hotspots": sorted({item["filename"] for item in slow + errors if item["filename"]}),
+        "threshold_ms": float(slow_threshold_ms),
+        "semantic_fields": ["trace_id", "span_id", "duration_ms", "status", "code.filepath", "code.lineno"],
+        "offline_only": True,
+    }

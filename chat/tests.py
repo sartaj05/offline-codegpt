@@ -331,6 +331,21 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["targets"][0]["filename"], "app.py")
         self.assertTrue(payload["test_generation"]["requires_review"])
 
+    def test_trace_debugging_finds_slow_and_error_source_hotspots(self):
+        response = self.client.post("/api/coding/trace-debugging/", {
+            "traces": json.dumps([
+                {"trace_id": "t1", "span_id": "s1", "name": "db.query", "duration_ms": 900, "status": "ok", "filename": "repo/db.py", "line": 20},
+                {"trace_id": "t1", "span_id": "s2", "name": "handler", "duration_ms": 40, "status": "error", "filename": "repo/views.py", "line": 8},
+            ]),
+            "files": json.dumps([{ "filename": "repo/db.py", "content": "" }, { "filename": "repo/views.py", "content": "" }]),
+            "slow_threshold_ms": "500",
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["slow_spans"][0]["name"], "db.query")
+        self.assertEqual(payload["error_spans"][0]["filename"], "repo/views.py")
+        self.assertIn("repo/db.py", payload["hotspots"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

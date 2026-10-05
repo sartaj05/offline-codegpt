@@ -125,7 +125,7 @@ from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
 from .runtimes import RUNTIME_CHOICES, get_runtime_adapter
 from .symbols import extract_symbols
-from .coding_features import analyze_consumer_contracts, analyze_coverage_guidance, analyze_generated_sync, analyze_migration_safety, analyze_test_impact, analyze_taint_flow, build_provenance, browser_debug_plan, dap_session_plan, detect_flaky_tests, discover_local_ci, discover_repository_instructions, evaluate_agent_hook, evolve_api_contract, fingerprint_workspace_environment, generate_fuzz_cases, incident_to_fix, issue_to_pr_plan, lsp_adapter_catalog, lsp_analyze, mutation_test_plan, orchestrate_monorepo, plan_dependency_upgrades, plan_git_bisect, plan_merge_queue, plan_release, plan_review_comment_resolution, preview_refactor, profile_code_performance, refactor_workspace, resolve_merge_conflicts, review_pull_request, route_codeowners, security_sbom_report, validate_repository_memory, verify_provenance
+from .coding_features import analyze_consumer_contracts, analyze_coverage_guidance, analyze_generated_sync, analyze_migration_safety, analyze_test_impact, analyze_taint_flow, build_provenance, browser_debug_plan, dap_session_plan, correlate_traces, detect_flaky_tests, discover_local_ci, discover_repository_instructions, evaluate_agent_hook, evolve_api_contract, fingerprint_workspace_environment, generate_fuzz_cases, incident_to_fix, issue_to_pr_plan, lsp_adapter_catalog, lsp_analyze, mutation_test_plan, orchestrate_monorepo, plan_dependency_upgrades, plan_git_bisect, plan_merge_queue, plan_release, plan_review_comment_resolution, preview_refactor, profile_code_performance, refactor_workspace, resolve_merge_conflicts, review_pull_request, route_codeowners, security_sbom_report, validate_repository_memory, verify_provenance
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -853,6 +853,21 @@ def coding_coverage(request):
     except (TypeError, ValueError, json.JSONDecodeError):
         return JsonResponse({"success": False, "error": "coverage must be a JSON object."}, status=400)
     return JsonResponse({"success": True, **analyze_coverage_guidance(coverage)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def coding_trace_debugging(request):
+    try:
+        traces = json.loads(request.POST.get("traces", "[]"))
+        files = json.loads(request.POST.get("files", "[]"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "traces and files must be valid JSON arrays."}, status=400)
+    try:
+        threshold = float(request.POST.get("slow_threshold_ms", 500))
+    except (TypeError, ValueError):
+        threshold = 500
+    return JsonResponse({"success": True, **correlate_traces(traces, files, threshold)})
 
 
 @login_required(login_url="/login/")
