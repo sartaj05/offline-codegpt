@@ -70,6 +70,7 @@ from .models import (
     McpToolCall,
     NetworkLedger,
     ScheduledTask,
+    ModelCapability,
     AgentTask,
     AgentWorktree,
     AgentTeam,
@@ -634,6 +635,76 @@ def _ollama_model_details(base_url=OLLAMA_BASE_URL, runtime="ollama"):
         return details
     except (requests.RequestException, ValueError, TypeError, AttributeError):
         return []
+
+
+def _infer_model_capabilities(model_name, runtime, details=None):
+    lowered = model_name.lower()
+    details = details or {}
+    family = str(details.get("family") or "").lower()
+    vision = any(token in lowered or token in family for token in ("vision", "vl", "llava", "minicpm", "qwen2.5-vl", "gemma3"))
+    embedding = any(token in lowered or token in family for token in ("embed", "bge", "nomic"))
+    parameter_text = str(details.get("parameter_size") or "")
+    return {
+        "chat": not embedding,
+        "vision": vision,
+        "embeddings": embedding,
+        "tool_calling": not embedding,
+        "json_schema": not embedding,
+        "long_context": any(token in lowered for token in ("32k", "64k", "128k", "long")),
+        "reasoning": any(token in lowered for token in ("reason", "r1", "thinking", "qwq")),
+        "parameter_size": parameter_text,
+        "runtime": runtime,
+    }
+
+
+def _model_capability_payload(item):
+    return {
+        "id": item.id,
+        "runtime": item.runtime,
+        "model_name": item.model_name,
+        "capabilities": item.capabilities or {},
+        "hardware": item.hardware or {},
+        "source": item.source,
+        "probed_at": item.probed_at.isoformat(),
+    }
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def model_capabilities(request):
+    settings = _user_ollama_settings(request.user)
+    if request.method == "GET":
+        task = request.GET.get("task", "").strip().lower()
+        capabilities = list(ModelCapability.objects.filter(owner=request.user, runtime=settings.runtime))
+        if task:
+            required = {"vision": "vision", "image": "vision", "embed": "embeddings", "tool": "tool_calling", "json": "json_schema"}.get(task)
+            if required:
+                capabilities = [item for item in capabilities if item.capabilities.get(required)]
+        return JsonResponse({"success": True, "runtime": settings.runtime, "task": task, "models": [_model_capability_payload(item) for item in capabilities]})
+
+    model_name = request.POST.get("model", "").strip()[:160]
+    if not model_name:
+        return JsonResponse({"success": False, "error": "Choose a model to probe."}, status=400)
+    details = next((item for item in _ollama_model_details(settings.server_url, settings.runtime) if item.get("name") == model_name), {})
+    capabilities = _infer_model_capabilities(model_name, settings.runtime, details)
+    try:
+        memory_gb = max(0, float(os.environ.get("LOCAL_AI_MEMORY_GB", "0") or 0))
+    except (TypeError, ValueError):
+        memory_gb = 0
+    hardware = {
+        "memory_gb": memory_gb,
+        "gpu": os.environ.get("LOCAL_AI_GPU", "auto"),
+        "size_bytes": int(details.get("size_bytes") or 0),
+        "parameter_size": details.get("parameter_size", ""),
+        "quantization": details.get("quantization", ""),
+    }
+    item, _ = ModelCapability.objects.update_or_create(
+        owner=request.user,
+        runtime=settings.runtime,
+        model_name=model_name,
+        defaults={"capabilities": capabilities, "hardware": hardware, "source": "name-and-runtime-inference"},
+    )
+    return JsonResponse({"success": True, "model": _model_capability_payload(item)})
 
 
 def _event(payload):

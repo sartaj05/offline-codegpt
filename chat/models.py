@@ -94,6 +94,20 @@ class ScheduledTask(models.Model):
         ordering = ["next_run_at", "-id"]
 
 
+class ModelCapability(models.Model):
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="model_capabilities")
+    runtime = models.CharField(max_length=20, default="ollama")
+    model_name = models.CharField(max_length=160)
+    capabilities = models.JSONField(default=dict)
+    hardware = models.JSONField(default=dict)
+    source = models.CharField(max_length=30, default="inferred")
+    probed_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["owner", "runtime", "model_name"], name="unique_model_capability")]
+        ordering = ["model_name"]
+
+
 class AgentTask(models.Model):
     STATUS_CHOICES = (
         ("planned", "Planned"),

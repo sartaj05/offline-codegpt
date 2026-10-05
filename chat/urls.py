@@ -15,6 +15,7 @@ urlpatterns = [
     path("api/scheduler/", views.scheduler_tasks, name="scheduler_tasks"),
     path("api/scheduler/<int:task_id>/control/", views.scheduler_task_control, name="scheduler_task_control"),
     path("api/models/", views.model_list, name="model_list"),
+    path("api/models/capabilities/", views.model_capabilities, name="model_capabilities"),
     path("api/ollama/settings/", views.ollama_settings, name="ollama_settings"),
     path("api/ollama/health/", views.ollama_health, name="ollama_health"),
     path("api/setup/diagnostics/", views.setup_diagnostics, name="setup_diagnostics"),
