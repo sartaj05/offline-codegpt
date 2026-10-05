@@ -102,3 +102,35 @@ def plan_ide_integration(files, editor="vscode", runtime="local"):
         "network_policy": "localhost-only",
         "offline_only": True,
     }
+
+
+def inline_completion(filename, code, prefix="", suffix="", language="auto", limit=8):
+    """Generate safe, local completion candidates from the current buffer."""
+    code = str(code or "")
+    prefix = str(prefix or "")[-1000:]
+    suffix = str(suffix or "")[:1000]
+    language = str(language or "auto").lower()
+    if language == "auto":
+        language = {".py": "python", ".js": "javascript", ".ts": "typescript", ".tsx": "typescript"}.get(os.path.splitext(filename or "")[1].lower(), "text")
+    identifiers = re.findall(r"\b[A-Za-z_$][A-Za-z0-9_$]{2,}\b", code)
+    identifiers = list(dict.fromkeys(identifiers))
+    current = re.search(r"[A-Za-z_$][A-Za-z0-9_$]*$", prefix)
+    fragment = current.group(0) if current else ""
+    candidates = [item for item in identifiers if item != fragment and (not fragment or item.lower().startswith(fragment.lower()))]
+    definitions = re.findall(r"(?:def|function|class|func|fn)\s+([A-Za-z_$][A-Za-z0-9_$]*)", code)
+    candidates = list(dict.fromkeys(definitions + candidates))
+    items = []
+    for item in candidates[: max(1, min(int(limit or 8), 20))]:
+        replacement = item[len(fragment):] if fragment else item
+        items.append({"label": item, "insert_text": replacement, "kind": "symbol", "source": "local-buffer"})
+    if not items and language == "python" and prefix.rstrip().endswith("def "):
+        items.append({"label": "new_function", "insert_text": "new_function():\n    pass", "kind": "snippet", "source": "local-snippet"})
+    return {
+        "filename": filename or "buffer",
+        "language": language,
+        "items": items,
+        "is_incomplete": len(candidates) > len(items),
+        "trigger": "manual-or-debounced",
+        "privacy": {"source_sent_remote": False, "cache": "memory-only"},
+        "offline_only": True,
+    }

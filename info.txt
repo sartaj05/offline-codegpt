@@ -482,3 +482,8 @@ Next coding workspace features
   It returns VS Code or JetBrains commands, detected languages, localhost API
   contracts, streaming support, and confirmation prompts. No extension is
   downloaded automatically; network access remains localhost-only.
+- Local inline completion is available at `/api/coding/inline-completion/`.
+  It returns bounded symbol/snippet suggestions from the current buffer with
+  an in-memory-only cache. The endpoint does not call a remote model; a future
+  model-backed provider must remain behind the local runtime and permission
+  policy.

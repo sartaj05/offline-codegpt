@@ -560,6 +560,17 @@ class ChatFeatureTests(TestCase):
         self.assertIn("offlineCodeGPT.reviewPatch", payload["commands"])
         self.assertEqual(payload["network_policy"], "localhost-only")
 
+    def test_inline_completion_uses_local_buffer_symbols_and_privacy_contract(self):
+        response = self.client.post("/api/coding/inline-completion/", {
+            "filename": "app.py",
+            "code": "def calculate_total(value):\n    return value\ncalculate_total(1)\n",
+            "prefix": "calculate_",
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["items"][0]["label"], "calculate_total")
+        self.assertFalse(payload["privacy"]["source_sent_remote"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",
