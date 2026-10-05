@@ -229,3 +229,41 @@ def plan_agent_orchestration(goal, agents, tasks):
         "approval_required": True,
         "offline_only": True,
     }
+
+
+def prepare_task_replay(record, current=None):
+    """Create a local replay manifest from a prior coding-task record."""
+    record = record if isinstance(record, dict) else {}
+    current = current if isinstance(current, dict) else {}
+    files = record.get("files") if isinstance(record.get("files"), list) else []
+    tool_calls = record.get("tool_calls") if isinstance(record.get("tool_calls"), list) else []
+    file_hashes = [{"filename": _filename(item), "sha256": _json_hash(str((item or {}).get("content") or ""))} for item in files if isinstance(item, dict)]
+    tool_hashes = [{"name": str((item or {}).get("name") or "")[:120], "input_hash": _json_hash((item or {}).get("arguments") or {})[:16]} for item in tool_calls if isinstance(item, dict)]
+    manifest = {
+        "schema": "offline-coding-replay-v1",
+        "prompt_hash": _json_hash(record.get("prompt") or ""),
+        "files": file_hashes,
+        "tool_calls": tool_hashes,
+        "model": str(record.get("model") or "local-default")[:120],
+        "runtime": str(record.get("runtime") or "local")[:80],
+        "settings_hash": _json_hash(record.get("settings") or {}),
+    }
+    mismatches = []
+    if current:
+        if current.get("model") and current.get("model") != manifest["model"]:
+            mismatches.append("model")
+        if current.get("runtime") and current.get("runtime") != manifest["runtime"]:
+            mismatches.append("runtime")
+        current_files = {_filename(item): _json_hash(str((item or {}).get("content") or "")) for item in (current.get("files") or []) if isinstance(item, dict)}
+        for item in file_hashes:
+            if item["filename"] in current_files and current_files[item["filename"]] != item["sha256"]:
+                mismatches.append(f"file:{item['filename']}")
+    return {
+        "manifest": manifest,
+        "replay_id": _json_hash(manifest)[:20],
+        "mismatches": sorted(set(mismatches)),
+        "replayable": not mismatches and bool(manifest["prompt_hash"]),
+        "redaction": {"prompt_contents_stored": False, "tool_arguments_stored": False, "secrets_removed": True},
+        "workflow": ["Load exact local files", "Confirm model/runtime", "Replay read-only steps", "Approve writes", "Compare tests and diff"],
+        "offline_only": True,
+    }

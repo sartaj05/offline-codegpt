@@ -604,6 +604,21 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["waves"][0][0]["id"], "code")
         self.assertEqual(payload["waves"][1][0]["id"], "test")
 
+    def test_task_replay_returns_stable_manifest_and_detects_file_drift(self):
+        response = self.client.post("/api/coding/task-replay/", {
+            "record": json.dumps({
+                "prompt": "Fix the parser", "model": "local-coder", "runtime": "local",
+                "files": [{"filename": "parser.py", "content": "return 1"}],
+                "tool_calls": [{"name": "project.read", "arguments": {"path": "parser.py"}}],
+            }),
+            "current": json.dumps({"files": [{"filename": "parser.py", "content": "return 2"}]}),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("file:parser.py", payload["mismatches"])
+        self.assertFalse(payload["replayable"])
+        self.assertFalse(payload["redaction"]["prompt_contents_stored"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",
