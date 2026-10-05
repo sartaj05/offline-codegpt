@@ -135,6 +135,20 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["hotspots"][0]["filename"], "slow.py")
         self.assertTrue(payload["patch_approval_required"])
 
+    def test_monorepo_orchestrator_selects_only_affected_packages(self):
+        response = self.client.post("/api/coding/monorepo/", {
+            "files": json.dumps([
+                {"filename": "packages/ui/package.json", "content": json.dumps({"name": "ui", "scripts": {"test": "vitest"}})},
+                {"filename": "packages/api/package.json", "content": json.dumps({"name": "api", "scripts": {"test": "pytest"}})},
+            ]),
+            "changed_files": json.dumps(["packages/ui/src/button.tsx"]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["affected_packages"], ["ui"])
+        self.assertTrue(all(task["package"] == "ui" for task in payload["tasks"]))
+        self.assertTrue(payload["approval_required"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

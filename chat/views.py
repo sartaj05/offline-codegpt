@@ -125,7 +125,7 @@ from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
 from .runtimes import RUNTIME_CHOICES, get_runtime_adapter
 from .symbols import extract_symbols
-from .coding_features import browser_debug_plan, discover_local_ci, evolve_api_contract, issue_to_pr_plan, lsp_analyze, preview_refactor, profile_code_performance, refactor_workspace, review_pull_request, security_sbom_report
+from .coding_features import browser_debug_plan, discover_local_ci, evolve_api_contract, issue_to_pr_plan, lsp_analyze, orchestrate_monorepo, preview_refactor, profile_code_performance, refactor_workspace, review_pull_request, security_sbom_report
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -726,6 +726,17 @@ def coding_performance(request):
     except (TypeError, ValueError, json.JSONDecodeError):
         return JsonResponse({"success": False, "error": "files and benchmark must be valid JSON."}, status=400)
     return JsonResponse({"success": True, **profile_code_performance(files, benchmark)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def coding_monorepo(request):
+    try:
+        files = json.loads(request.POST.get("files", "[]"))
+        changed_files = json.loads(request.POST.get("changed_files", "[]"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "files and changed_files must be valid JSON."}, status=400)
+    return JsonResponse({"success": True, **orchestrate_monorepo(files, changed_files)})
 
 
 def _user_ollama_settings(user):

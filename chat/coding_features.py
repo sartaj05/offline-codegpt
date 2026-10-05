@@ -352,3 +352,50 @@ def profile_code_performance(files, benchmark=None):
         "patch_approval_required": True,
         "offline_only": True,
     }
+
+
+def orchestrate_monorepo(files, changed_files=None):
+    changed = {str(item).replace("\\", "/").lstrip("./") for item in (changed_files or [])}
+    packages = []
+    for item in (files or [])[:500]:
+        filename = str(item.get("filename") or "").replace("\\", "/").lstrip("./")
+        content = str(item.get("content") or "")
+        if filename.endswith("package.json"):
+            try:
+                data = json.loads(content)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                data = {}
+            root = filename.rsplit("/", 1)[0] if "/" in filename else "."
+            packages.append({"name": data.get("name") or root, "root": root, "manager": "npm", "scripts": sorted((data.get("scripts") or {}).keys()), "dependencies": sorted((data.get("dependencies") or {}).keys())})
+        elif filename.endswith("pyproject.toml"):
+            root = filename.rsplit("/", 1)[0] if "/" in filename else "."
+            packages.append({"name": root, "root": root, "manager": "python", "scripts": ["test", "lint"], "dependencies": []})
+        elif filename.endswith("Cargo.toml"):
+            root = filename.rsplit("/", 1)[0] if "/" in filename else "."
+            packages.append({"name": root, "root": root, "manager": "cargo", "scripts": ["check", "test"], "dependencies": []})
+    affected = []
+    for package in packages:
+        root = package["root"]
+        if not changed or root == "." or any(path == root or path.startswith(root + "/") for path in changed):
+            affected.append(package["name"])
+    tasks = []
+    for package in packages:
+        if package["name"] not in affected:
+            continue
+        if package["manager"] == "npm":
+            tasks.extend([{"package": package["name"], "stage": "lint", "command": "npm run lint --if-present", "cwd": package["root"]}, {"package": package["name"], "stage": "test", "command": "npm test -- --runInBand", "cwd": package["root"]}])
+        elif package["manager"] == "cargo":
+            tasks.extend([{"package": package["name"], "stage": "check", "command": "cargo check", "cwd": package["root"]}, {"package": package["name"], "stage": "test", "command": "cargo test", "cwd": package["root"]}])
+        else:
+            tasks.extend([{"package": package["name"], "stage": "lint", "command": "python -m compileall -q .", "cwd": package["root"]}, {"package": package["name"], "stage": "test", "command": "python -m pytest", "cwd": package["root"]}])
+    return {
+        "orchestrator": "offline-affected-task-graph",
+        "packages": packages,
+        "changed_files": sorted(changed),
+        "affected_packages": affected,
+        "tasks": tasks,
+        "cache": "local-content-hash",
+        "approval_required": True,
+        "network_policy": "blocked",
+        "offline_only": True,
+    }

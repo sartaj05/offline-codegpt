@@ -172,6 +172,17 @@ Coding workspace feature set
   complexity signals, loop/query hotspots, timing deltas, and optimization
   guidance. It is an evidence helper; generated performance patches still
   require review and benchmark confirmation.
+- Monorepo orchestration is available at `/api/coding/monorepo/`. Send the
+  local file manifest and changed-file list to detect npm, Python, and Cargo
+  packages, calculate affected packages, and create an affected-only task DAG.
+  Tasks are local-cacheable, approval-gated, and network-blocked.
+
+Coding API verification
+-----------------------
+The 10 coding features are exposed under `/api/coding/`:
+`lsp`, `refactor`, `issue-to-pr`, `pr-review`, `local-ci`, `security-sbom`,
+`browser-debug`, `api-evolution`, `performance`, and `monorepo`. All endpoints
+require an authenticated local user and keep source analysis on the device.
 
 Privacy reminder
 ----------------
