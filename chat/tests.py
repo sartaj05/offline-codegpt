@@ -368,6 +368,17 @@ class ChatFeatureTests(TestCase):
         self.assertIn("unbounded-write", kinds)
         self.assertEqual(payload["n_plus_one_candidates"][0]["count"], 3)
 
+    def test_package_compatibility_flags_removed_public_symbol_and_major_bump(self):
+        response = self.client.post("/api/coding/package-compatibility/", {
+            "old_api": json.dumps({"demo": {"Client": {"signature": "Client()"}, "old_method": {"signature": "old()"}}}),
+            "new_api": json.dumps({"demo": {"Client": {"signature": "Client(config)"}, "new_method": {"signature": "new()"}}}),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["compatible"])
+        self.assertEqual(payload["recommended_bump"], "major")
+        self.assertEqual(payload["removed"][0]["symbol"], "old_method")
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

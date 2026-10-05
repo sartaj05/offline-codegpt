@@ -428,6 +428,10 @@ After these migrations and feature updates, run:
   Submit local SQL and EXPLAIN output to detect sequential scans, unbounded
   writes, unsafe joins, SELECT *, and repeated N+1 query shapes. Index changes
   remain suggestions and must be benchmarked before migration.
+- Package API/ABI compatibility analysis is available at
+  `/api/coding/package-compatibility/`. Submit old/new exported symbol maps to
+  detect removed or changed functions, classes, types, CLI commands, and binary
+  symbols, then receive a semantic-version bump recommendation.
 
 - Agent lifecycle hook evaluation is available at `/api/coding/agent-hooks/`.
   It supports session, prompt, pre-tool, post-tool, error, and session-end

@@ -1187,3 +1187,33 @@ def analyze_query_plans(queries):
         "index_suggestions": ["Compare EXPLAIN before and after each index change.", "Index selective WHERE and JOIN columns.", "Avoid adding indexes without measuring write cost."],
         "offline_only": True,
     }
+
+
+def analyze_package_compatibility(old_api, new_api):
+    old_api = old_api if isinstance(old_api, dict) else {}
+    new_api = new_api if isinstance(new_api, dict) else {}
+    removed = []
+    changed = []
+    added = []
+    for package, symbols in old_api.items():
+        before = symbols if isinstance(symbols, dict) else {str(item): {} for item in (symbols or [])}
+        after_raw = new_api.get(package, {})
+        after = after_raw if isinstance(after_raw, dict) else {str(item): {} for item in (after_raw or [])}
+        for symbol in sorted(set(before) - set(after)):
+            removed.append({"package": package, "symbol": symbol, "severity": "breaking"})
+        for symbol in sorted(set(before) & set(after)):
+            if before[symbol] != after[symbol]:
+                changed.append({"package": package, "symbol": symbol, "before": before[symbol], "after": after[symbol], "severity": "review"})
+        for symbol in sorted(set(after) - set(before)):
+            added.append({"package": package, "symbol": symbol})
+    for package in sorted(set(new_api) - set(old_api)):
+        added.append({"package": package, "symbol": "<package>"})
+    return {
+        "removed": removed,
+        "changed": changed,
+        "added": added,
+        "compatible": not removed,
+        "recommended_bump": "major" if removed else "minor" if added or changed else "patch",
+        "checks": ["public exports", "function/class signatures", "CLI command surface", "type fields", "binary symbols when supplied"],
+        "offline_only": True,
+    }
