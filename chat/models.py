@@ -307,6 +307,21 @@ class ToolSecurityPolicy(models.Model):
         constraints = [models.UniqueConstraint(fields=["owner", "tool_name"], name="unique_tool_security_policy")]
 
 
+class SyncPeer(models.Model):
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sync_peers")
+    name = models.CharField(max_length=120)
+    endpoint = models.CharField(max_length=300, blank=True, default="")
+    token_hash = models.CharField(max_length=128)
+    token_last4 = models.CharField(max_length=4, blank=True, default="")
+    enabled = models.BooleanField(default=True)
+    conflict_policy = models.CharField(max_length=30, default="review")
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+
+
 class AiEvent(models.Model):
     owner = models.ForeignKey(
         User,

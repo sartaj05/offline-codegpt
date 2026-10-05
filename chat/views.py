@@ -72,6 +72,7 @@ from .models import (
     McpToolCall,
     McpTask,
     ToolSecurityPolicy,
+    SyncPeer,
     NetworkLedger,
     ScheduledTask,
     ModelCapability,
@@ -4664,6 +4665,63 @@ def mcp_security_check(request):
         return JsonResponse({"success": False, "error": "arguments must be valid JSON."}, status=400)
     allowed, risk, reason = _tool_security_decision(request.user, tool_name, arguments if isinstance(arguments, dict) else {})
     return JsonResponse({"success": True, "allowed": allowed, "risk_score": risk, "reason": reason})
+
+
+def _sync_peer_payload(peer):
+    return {"id": peer.id, "name": peer.name, "endpoint": peer.endpoint, "token_last4": peer.token_last4, "enabled": peer.enabled, "conflict_policy": peer.conflict_policy, "last_seen_at": peer.last_seen_at.isoformat() if peer.last_seen_at else None}
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def sync_peers(request):
+    if request.method == "GET":
+        return JsonResponse({"success": True, "peers": [_sync_peer_payload(peer) for peer in SyncPeer.objects.filter(owner=request.user)]})
+    name = request.POST.get("name", "").strip()[:120]
+    if not name:
+        return JsonResponse({"success": False, "error": "Peer name is required."}, status=400)
+    token = secrets.token_urlsafe(32)
+    peer = SyncPeer.objects.create(owner=request.user, name=name, endpoint=request.POST.get("endpoint", "").strip()[:300], token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(), token_last4=token[-4:])
+    return JsonResponse({"success": True, "peer": _sync_peer_payload(peer), "pairing_token": token}, status=201)
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["POST", "DELETE"])
+def sync_peer_action(request, peer_id):
+    peer = get_object_or_404(SyncPeer, id=peer_id, owner=request.user)
+    if request.method == "DELETE":
+        peer.delete()
+        return JsonResponse({"success": True, "deleted": peer_id})
+    action = request.POST.get("action", "rotate").strip().lower()
+    if action != "rotate":
+        return JsonResponse({"success": False, "error": "Use rotate or DELETE."}, status=400)
+    token = secrets.token_urlsafe(32)
+    peer.token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    peer.token_last4 = token[-4:]
+    peer.save(update_fields=["token_hash", "token_last4"])
+    return JsonResponse({"success": True, "peer": _sync_peer_payload(peer), "pairing_token": token})
+
+
+@login_required(login_url="/login/")
+@require_GET
+def sync_manifest(request):
+    documents = [{"filename": document.filename or document.title, "hash": document.content_hash, "size_bytes": document.file_size_bytes} for document in KnowledgeDocument.objects.filter(owner=request.user, is_active=True).order_by("filename")]
+    chats = []
+    for session in ChatSession.objects.filter(owner=request.user).order_by("id"):
+        content = "\n".join(session.messages.order_by("created_at").values_list("content", flat=True))
+        chats.append({"id": session.id, "title": session.title, "hash": hashlib.sha256(content.encode("utf-8")).hexdigest(), "message_count": session.messages.count()})
+    manifest = {"format": "syntax-local-ai-sync-manifest", "generated_at": timezone.now().isoformat(), "documents": documents, "chats": chats, "encrypted_transfer": "/api/sync/bundle/?encrypted=1"}
+    manifest["manifest_sha256"] = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode("utf-8")).hexdigest()
+    return JsonResponse({"success": True, "manifest": manifest})
+
+
+@login_required(login_url="/login/")
+@require_GET
+def sync_bundle(request):
+    request.GET = request.GET.copy()
+    request.GET["encrypted"] = "1"
+    response = project_backup(request)
+    response["Content-Disposition"] = 'attachment; filename="syntax-local-ai-sync.enc"'
+    return response
 
 
 @login_required(login_url="/login/")
