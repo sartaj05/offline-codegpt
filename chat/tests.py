@@ -659,6 +659,21 @@ class ChatFeatureTests(TestCase):
         self.assertIn("API_TOKEN", payload["secret_variables_redacted"])
         self.assertNotIn("api_key", payload["hardware"])
 
+    def test_git_archaeology_reports_hotspots_owners_and_local_reason(self):
+        response = self.client.post("/api/coding/git-archaeology/", {
+            "commits": json.dumps([
+                {"hash": "a1", "author": "dev", "message": "Fix parser edge case", "files": ["parser.py"]},
+                {"hash": "a2", "author": "dev", "message": "Add parser tests", "files": ["parser.py", "tests/test_parser.py"]},
+            ]),
+            "blame": json.dumps([{ "filename": "parser.py", "author": "dev" }]),
+            "changed_files": json.dumps(["parser.py"]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["hotspots"][0]["filename"], "parser.py")
+        self.assertEqual(payload["changed_file_explanations"][0]["likely_reason"], "Add parser tests")
+        self.assertFalse(payload["remote_provider_used"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

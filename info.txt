@@ -511,7 +511,7 @@ Next coding workspace features
   `/api/coding/dev-environment/`. It detects Python, Node, Rust, Go, container,
   lockfile, and devcontainer inputs, returns safe setup commands, and redacts
   secret-like environment names. It never installs packages automatically.
-- Multi-agent coding plans are available at `/api/coding/agent-orchestration/`.
-  Submit specialist profiles and dependency-linked tasks to receive execution
-  waves, cycle detection, and a review-before-merge policy. Agents are not
-  started by this planner, and every write/tool boundary requires approval.
+- Git history/code archaeology is available at `/api/coding/git-archaeology/`.
+  Submit local commits, blame rows, and changed files to get hotspots, owners,
+  recent change reasons, and file-history explanations. The endpoint does not
+  call GitHub or another remote provider.

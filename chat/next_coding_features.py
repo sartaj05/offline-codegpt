@@ -9,7 +9,7 @@ import hashlib
 import json
 import os
 import re
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 
 
 def _filename(item):
@@ -418,5 +418,52 @@ def plan_dev_environment(files, hardware=None, commands=None):
         "secret_variables_redacted": secret_like,
         "hardware": {key: str(value)[:120] for key, value in hardware.items() if not any(token in key.lower() for token in ("secret", "token", "password", "key"))},
         "execution": "preview-only-until-approved",
+        "offline_only": True,
+    }
+
+
+def analyze_git_archaeology(commits, blame=None, changed_files=None):
+    """Summarize local Git history, ownership, and change hotspots."""
+    commits = commits if isinstance(commits, list) else []
+    blame = blame if isinstance(blame, list) else []
+    changed = {str(item).replace("\\", "/").lstrip("./") for item in (changed_files or [])}
+    file_counts = Counter()
+    file_messages = defaultdict(list)
+    authors = Counter()
+    for commit in commits[:1000]:
+        if not isinstance(commit, dict):
+            continue
+        author = str(commit.get("author") or "unknown")[:120]
+        authors[author] += 1
+        message = str(commit.get("message") or "")[:300]
+        for filename in commit.get("files") or []:
+            filename = str(filename).replace("\\", "/").lstrip("./")
+            file_counts[filename] += 1
+            if message:
+                file_messages[filename].append(message)
+    ownership = defaultdict(Counter)
+    for row in blame[:5000]:
+        if not isinstance(row, dict):
+            continue
+        filename = str(row.get("filename") or "").replace("\\", "/").lstrip("./")
+        ownership[filename][str(row.get("author") or "unknown")[:120]] += 1
+    hotspots = [{"filename": filename, "changes": count, "recent_messages": file_messages[filename][-5:]} for filename, count in file_counts.most_common(50)]
+    explanations = []
+    for filename in sorted(changed):
+        messages = file_messages.get(filename) or []
+        reason = messages[-1] if messages else "No local commit message was supplied for this file."
+        explanations.append({
+            "filename": filename,
+            "likely_reason": reason,
+            "owners": [{"author": author, "lines": count} for author, count in ownership.get(filename, {}).most_common(5)],
+            "history_count": file_counts.get(filename, 0),
+        })
+    return {
+        "hotspots": hotspots,
+        "changed_file_explanations": explanations,
+        "top_authors": [{"author": author, "commits": count} for author, count in authors.most_common(20)],
+        "commit_count": len(commits),
+        "blame_rows": len(blame),
+        "remote_provider_used": False,
         "offline_only": True,
     }
