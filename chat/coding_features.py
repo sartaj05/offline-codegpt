@@ -458,6 +458,47 @@ def route_codeowners(codeowners_text, changed_files, approvals=None):
     }
 
 
+def plan_merge_queue(entries):
+    entries = [item for item in (entries or [])[:200] if isinstance(item, dict) and item.get("id")]
+    by_id = {str(item["id"]): item for item in entries}
+    dependencies = {key: {str(dep) for dep in (value.get("depends_on") or []) if str(dep) in by_id} for key, value in by_id.items()}
+    order = []
+    direct_blocked = {key for key, item in by_id.items() if item.get("conflict") or item.get("conflicts") or item.get("checks_passed") is False}
+    remaining = set(by_id) - direct_blocked
+    cycles = []
+    while remaining:
+        ready = sorted(item for item in remaining if not dependencies[item] & remaining and not dependencies[item] & direct_blocked)
+        if not ready:
+            cycles.append(sorted(remaining))
+            break
+        order.extend(ready)
+        remaining -= set(ready)
+    blocked = []
+    for key, item in by_id.items():
+        reasons = []
+        if item.get("conflict") or item.get("conflicts"):
+            reasons.append("conflict")
+        if item.get("checks_passed") is False:
+            reasons.append("checks-failed")
+        if key in direct_blocked:
+            pass
+        elif dependencies[key] & direct_blocked:
+            reasons.append("blocked-dependency")
+        elif dependencies[key] & remaining or any(key in cycle for cycle in cycles):
+            reasons.append("dependency-cycle-or-blocked")
+        if reasons:
+            blocked.append({"id": key, "reasons": reasons})
+    return {
+        "queue": [{"id": key, "position": index + 1, "depends_on": sorted(dependencies[key])} for index, key in enumerate(order)],
+        "blocked": blocked,
+        "cycles": cycles,
+        "ready": not blocked and not cycles,
+        "strategy": "topological stacked-pr ordering",
+        "approval_required": True,
+        "offline_only": True,
+    }
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 

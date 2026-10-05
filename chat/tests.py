@@ -181,6 +181,20 @@ class ChatFeatureTests(TestCase):
         self.assertIn("@frontend-team", payload["missing_owners"])
         self.assertFalse(payload["ready"])
 
+    def test_merge_queue_orders_stacked_prs_and_blocks_conflicts(self):
+        response = self.client.post("/api/coding/merge-queue/", {
+            "entries": json.dumps([
+                {"id": "base", "depends_on": [], "checks_passed": True},
+                {"id": "feature", "depends_on": ["base"], "checks_passed": True},
+                {"id": "conflict", "depends_on": [], "conflict": True, "checks_passed": True},
+            ]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual([item["id"] for item in payload["queue"]], ["base", "feature"])
+        self.assertEqual(payload["blocked"][0]["id"], "conflict")
+        self.assertFalse(payload["ready"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

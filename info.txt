@@ -200,6 +200,10 @@ Next coding workspace features
   local CODEOWNERS text, changed paths, and approval state to calculate required
   owners, missing approvals, and merge readiness. No remote reviewer or Git
   provider is contacted.
+- Stacked PR and merge-queue planning is available at
+  `/api/coding/merge-queue/`. Submit local PR metadata and dependencies to
+  calculate topological merge order, detect cycles, flag conflicts, and check
+  queue readiness. It does not push, rebase, or merge branches automatically.
 - Repository instructions and coding skills are discovered at
   `/api/coding/repository-instructions/`. Submit local files to detect
   `AGENTS.md`, Copilot instructions, path-specific `*.instructions.md` files,
