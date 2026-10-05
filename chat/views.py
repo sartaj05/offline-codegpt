@@ -15,6 +15,7 @@ import time
 import uuid
 import zipfile
 import tempfile
+from datetime import timedelta
 from pathlib import PurePosixPath
 from urllib.parse import quote, urlencode, urlparse
 
@@ -69,6 +70,7 @@ from .models import (
     McpConnector,
     McpToolCall,
     McpTask,
+    ToolSecurityPolicy,
     NetworkLedger,
     ScheduledTask,
     ModelCapability,
@@ -4244,7 +4246,38 @@ def _mcp_tools():
     ]
 
 
+def _tool_security_decision(user, tool_name, arguments):
+    tool = next((item for item in _mcp_tools() if item["name"] == tool_name), None)
+    if not tool:
+        return False, 100, "Unknown tool."
+    policy, _ = ToolSecurityPolicy.objects.get_or_create(owner=user, tool_name=tool_name)
+    risk = 80 if tool.get("write") else (65 if tool_name == "sandbox.run" else 20)
+    if not policy.enabled:
+        return False, risk, "This tool is disabled by its security policy."
+    if policy.require_confirmation and risk >= 65 and not (arguments or {}).get("security_approved"):
+        return False, risk, "Security confirmation is required; include security_approved=true after reviewing the risk."
+    for key in ("url", "endpoint", "server_url"):
+        value = str((arguments or {}).get(key, "")).strip()
+        if value:
+            parsed = urlparse(value)
+            if parsed.hostname and parsed.hostname not in {"127.0.0.1", "localhost", "::1"} and not policy.network_allowed:
+                return False, 95, "Network access is blocked by the local tool policy."
+    requested_path = str((arguments or {}).get("filename", (arguments or {}).get("path", ""))).strip()
+    if requested_path and policy.allowed_roots:
+        normalized = requested_path.replace("\\", "/").lower()
+        allowed = [str(root).replace("\\", "/").lower().rstrip("/") for root in policy.allowed_roots]
+        if not any(normalized == root or normalized.startswith(root + "/") for root in allowed):
+            return False, 90, "The requested path is outside the tool allowlist."
+    recent = McpToolCall.objects.filter(owner=user, tool_name=tool_name, created_at__gte=timezone.now() - timedelta(minutes=1)).count()
+    if recent >= max(1, policy.max_calls_per_minute):
+        return False, 75, "Tool rate limit reached; try again later."
+    return True, risk, "Allowed by local tool policy."
+
+
 def _mcp_call(user, tool_name, arguments):
+    allowed, risk, security_message = _tool_security_decision(user, tool_name, arguments)
+    if not allowed:
+        return False, {"risk_score": risk}, security_message
     tool = next((item for item in _mcp_tools() if item["name"] == tool_name), None)
     if not tool:
         return False, {}, "Unknown MCP tool."
@@ -4418,6 +4451,68 @@ def _mcp_config_is_local(config):
             if parsed.hostname and parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
                 return False
     return True
+
+
+def _tool_security_payload(policy):
+    return {
+        "id": policy.id,
+        "tool_name": policy.tool_name,
+        "enabled": policy.enabled,
+        "require_confirmation": policy.require_confirmation,
+        "allowed_roots": policy.allowed_roots or [],
+        "network_allowed": policy.network_allowed,
+        "max_calls_per_minute": policy.max_calls_per_minute,
+        "signed_manifest_hash": policy.signed_manifest_hash,
+    }
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def mcp_security_policy(request):
+    if request.method == "GET":
+        policies = ToolSecurityPolicy.objects.filter(owner=request.user)
+        return JsonResponse({"success": True, "tools": _mcp_tools(), "policies": [_tool_security_payload(policy) for policy in policies]})
+    tool_name = request.POST.get("tool_name", "").strip()
+    if tool_name not in {tool["name"] for tool in _mcp_tools()}:
+        return JsonResponse({"success": False, "error": "Unknown MCP tool."}, status=400)
+    roots = request.POST.get("allowed_roots", "[]")
+    try:
+        roots = json.loads(roots)
+        if not isinstance(roots, list):
+            raise ValueError
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "allowed_roots must be a JSON array."}, status=400)
+    try:
+        limit = min(600, max(1, int(request.POST.get("max_calls_per_minute", "30"))))
+    except (TypeError, ValueError):
+        return JsonResponse({"success": False, "error": "Rate limit must be a number."}, status=400)
+    manifest = json.dumps({"tool_name": tool_name, "allowed_roots": roots}, sort_keys=True)
+    signature = hashlib.sha256((settings.SECRET_KEY + manifest).encode("utf-8")).hexdigest()
+    policy, _ = ToolSecurityPolicy.objects.update_or_create(
+        owner=request.user,
+        tool_name=tool_name,
+        defaults={
+            "enabled": request.POST.get("enabled", "true").lower() in {"1", "true", "yes", "on"},
+            "require_confirmation": request.POST.get("require_confirmation", "true").lower() in {"1", "true", "yes", "on"},
+            "allowed_roots": [str(item)[:240] for item in roots[:50]],
+            "network_allowed": request.POST.get("network_allowed", "false").lower() in {"1", "true", "yes", "on"},
+            "max_calls_per_minute": limit,
+            "signed_manifest_hash": signature,
+        },
+    )
+    return JsonResponse({"success": True, "policy": _tool_security_payload(policy)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def mcp_security_check(request):
+    tool_name = request.POST.get("tool_name", "").strip()
+    try:
+        arguments = json.loads(request.POST.get("arguments", "{}"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "arguments must be valid JSON."}, status=400)
+    allowed, risk, reason = _tool_security_decision(request.user, tool_name, arguments if isinstance(arguments, dict) else {})
+    return JsonResponse({"success": True, "allowed": allowed, "risk_score": risk, "reason": reason})
 
 
 @login_required(login_url="/login/")

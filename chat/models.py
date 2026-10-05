@@ -292,6 +292,21 @@ class McpTask(models.Model):
         ordering = ["-created_at"]
 
 
+class ToolSecurityPolicy(models.Model):
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="tool_security_policies")
+    tool_name = models.CharField(max_length=120)
+    enabled = models.BooleanField(default=True)
+    require_confirmation = models.BooleanField(default=True)
+    allowed_roots = models.JSONField(default=list, blank=True)
+    network_allowed = models.BooleanField(default=False)
+    max_calls_per_minute = models.PositiveIntegerField(default=30)
+    signed_manifest_hash = models.CharField(max_length=128, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["owner", "tool_name"], name="unique_tool_security_policy")]
+
+
 class AiEvent(models.Model):
     owner = models.ForeignKey(
         User,
