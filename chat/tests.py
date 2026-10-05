@@ -244,6 +244,18 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["missing_provider_endpoints"][0]["path"], "/invoices")
         self.assertEqual(payload["consumer_contracts"][0]["consumer"], "web")
 
+    def test_provenance_attestation_hashes_and_verifies_local_artifacts(self):
+        created = self.client.post("/api/coding/provenance/", {
+            "files": json.dumps([{"filename": "app.py", "content": "print('ok')"}]),
+            "metadata": json.dumps({"commit": "abc123", "secret_token": "never-export"}),
+            "signing_secret": "local-only-secret",
+        })
+        self.assertEqual(created.status_code, 200)
+        attestation = created.json()["attestation"]
+        self.assertNotIn("secret_token", attestation["metadata"])
+        verified = self.client.post("/api/coding/provenance/", {"action": "verify", "attestation": json.dumps(attestation), "signing_secret": "local-only-secret"})
+        self.assertTrue(verified.json()["valid"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

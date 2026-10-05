@@ -130,6 +130,10 @@ Troubleshooting
   `/api/coding/consumer-contracts/`. Submit provider endpoints and local
   consumer expectations to detect missing or unused routes and generate a
   release-blocking contract-test plan without calling a remote provider.
+- Build provenance and artifact verification is available at
+  `/api/coding/provenance/`. Create local SHA-256 subject hashes and optional
+  local signatures, then verify the attestation offline. Secret-like metadata
+  keys are excluded and no artifact is uploaded or signed by a remote service.
 
 Coding workspace feature set
 ----------------------------

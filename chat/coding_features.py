@@ -604,6 +604,29 @@ def analyze_consumer_contracts(provider_endpoints, consumer_contracts):
     }
 
 
+def build_provenance(files, metadata=None, signing_secret=""):
+    metadata = metadata if isinstance(metadata, dict) else {}
+    subjects = []
+    for item in sorted((files or [])[:1000], key=lambda value: str(value.get("filename", ""))):
+        filename = str(item.get("filename") or "").replace("\\", "/")
+        content = str(item.get("content") or "").encode("utf-8")
+        subjects.append({"name": filename, "sha256": hashlib.sha256(content).hexdigest(), "size": len(content)})
+    payload = {"format": "offline-provenance-v1", "subjects": subjects, "metadata": {key: str(value)[:500] for key, value in metadata.items() if "secret" not in key.lower() and "token" not in key.lower()}}
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    attestation = {**payload, "subject_digest": hashlib.sha256(canonical.encode("utf-8")).hexdigest(), "signature": hashlib.sha256(((signing_secret or "unsigned") + canonical).encode("utf-8")).hexdigest()}
+    return {"attestation": attestation, "verification": {"signed": bool(signing_secret), "algorithm": "sha256-local", "verified": True}, "offline_only": True}
+
+
+def verify_provenance(attestation, signing_secret=""):
+    if not isinstance(attestation, dict):
+        return {"valid": False, "error": "Attestation must be a JSON object."}
+    payload = {"format": attestation.get("format"), "subjects": attestation.get("subjects", []), "metadata": attestation.get("metadata", {})}
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    digest_valid = hashlib.sha256(canonical.encode("utf-8")).hexdigest() == attestation.get("subject_digest")
+    signature_valid = hashlib.sha256(((signing_secret or "unsigned") + canonical).encode("utf-8")).hexdigest() == attestation.get("signature")
+    return {"valid": digest_valid and signature_valid, "digest_valid": digest_valid, "signature_valid": signature_valid, "subjects": len(payload["subjects"]), "offline_only": True}
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 
