@@ -499,6 +499,42 @@ def plan_merge_queue(entries):
     }
 
 
+def analyze_taint_flow(files):
+    source_patterns = [r"request\.(GET|POST|args|params)", r"input\s*\(", r"sys\.argv", r"os\.environ", r"location\.(search|hash)"]
+    sink_patterns = [
+        ("sql", r"(?:execute|executemany|cursor)\s*\([^)]*(?:\+|%|format\(|f[\"'])"),
+        ("shell", r"(?:os\.system|subprocess\.(?:run|Popen|call)|child_process\.exec)\s*\("),
+        ("file", r"(?:open|writeFile|readFile)\s*\("),
+        ("html", r"(?:innerHTML|outerHTML|document\.write)\s*[=\(]"),
+    ]
+    findings = []
+    for item in (files or [])[:200]:
+        filename = str(item.get("filename") or "buffer").replace("\\", "/")
+        content = str(item.get("content") or "")
+        tainted = set()
+        for line_number, line in enumerate(content.splitlines(), start=1):
+            if any(re.search(pattern, line, re.IGNORECASE) for pattern in source_patterns):
+                assignment = re.search(r"\b([A-Za-z_]\w*)\s*=", line)
+                if assignment:
+                    tainted.add(assignment.group(1))
+            for kind, pattern in sink_patterns:
+                if re.search(pattern, line, re.IGNORECASE) and (tainted or any(re.search(r"\b" + re.escape(name) + r"\b", line) for name in tainted)):
+                    findings.append({"filename": filename, "line": line_number, "category": kind, "severity": "high", "message": f"Potential tainted data flow reaches {kind} sink.", "evidence": line.strip()[:500]})
+        for name in tainted:
+            for line_number, line in enumerate(content.splitlines(), start=1):
+                if name in line and any(re.search(pattern, line, re.IGNORECASE) for _, pattern in sink_patterns):
+                    if not any(item["filename"] == filename and item["line"] == line_number for item in findings):
+                        findings.append({"filename": filename, "line": line_number, "category": "dataflow", "severity": "medium", "message": f"Review flow of input-derived variable {name}.", "evidence": line.strip()[:500]})
+    return {
+        "findings": findings[:200],
+        "sources_checked": source_patterns,
+        "sinks_checked": [kind for kind, _ in sink_patterns],
+        "safe": not any(item["severity"] == "high" for item in findings),
+        "engine": "offline-source-sink-analysis",
+        "offline_only": True,
+    }
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 

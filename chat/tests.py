@@ -195,6 +195,16 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["blocked"][0]["id"], "conflict")
         self.assertFalse(payload["ready"])
 
+    def test_taint_analysis_finds_input_to_sql_sink(self):
+        response = self.client.post("/api/coding/taint-analysis/", {
+            "files": json.dumps([{"filename": "queries.py", "content": "query = request.GET['q']\ndb.execute('SELECT ' + query)\n"}]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["safe"])
+        self.assertEqual(payload["findings"][0]["category"], "sql")
+        self.assertEqual(payload["findings"][0]["line"], 2)
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

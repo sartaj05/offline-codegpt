@@ -204,6 +204,10 @@ Next coding workspace features
   `/api/coding/merge-queue/`. Submit local PR metadata and dependencies to
   calculate topological merge order, detect cycles, flag conflicts, and check
   queue readiness. It does not push, rebase, or merge branches automatically.
+- Local dataflow/taint analysis is available at `/api/coding/taint-analysis/`.
+  It checks common input sources and SQL, shell, file, and HTML sinks, then
+  reports file/line evidence and severity. It is a conservative offline
+  source-to-sink signal, not a replacement for a language-specific analyzer.
 - Repository instructions and coding skills are discovered at
   `/api/coding/repository-instructions/`. Submit local files to detect
   `AGENTS.md`, Copilot instructions, path-specific `*.instructions.md` files,
