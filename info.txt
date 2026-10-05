@@ -212,6 +212,10 @@ Next coding workspace features
   repeated local test outcomes to calculate failure rates, mixed-result tests,
   average duration, and quarantine candidates. Quarantine recommendations
   require owner review, an expiry date, and a follow-up issue.
+- Property and fuzz-case generation is available at `/api/coding/fuzz-testing/`.
+  It generates deterministic empty, null, boundary, Unicode, large-input, and
+  seed cases, plus shrinking guidance for the smallest reproducible failure.
+  Execution remains approval-gated and local.
 - Repository instructions and coding skills are discovered at
   `/api/coding/repository-instructions/`. Submit local files to detect
   `AGENTS.md`, Copilot instructions, path-specific `*.instructions.md` files,

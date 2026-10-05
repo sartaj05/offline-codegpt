@@ -219,6 +219,17 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["flaky_tests"][0]["failure_rate"], 0.333)
         self.assertTrue(payload["quarantine_candidates"][0]["requires_owner_review"])
 
+    def test_fuzz_testing_generates_boundary_cases_and_shrinking_guidance(self):
+        response = self.client.post("/api/coding/fuzz-testing/", {
+            "code": "def parse_user(name, age):\n    return name, age\n",
+            "seed_inputs": json.dumps([["Ada", 37]]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["target"], "parse_user")
+        self.assertIn("empty-input", [item["name"] for item in payload["cases"]])
+        self.assertIn("reduce strings by half", payload["shrinking"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

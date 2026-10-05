@@ -559,6 +559,26 @@ def detect_flaky_tests(runs):
     }
 
 
+def generate_fuzz_cases(code, language="python", seed_inputs=None):
+    code = str(code or "")
+    seed_inputs = seed_inputs if isinstance(seed_inputs, list) else []
+    signatures = re.findall(r"(?:def|function)\s+([A-Za-z_]\w*)\s*\(([^)]*)\)", code)
+    target = signatures[0][0] if signatures else "target_function"
+    parameters = [item.strip().split("=", 1)[0].strip() for item in (signatures[0][1].split(",") if signatures else []) if item.strip()]
+    cases = [{"name": "empty-input", "args": ["" for _ in parameters]}, {"name": "null-input", "args": [None for _ in parameters]}, {"name": "boundary-numbers", "args": [0, -1, 1, 2**31 - 1][:len(parameters)]}, {"name": "unicode-input", "args": ["\u0000\U0001f600\u00e9" for _ in parameters]}, {"name": "large-input", "args": ["x" * 4096 for _ in parameters]}]
+    cases.extend({"name": f"seed-{index + 1}", "args": value if isinstance(value, list) else [value]} for index, value in enumerate(seed_inputs[:20]))
+    return {
+        "runner": "offline-property-fuzz",
+        "target": target,
+        "parameters": parameters,
+        "cases": cases,
+        "property_checks": ["no unexpected exception", "stable output for repeated input", "boundary values are handled", "input size limits are enforced"],
+        "shrinking": ["remove arguments", "reduce strings by half", "move numbers toward zero", "retain the smallest failing case"],
+        "approval_required": True,
+        "offline_only": True,
+    }
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 
