@@ -23,6 +23,14 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "FREE PREVIEW")
 
+    def test_lsp_adapter_catalog_reports_local_fallback_and_servers(self):
+        response = self.client.get("/api/coding/lsp/adapters/")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["fallback"], "local-ast-regex")
+        self.assertTrue(any(item["id"] == "pyright" for item in payload["adapters"]))
+        self.assertEqual(payload["network_policy"], "blocked")
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

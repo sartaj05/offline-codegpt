@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import time
 from collections import Counter, defaultdict
 
@@ -94,6 +95,28 @@ def lsp_analyze(filename, code, language="auto", operation="diagnostics", symbol
         "completion_items": sorted(set(names))[:100] if operation in {"completion", "all"} else [],
         "capabilities": ["diagnostics", "document-symbols", "definition", "references", "completion"],
         "backend": "local-ast-regex",
+    }
+
+
+def lsp_adapter_catalog():
+    """Describe optional local language-server adapters without downloading anything."""
+    adapters = [
+        {"id": "pyright", "language": "python", "command": "pyright-langserver", "install_hint": "Install Pyright locally, then restart the app."},
+        {"id": "typescript", "language": "typescript", "command": "typescript-language-server", "install_hint": "Install typescript-language-server locally."},
+        {"id": "gopls", "language": "go", "command": "gopls", "install_hint": "Install gopls locally."},
+        {"id": "rust-analyzer", "language": "rust", "command": "rust-analyzer", "install_hint": "Install rust-analyzer locally."},
+        {"id": "jdtls", "language": "java", "command": "jdtls", "install_hint": "Install Eclipse JDT Language Server locally."},
+        {"id": "intelephense", "language": "php", "command": "intelephense", "install_hint": "Install Intelephense locally."},
+    ]
+    for adapter in adapters:
+        executable = shutil.which(adapter["command"])
+        adapter.update({"available": bool(executable), "executable": executable or "", "transport": "stdio", "offline_only": True})
+    return {
+        "protocol": "lsp",
+        "adapters": adapters,
+        "fallback": "local-ast-regex",
+        "capabilities": ["diagnostics", "completion", "definition", "references", "rename", "document-symbols"],
+        "network_policy": "blocked",
     }
 
 

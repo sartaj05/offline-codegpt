@@ -184,6 +184,14 @@ The 10 coding features are exposed under `/api/coding/`:
 `browser-debug`, `api-evolution`, `performance`, and `monorepo`. All endpoints
 require an authenticated local user and keep source analysis on the device.
 
+Next coding workspace features
+------------------------------
+- Full local LSP adapter discovery is available at
+  `/api/coding/lsp/adapters/`. It detects optional locally installed Pyright,
+  TypeScript, gopls, Rust Analyzer, JDTLS, and Intelephense executables. The
+  built-in AST/regex backend remains the offline fallback; no adapter is
+  downloaded automatically and network access stays blocked.
+
 Privacy reminder
 ----------------
 Keep .env and local model/data directories out of Git. Do not store API keys or
