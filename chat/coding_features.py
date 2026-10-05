@@ -1040,3 +1040,24 @@ def evaluate_agent_hook(event, tool_name, tool_args=None, policies=None):
         "fail_closed_for_pre_tool": True,
         "offline_only": True,
     }
+
+
+def validate_repository_memory(files, memories):
+    source_map = {str(item.get("filename") or "").replace("\\", "/"): str(item.get("content") or "") for item in (files or [])[:500]}
+    validated = []
+    stale = []
+    for memory in (memories or [])[:500]:
+        if not isinstance(memory, dict):
+            continue
+        source = str(memory.get("source_file") or "").replace("\\", "/")
+        excerpt = str(memory.get("excerpt") or "")
+        valid = bool(source and source in source_map and excerpt and excerpt in source_map[source])
+        record = {"title": str(memory.get("title") or "Untitled")[:200], "content": str(memory.get("content") or "")[:4000], "source_file": source, "excerpt": excerpt[:500], "confidence": float(memory.get("confidence", 0.5) or 0.5), "validated": valid, "scope": memory.get("scope", "repository"), "expires_at": memory.get("expires_at", "")}
+        (validated if valid else stale).append(record)
+    return {
+        "validated_memories": validated,
+        "stale_or_unverified": stale,
+        "citation_required": True,
+        "maintenance": ["Revalidate citations after source changes.", "Lower confidence when evidence is incomplete.", "Allow users to edit or delete repository facts.", "Expire unused facts rather than silently trusting stale context."],
+        "offline_only": True,
+    }

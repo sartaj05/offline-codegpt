@@ -292,6 +292,20 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["decision"], "deny")
         self.assertTrue(payload["fail_closed_for_pre_tool"])
 
+    def test_repository_memory_validates_source_citations_and_marks_stale_facts(self):
+        response = self.client.post("/api/coding/repository-memory/", {
+            "files": json.dumps([{ "filename": "README.md", "content": "Use pytest for local tests." }]),
+            "memories": json.dumps([
+                {"title": "Test command", "content": "Run pytest", "source_file": "README.md", "excerpt": "Use pytest"},
+                {"title": "Old rule", "content": "Run make", "source_file": "README.md", "excerpt": "Use make"},
+            ]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["validated_memories"]), 1)
+        self.assertEqual(len(payload["stale_or_unverified"]), 1)
+        self.assertTrue(payload["citation_required"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",
