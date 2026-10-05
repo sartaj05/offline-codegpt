@@ -31,6 +31,20 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(any(item["id"] == "pyright" for item in payload["adapters"]))
         self.assertEqual(payload["network_policy"], "blocked")
 
+    def test_repository_instructions_discover_scoped_skills(self):
+        response = self.client.post("/api/coding/repository-instructions/", {
+            "files": json.dumps([
+                {"filename": "AGENTS.md", "content": "# Repository rules\nUse tests."},
+                {"filename": ".github/instructions/python.instructions.md", "content": "# Python rules"},
+                {"filename": ".github/skills/release/SKILL.md", "content": "# Release skill"},
+            ]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["always_on"]), 1)
+        self.assertEqual(len(payload["path_specific"]), 1)
+        self.assertEqual(len(payload["skills"]), 1)
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

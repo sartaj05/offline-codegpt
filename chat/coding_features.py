@@ -120,6 +120,40 @@ def lsp_adapter_catalog():
     }
 
 
+def discover_repository_instructions(files):
+    records = []
+    for item in (files or [])[:500]:
+        filename = str(item.get("filename") or "").replace("\\", "/").lstrip("./")
+        content = str(item.get("content") or "")
+        lower = filename.lower()
+        kind = ""
+        scope = "repository"
+        if lower == "agents.md":
+            kind = "agent-instructions"
+        elif lower == ".github/copilot-instructions.md":
+            kind = "copilot-instructions"
+        elif lower.endswith(".instructions.md"):
+            kind = "path-instructions"
+            scope = filename.rsplit("/", 1)[0] if "/" in filename else "repository"
+        elif "/skills/" in lower and lower.endswith("/skill.md"):
+            kind = "reusable-skill"
+            scope = filename.split("/skills/", 1)[0] or "repository"
+        elif lower in {"claude.md", "gemini.md", "review.md"}:
+            kind = "agent-instructions"
+        if not kind:
+            continue
+        headings = [line.strip().lstrip("# ")[:160] for line in content.splitlines() if line.strip().startswith("#")][:10]
+        records.append({"filename": filename, "kind": kind, "scope": scope, "headings": headings, "chars": len(content), "content": content[:12000]})
+    return {
+        "instructions": records,
+        "always_on": [item["filename"] for item in records if item["kind"] in {"agent-instructions", "copilot-instructions"}],
+        "path_specific": [item["filename"] for item in records if item["kind"] == "path-instructions"],
+        "skills": [item["filename"] for item in records if item["kind"] == "reusable-skill"],
+        "precedence": ["user", "repository", "path-specific", "task-skill"],
+        "offline_only": True,
+    }
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 

@@ -125,7 +125,7 @@ from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
 from .runtimes import RUNTIME_CHOICES, get_runtime_adapter
 from .symbols import extract_symbols
-from .coding_features import browser_debug_plan, discover_local_ci, evolve_api_contract, issue_to_pr_plan, lsp_adapter_catalog, lsp_analyze, orchestrate_monorepo, preview_refactor, profile_code_performance, refactor_workspace, review_pull_request, security_sbom_report
+from .coding_features import browser_debug_plan, discover_local_ci, discover_repository_instructions, evolve_api_contract, issue_to_pr_plan, lsp_adapter_catalog, lsp_analyze, orchestrate_monorepo, preview_refactor, profile_code_performance, refactor_workspace, review_pull_request, security_sbom_report
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -609,6 +609,16 @@ def coding_lsp(request):
 @require_GET
 def coding_lsp_adapters(request):
     return JsonResponse({"success": True, **lsp_adapter_catalog()})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def coding_repository_instructions(request):
+    try:
+        files = json.loads(request.POST.get("files", "[]"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "files must be a JSON array."}, status=400)
+    return JsonResponse({"success": True, **discover_repository_instructions(files)})
 
 
 @login_required(login_url="/login/")

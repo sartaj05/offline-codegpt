@@ -191,6 +191,11 @@ Next coding workspace features
   TypeScript, gopls, Rust Analyzer, JDTLS, and Intelephense executables. The
   built-in AST/regex backend remains the offline fallback; no adapter is
   downloaded automatically and network access stays blocked.
+- Repository instructions and coding skills are discovered at
+  `/api/coding/repository-instructions/`. Submit local files to detect
+  `AGENTS.md`, Copilot instructions, path-specific `*.instructions.md` files,
+  and reusable `SKILL.md` workflows. The response reports scope and precedence
+  without contacting external providers.
 
 Privacy reminder
 ----------------
