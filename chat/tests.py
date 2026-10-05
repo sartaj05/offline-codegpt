@@ -280,6 +280,18 @@ class ChatFeatureTests(TestCase):
         self.assertIn("disposable local database", " ".join(payload["release_checklist"]))
         self.assertTrue(payload["approval_required"])
 
+    def test_agent_hooks_deny_blocked_arguments_and_ask_for_approval(self):
+        response = self.client.post("/api/coding/agent-hooks/", {
+            "event": "preToolUse",
+            "tool_name": "shell",
+            "tool_args": json.dumps({"command": "rm -rf project"}),
+            "policies": json.dumps({"shell": {"blocked_args": ["rm -rf"], "require_approval": True}}),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["decision"], "deny")
+        self.assertTrue(payload["fail_closed_for_pre_tool"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

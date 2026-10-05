@@ -1019,3 +1019,24 @@ def orchestrate_monorepo(files, changed_files=None):
         "network_policy": "blocked",
         "offline_only": True,
     }
+
+
+def evaluate_agent_hook(event, tool_name, tool_args=None, policies=None):
+    tool_args = tool_args if isinstance(tool_args, dict) else {}
+    policies = policies if isinstance(policies, dict) else {}
+    policy = policies.get(tool_name, policies.get("*", {}))
+    blocked_patterns = policy.get("blocked_args", []) if isinstance(policy, dict) else []
+    serialized = json.dumps(tool_args, sort_keys=True).lower()
+    matched = [str(pattern) for pattern in blocked_patterns if str(pattern).lower() in serialized]
+    decision = "deny" if matched else ("ask" if isinstance(policy, dict) and policy.get("require_approval") else "allow")
+    return {
+        "event": event or "preToolUse",
+        "tool_name": tool_name,
+        "decision": decision,
+        "reason": "Blocked argument pattern detected." if matched else ("Policy requires approval." if decision == "ask" else "Allowed by local policy."),
+        "matched_patterns": matched,
+        "modified_args": tool_args,
+        "hooks": ["sessionStart", "userPromptSubmitted", "preToolUse", "postToolUse", "errorOccurred", "sessionEnd"],
+        "fail_closed_for_pre_tool": True,
+        "offline_only": True,
+    }
