@@ -154,6 +154,34 @@ def discover_repository_instructions(files):
     }
 
 
+def analyze_test_impact(files, changed_files=None):
+    normalized = []
+    for item in (files or [])[:500]:
+        filename = str(item.get("filename") or "").replace("\\", "/").lstrip("./")
+        content = str(item.get("content") or "")
+        symbols = re.findall(r"^\s*(?:async\s+def|def|class|function|export\s+function)\s+([A-Za-z_$][\w$]*)", content, re.MULTILINE)
+        normalized.append({"filename": filename, "content": content, "symbols": sorted(set(symbols))})
+    changed = {str(item).replace("\\", "/").lstrip("./") for item in (changed_files or [])}
+    changed_items = [item for item in normalized if item["filename"] in changed or not changed]
+    changed_symbols = sorted({symbol for item in changed_items for symbol in item["symbols"]})
+    test_items = [item for item in normalized if re.search(r"(^|/)(test|tests|spec|specs)(/|_|\.)", item["filename"].lower()) or re.search(r"\b(?:test|describe|it)\s*\(", item["content"])]
+    impacted = []
+    for item in test_items:
+        hits = [symbol for symbol in changed_symbols if re.search(r"\b" + re.escape(symbol) + r"\b", item["content"])]
+        if hits:
+            impacted.append({"filename": item["filename"], "reason": "References changed symbol(s).", "symbols": hits})
+    return {
+        "changed_files": sorted(changed),
+        "changed_symbols": changed_symbols,
+        "impacted_tests": impacted,
+        "skipped_tests": [{"filename": item["filename"], "reason": "No changed symbol reference detected."} for item in test_items if item["filename"] not in {row["filename"] for row in impacted}],
+        "unknown_tests": not bool(test_items),
+        "strategy": "symbol-reference plus test-path matching",
+        "approval_required": True,
+        "offline_only": True,
+    }
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 

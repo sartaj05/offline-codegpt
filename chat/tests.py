@@ -45,6 +45,21 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(len(payload["path_specific"]), 1)
         self.assertEqual(len(payload["skills"]), 1)
 
+    def test_test_impact_selects_tests_referencing_changed_symbols(self):
+        response = self.client.post("/api/coding/test-impact/", {
+            "files": json.dumps([
+                {"filename": "src/math.py", "content": "def add(left, right):\n    return left + right\n"},
+                {"filename": "tests/test_math.py", "content": "from src.math import add\ndef test_add():\n    assert add(1, 2) == 3\n"},
+                {"filename": "tests/test_other.py", "content": "def test_other():\n    assert True\n"},
+            ]),
+            "changed_files": json.dumps(["src/math.py"]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["changed_symbols"], ["add"])
+        self.assertEqual(payload["impacted_tests"][0]["filename"], "tests/test_math.py")
+        self.assertEqual(payload["skipped_tests"][0]["filename"], "tests/test_other.py")
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

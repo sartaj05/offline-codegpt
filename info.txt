@@ -196,6 +196,10 @@ Next coding workspace features
   `AGENTS.md`, Copilot instructions, path-specific `*.instructions.md` files,
   and reusable `SKILL.md` workflows. The response reports scope and precedence
   without contacting external providers.
+- Test-impact analysis is available at `/api/coding/test-impact/`. Submit a
+  local file manifest and changed-file list to map changed symbols to tests,
+  report impacted tests, and explain skipped tests. It is approval-gated and
+  should be used to select commands in the existing guarded test runner.
 
 Privacy reminder
 ----------------
