@@ -632,6 +632,18 @@ class ChatFeatureTests(TestCase):
         self.assertIn("security-sensitive", {item["kind"] for item in payload["findings"]})
         self.assertTrue(payload["approval_required"])
 
+    def test_offline_dependency_intelligence_uses_catalog_and_flags_advisories(self):
+        response = self.client.post("/api/coding/offline-dependencies/", {
+            "files": json.dumps([{ "filename": "requirements.txt", "content": "demo==1.0\nmissing>=2" }]),
+            "catalog": json.dumps({"demo": {"version": "1.0", "license": "MIT", "advisories": [{"id": "LOCAL-1", "severity": "high"}]}}),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["available"][0]["name"], "demo")
+        self.assertEqual(payload["missing_from_catalog"][0]["name"], "missing")
+        self.assertEqual(payload["advisories"][0]["id"], "LOCAL-1")
+        self.assertFalse(payload["network_used"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

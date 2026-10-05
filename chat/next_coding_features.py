@@ -317,3 +317,58 @@ def assess_change_risk(files, changed_files=None, relations=None, tests=None, se
         ),
         "offline_only": True,
     }
+
+
+def analyze_offline_dependencies(files, catalog=None):
+    """Inspect local manifests against an imported package catalog only."""
+    files = files if isinstance(files, list) else []
+    catalog = catalog if isinstance(catalog, dict) else {}
+    packages = []
+    for item in files[:500]:
+        name = _filename(item)
+        content = str((item or {}).get("content") or "")
+        base = os.path.basename(name).lower()
+        if base in {"requirements.txt", "requirements-dev.txt"}:
+            for line in content.splitlines():
+                match = re.match(r"^\s*([A-Za-z0-9_.-]+)\s*(==|~=|>=|<=|>|<)?\s*([^;\s#]+)?", line)
+                if match and not line.lstrip().startswith("#"):
+                    packages.append({"name": match.group(1), "constraint": (match.group(2) or "") + (match.group(3) or ""), "manager": "pip", "manifest": name})
+        elif base == "package.json":
+            try:
+                data = json.loads(content)
+                for section in ("dependencies", "devDependencies", "peerDependencies"):
+                    for package, constraint in (data.get(section) or {}).items():
+                        packages.append({"name": package, "constraint": str(constraint), "manager": "npm", "manifest": name, "section": section})
+            except (TypeError, ValueError, json.JSONDecodeError):
+                pass
+        elif base == "cargo.toml":
+            in_deps = False
+            for line in content.splitlines():
+                if line.strip().startswith("["):
+                    in_deps = line.strip() in {"[dependencies]", "[dev-dependencies]"}
+                elif in_deps and "=" in line:
+                    package, constraint = line.split("=", 1)
+                    packages.append({"name": package.strip(), "constraint": constraint.strip().strip('"'), "manager": "cargo", "manifest": name})
+    available, missing, advisories, license_flags = [], [], [], []
+    for package in packages:
+        entry = catalog.get(package["name"]) or catalog.get(f"{package['name']}@{package['constraint']}")
+        if not isinstance(entry, dict):
+            missing.append(package)
+            continue
+        result = {**package, "available_version": str(entry.get("version") or ""), "license": str(entry.get("license") or "UNKNOWN")}
+        available.append(result)
+        for advisory in entry.get("advisories") or []:
+            advisories.append({"package": package["name"], **(advisory if isinstance(advisory, dict) else {"id": str(advisory)})})
+        if result["license"].upper() in {"GPL-3.0", "AGPL-3.0", "UNKNOWN"}:
+            license_flags.append({"package": package["name"], "license": result["license"]})
+    return {
+        "packages": packages,
+        "available": available,
+        "missing_from_catalog": missing,
+        "advisories": advisories,
+        "license_flags": license_flags,
+        "catalog_source": "imported-local-catalog",
+        "network_used": False,
+        "approval_required_for_install": True,
+        "offline_only": True,
+    }
