@@ -624,6 +624,21 @@ class CodeSymbol(models.Model):
         indexes = [models.Index(fields=["name"]), models.Index(fields=["kind"])]
 
 
+class CodeRelation(models.Model):
+    RELATION_TYPES = (("references", "References"), ("imports", "Imports"), ("route", "Route"), ("test", "Test"), ("depends_on", "Depends on"))
+
+    document = models.ForeignKey(KnowledgeDocument, on_delete=models.CASCADE, related_name="relations")
+    source_name = models.CharField(max_length=240)
+    target_name = models.CharField(max_length=240)
+    relation_type = models.CharField(max_length=30, choices=RELATION_TYPES, default="references")
+    line_number = models.PositiveIntegerField(default=1)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["source_name"]), models.Index(fields=["target_name"]), models.Index(fields=["relation_type"])]
+
+
 class KnowledgeChunk(models.Model):
     """
     Stores small chunks of uploaded code/text for local search.

@@ -65,6 +65,7 @@ from .models import (
     KnowledgeCollection,
     KnowledgeCollectionDocument,
     CodeSymbol,
+    CodeRelation,
     ScopedMemory,
     LocalModelConfig,
     McpConnector,
@@ -841,6 +842,7 @@ def _ollama_embeddings(texts, base_url, runtime="ollama"):
 def _index_knowledge_document(document, owner):
     document.chunks.all().delete()
     document.symbols.all().delete()
+    document.relations.all().delete()
     indexed_text = redact_sensitive_text(owner, document.original_text)
     contents = [
         indexed_text[start:start + CHUNK_SIZE]
@@ -862,10 +864,22 @@ def _index_knowledge_document(document, owner):
         )
         for index, content in enumerate(contents)
     ])
-    CodeSymbol.objects.bulk_create([
-        CodeSymbol(document=document, **symbol)
-        for symbol in extract_symbols(document.filename or document.title, indexed_text)
-    ])
+    symbols = extract_symbols(document.filename or document.title, indexed_text)
+    CodeSymbol.objects.bulk_create([CodeSymbol(document=document, **symbol) for symbol in symbols])
+    symbol_names = [symbol["name"] for symbol in symbols if symbol.get("kind") != "import"]
+    relations = []
+    for source in symbols:
+        if source.get("kind") == "import":
+            relations.append(CodeRelation(document=document, source_name=document.filename or document.title, target_name=source["name"], relation_type="imports", line_number=source.get("line_start", 1)))
+            continue
+        start = max(0, source.get("line_start", 1) - 1)
+        end = min(len(indexed_text.splitlines()), source.get("line_end", start + 1))
+        body = "\n".join(indexed_text.splitlines()[start:end])
+        for target_name in symbol_names:
+            if target_name != source.get("name") and re.search(r"\b" + re.escape(target_name) + r"\b", body):
+                relation_type = "test" if re.search(r"test", source.get("name", ""), re.IGNORECASE) else "references"
+                relations.append(CodeRelation(document=document, source_name=source.get("name", ""), target_name=target_name, relation_type=relation_type, line_number=source.get("line_start", 1)))
+    CodeRelation.objects.bulk_create(relations[:2000])
 
 
 def _cosine_similarity(left, right):
@@ -1632,6 +1646,30 @@ def symbol_impact(request):
         if name.lower() in document.original_text.lower():
             impacted.append({"filename": document.filename, "matches": document.original_text.lower().count(name.lower())})
     return JsonResponse({"success": True, "symbol": name, "definitions": [{"filename": item.document.filename, "kind": item.kind, "line_start": item.line_start, "line_end": item.line_end} for item in symbols[:100]], "impacted_files": impacted[:100]})
+
+
+@login_required(login_url="/login/")
+@require_GET
+def code_graph(request):
+    name = request.GET.get("name", "").strip()[:240]
+    relations = CodeRelation.objects.filter(document__owner=request.user, document__is_active=True).select_related("document")
+    if name:
+        relations = relations.filter(Q(source_name__icontains=name) | Q(target_name__icontains=name))
+    relations = list(relations[:500])
+    nodes = {}
+    edges = []
+    for relation in relations:
+        source = relation.source_name
+        target = relation.target_name
+        nodes.setdefault(source, {"name": source, "files": []})
+        nodes.setdefault(target, {"name": target, "files": []})
+        filename = relation.document.filename or relation.document.title
+        if filename not in nodes[source]["files"]:
+            nodes[source]["files"].append(filename)
+        if filename not in nodes[target]["files"]:
+            nodes[target]["files"].append(filename)
+        edges.append({"source": source, "target": target, "type": relation.relation_type, "filename": filename, "line": relation.line_number})
+    return JsonResponse({"success": True, "query": name, "nodes": list(nodes.values()), "edges": edges, "impact_files": sorted({edge["filename"] for edge in edges})})
 
 
 @login_required(login_url="/login/")

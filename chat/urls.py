@@ -30,6 +30,7 @@ urlpatterns = [
     path("api/project/", views.project_documents, name="project_documents"),
     path("api/project/symbols/", views.project_symbols, name="project_symbols"),
     path("api/project/symbol-impact/", views.symbol_impact, name="symbol_impact"),
+    path("api/project/graph/", views.code_graph, name="code_graph"),
     path("api/project/save/", views.project_document_create, name="project_document_create"),
     path("api/project/<int:document_id>/", views.project_document_delete, name="project_document_delete"),
     path("api/project/<int:document_id>/content/", views.project_document_content, name="project_document_content"),
