@@ -26,35 +26,48 @@ function activate(context) {
     const output = vscode.window.createOutputChannel("Syntax Local AI");
     const serverUrl = () => vscode.workspace.getConfiguration("syntaxLocalAI").get("serverUrl");
 
+    const runPrompt = async (prompt, code, label) => {
+        output.show(true);
+        output.appendLine("\n--- " + label + " ---");
+        try {
+            output.appendLine(await askServer(serverUrl(), prompt, code));
+        } catch (error) {
+            output.appendLine("Error: " + error.message);
+        }
+    };
+
     context.subscriptions.push(vscode.commands.registerCommand("syntaxLocalAI.askSelection", async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) return;
         const prompt = await vscode.window.showInputBox({ prompt: "What should Syntax Local AI do?" });
         if (!prompt) return;
         const code = editor.document.getText(editor.selection) || editor.document.getText();
-        output.show(true);
-        output.appendLine("Working...");
-        try {
-            output.appendLine(await askServer(serverUrl(), prompt, code));
-        } catch (error) {
-            output.appendLine("Error: " + error.message);
-        }
+        await runPrompt(prompt, code, "Selection request");
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand("syntaxLocalAI.reviewFile", async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) return;
-        output.show(true);
-        output.appendLine("Reviewing " + editor.document.fileName + "...");
-        try {
-            output.appendLine(await askServer(
-                serverUrl(),
-                "Review this file for bugs, security issues, tests, and concrete improvements.",
-                editor.document.getText(),
-            ));
-        } catch (error) {
-            output.appendLine("Error: " + error.message);
-        }
+        await runPrompt("Review this file for bugs, security issues, tests, and concrete improvements.", editor.document.getText(), "File review");
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand("syntaxLocalAI.explainSelection", async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) return;
+        const code = editor.document.getText(editor.selection) || editor.document.getText();
+        await runPrompt("Explain this code, its dependencies, edge cases, and likely failure modes.", code, "Code explanation");
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand("syntaxLocalAI.generateTests", async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) return;
+        await runPrompt("Generate focused tests for this code. Return an editable test file with a short rationale.", editor.document.getText(), "Test generation");
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand("syntaxLocalAI.askProject", async () => {
+        const prompt = await vscode.window.showInputBox({ prompt: "Ask the local project workspace" });
+        if (!prompt) return;
+        await runPrompt(prompt, "", "Project request");
     }));
 }
 

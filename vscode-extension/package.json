@@ -11,6 +11,9 @@
   "activationEvents": [
     "onCommand:syntaxLocalAI.askSelection",
     "onCommand:syntaxLocalAI.reviewFile"
+    ,"onCommand:syntaxLocalAI.explainSelection"
+    ,"onCommand:syntaxLocalAI.generateTests"
+    ,"onCommand:syntaxLocalAI.askProject"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -22,6 +25,18 @@
       {
         "command": "syntaxLocalAI.reviewFile",
         "title": "Syntax Local AI: Review Current File"
+      },
+      {
+        "command": "syntaxLocalAI.explainSelection",
+        "title": "Syntax Local AI: Explain Selection"
+      },
+      {
+        "command": "syntaxLocalAI.generateTests",
+        "title": "Syntax Local AI: Generate Tests"
+      },
+      {
+        "command": "syntaxLocalAI.askProject",
+        "title": "Syntax Local AI: Ask Project"
       }
     ],
     "configuration": {
