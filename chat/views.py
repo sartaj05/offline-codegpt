@@ -107,6 +107,7 @@ from .dependencies import analyze_dependencies
 from .browser_testing import analyze_browser_report, generate_playwright_test
 from .model_router import route_model
 from .devcontainer import generate_devcontainer
+from .data_workspace import analyze_data_file
 from .deployment import generate_deployment_kit, validate_deployment_environment
 from .incident import analyze_incident
 from .architecture import analyze_architecture
@@ -1565,6 +1566,19 @@ def knowledge_collection_documents(request, collection_id):
         return JsonResponse({"success": False, "error": "Use add or remove."}, status=400)
     collection.save(update_fields=["updated_at"])
     return JsonResponse({"success": True, "collection": _collection_payload(collection)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def data_workspace_analyze(request):
+    uploaded = request.FILES.get("file")
+    if not uploaded:
+        return JsonResponse({"success": False, "error": "Choose a CSV, JSON, XLSX, or SQLite file."}, status=400)
+    try:
+        result = analyze_data_file(uploaded.name, uploaded.read(), request.POST.get("query", "").strip()[:200])
+    except (ValueError, OSError, zipfile.BadZipFile, sqlite3.Error) as exc:
+        return JsonResponse({"success": False, "error": str(exc)}, status=400)
+    return JsonResponse({"success": True, **result})
 
 
 @login_required(login_url="/login/")

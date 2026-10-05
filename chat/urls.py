@@ -22,6 +22,7 @@ urlpatterns = [
     path("api/ollama/models/action/", views.ollama_model_action, name="ollama_model_action"),
     path("api/ocr/", views.local_ocr, name="local_ocr"),
     path("api/speech/transcribe/", views.local_transcribe, name="local_transcribe"),
+    path("api/data/analyze/", views.data_workspace_analyze, name="data_workspace_analyze"),
     path("api/sessions/", views.session_list, name="session_list"),
     path("api/session/<int:session_id>/manage/", views.manage_session, name="manage_session"),
     path("api/search/", views.knowledge_search, name="knowledge_search"),
