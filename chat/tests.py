@@ -73,6 +73,19 @@ class ChatFeatureTests(TestCase):
         self.assertFalse(payload["destructive"])
         self.assertTrue(payload["approval_required"])
 
+    def test_incident_debugger_extracts_frame_and_creates_fix_workflow(self):
+        response = self.client.post("/api/coding/incident-debug/", {
+            "title": "Checkout failure",
+            "logs": "ERROR database connection timeout",
+            "traces": "File \"checkout.py\", line 42, in submit",
+            "metrics": "latency=9000ms",
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["locations"][0]["filename"], "checkout.py")
+        self.assertTrue(payload["requires_regression_test"])
+        self.assertEqual(payload["fix_workflow"]["isolation"], "agent-worktree")
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

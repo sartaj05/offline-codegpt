@@ -204,6 +204,10 @@ Next coding workspace features
   failing test and known-good/known-bad revisions to receive reproducible local
   bisect commands and a review workflow. The endpoint never runs bisect or
   changes Git state automatically; clean-worktree confirmation is required.
+- Incident-to-fix debugging is available at `/api/coding/incident-debug/`.
+  Submit local logs, traces, and metrics to extract stack-frame locations,
+  identify likely causes, draft a postmortem, and create an approval-gated
+  issue-to-PR workflow that requires a regression test.
 
 Privacy reminder
 ----------------

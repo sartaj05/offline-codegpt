@@ -203,6 +203,27 @@ def plan_git_bisect(failing_test, known_good="", known_bad="HEAD", commits=None)
     }
 
 
+def incident_to_fix(logs="", traces="", metrics="", title="Incident repair"):
+    from .incident import analyze_incident
+
+    analysis = analyze_incident(logs, traces, metrics)
+    locations = []
+    for line in (traces or "").splitlines():
+        match = re.search(r"(?:File|at)\s+[\"']?([^\"'\s:]+)[\"']?(?:,?\s+line\s+|:\s*)(\d+)", line, re.IGNORECASE)
+        if match:
+            locations.append({"filename": match.group(1).replace("\\", "/"), "line": int(match.group(2)), "evidence": line.strip()[:500]})
+    goal = (analysis["errors"][0] if analysis["errors"] else "Investigate the reported local incident.")[:1000]
+    plan = issue_to_pr_plan(title, goal, [item["filename"] for item in locations], "Run the smallest reproducing test, then the regression suite")
+    return {
+        "analysis": analysis,
+        "locations": locations[:50],
+        "root_cause_candidates": analysis["suspected_causes"],
+        "fix_workflow": plan,
+        "requires_regression_test": True,
+        "offline_only": True,
+    }
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 
