@@ -365,3 +365,9 @@ After these migrations and feature updates, run:
    node --check vscode-extension\extension.js
    python manage.py test chat
    git diff --check
+
+- Offline dependency upgrade planning is available at
+  `/api/coding/dependency-upgrades/`. Submit manifests and an imported local
+  version/advisory catalog to generate preview-only upgrades with required
+  install, test, CI, and security checks. The bot never downloads packages or
+  queries a live registry while offline mode is active.

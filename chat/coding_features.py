@@ -258,6 +258,46 @@ def analyze_migration_safety(old_schema=None, new_schema=None, migration_sql="")
     }
 
 
+def plan_dependency_upgrades(files, catalog=None):
+    catalog = catalog if isinstance(catalog, dict) else {}
+    dependencies = []
+    for item in (files or [])[:100]:
+        filename = str(item.get("filename") or "").replace("\\", "/")
+        content = str(item.get("content") or "")
+        if filename.lower().endswith(("requirements.txt", "requirements-dev.txt")):
+            for line in content.splitlines():
+                match = re.match(r"^\s*([A-Za-z0-9_.-]+)\s*(==|~=|>=|<=|>|<)?\s*([^;\s]+)?", line)
+                if match and not line.strip().startswith("#"):
+                    name, operator, version = match.groups()
+                    dependencies.append({"name": name, "current": version or "unversioned", "operator": operator or "", "source": filename, "manager": "pip"})
+        elif filename.lower().endswith("package.json"):
+            try:
+                data = json.loads(content)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                data = {}
+            for group in ("dependencies", "devDependencies"):
+                for name, version in (data.get(group) or {}).items():
+                    dependencies.append({"name": name, "current": str(version), "operator": "", "source": filename, "manager": "npm", "group": group})
+    updates = []
+    for dependency in dependencies:
+        proposal = catalog.get(dependency["name"])
+        if not proposal:
+            continue
+        target = str(proposal.get("version") if isinstance(proposal, dict) else proposal)
+        if target and target != dependency["current"]:
+            updates.append({"dependency": dependency, "target": target, "advisories": (proposal.get("advisories", []) if isinstance(proposal, dict) else []), "tests_required": ["install or lock resolution", "unit tests", "local CI", "security scan"]})
+    return {
+        "bot": "offline-dependency-upgrade",
+        "dependencies": dependencies,
+        "updates": updates,
+        "catalog_entries": len(catalog),
+        "patches_are_preview_only": True,
+        "rollback": "Restore the lockfile and dependency manifest from the reviewed patch.",
+        "network_policy": "blocked",
+        "offline_only": True,
+    }
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 

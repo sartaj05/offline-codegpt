@@ -98,6 +98,17 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(any(item["kind"] == "drop-table" for item in payload["findings"]))
         self.assertFalse(payload["dry_run"]["executed"])
 
+    def test_dependency_upgrade_bot_uses_imported_catalog_and_requires_tests(self):
+        response = self.client.post("/api/coding/dependency-upgrades/", {
+            "files": json.dumps([{"filename": "requirements.txt", "content": "Django==5.0\n"}]),
+            "catalog": json.dumps({"Django": {"version": "5.1", "advisories": [{"id": "LOCAL-2"}]}}),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["updates"][0]["target"], "5.1")
+        self.assertIn("local CI", payload["updates"][0]["tests_required"])
+        self.assertTrue(payload["patches_are_preview_only"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",
