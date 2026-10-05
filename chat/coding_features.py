@@ -7,6 +7,7 @@ usable while the app is in offline mode.
 
 import ast
 import difflib
+import fnmatch
 import hashlib
 import json
 import os
@@ -416,6 +417,43 @@ def dap_session_plan(language="python", program="", cwd="", breakpoints=None, ex
         "capabilities": ["initialize", "launch", "attach", "setBreakpoints", "stackTrace", "scopes", "variables", "evaluate", "next", "stepIn", "stepOut", "continue", "pause", "disconnect"],
         "approval_required": True,
         "network_policy": "blocked",
+        "offline_only": True,
+    }
+
+
+def route_codeowners(codeowners_text, changed_files, approvals=None):
+    approvals = approvals if isinstance(approvals, dict) else {}
+    rules = []
+    for line in (codeowners_text or "").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        rules.append((parts[0], parts[1:]))
+    routed = []
+    for raw_path in (changed_files or [])[:500]:
+        path = str(raw_path).replace("\\", "/").lstrip("/")
+        owners = []
+        matched_pattern = ""
+        for pattern, candidates in rules:
+            normalized = pattern.lstrip("/")
+            if fnmatch.fnmatch(path, normalized) or fnmatch.fnmatch(path, normalized.replace("/**", "/*")):
+                owners = candidates
+                matched_pattern = pattern
+        approved = [owner for owner in owners if approvals.get(owner) in {True, "true", "1", "approved"}]
+        routed.append({"path": path, "pattern": matched_pattern, "owners": owners, "approved": approved, "missing": [owner for owner in owners if owner not in approved], "blocked": bool(owners) and not approved})
+    required = sorted({owner for item in routed for owner in item["owners"]})
+    approved = sorted({owner for item in routed for owner in item["approved"]})
+    return {
+        "files": routed,
+        "required_owners": required,
+        "approved_owners": approved,
+        "missing_owners": sorted(set(required) - set(approved)),
+        "ready": not any(item["blocked"] for item in routed),
+        "rules_count": len(rules),
+        "approval_required": True,
         "offline_only": True,
     }
 

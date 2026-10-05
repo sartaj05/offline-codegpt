@@ -196,6 +196,10 @@ Next coding workspace features
   JavaScript/TypeScript, Go, Rust, and Java, including breakpoints, exception
   pauses, stack frames, variables, watches, and stepping. Starting a debug
   process remains approval-gated and network-blocked.
+- CODEOWNERS-aware routing is available at `/api/coding/codeowners/`. Submit
+  local CODEOWNERS text, changed paths, and approval state to calculate required
+  owners, missing approvals, and merge readiness. No remote reviewer or Git
+  provider is contacted.
 - Repository instructions and coding skills are discovered at
   `/api/coding/repository-instructions/`. Submit local files to detect
   `AGENTS.md`, Copilot instructions, path-specific `*.instructions.md` files,

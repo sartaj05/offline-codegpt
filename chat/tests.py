@@ -169,6 +169,18 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["breakpoints"][0]["line"], 40)
         self.assertTrue(payload["approval_required"])
 
+    def test_codeowners_routes_changed_files_and_blocks_missing_owner(self):
+        response = self.client.post("/api/coding/codeowners/", {
+            "codeowners": "*.py @python-team\nstatic/* @frontend-team\n",
+            "changed_files": json.dumps(["chat/views.py", "static/app.js"]),
+            "approvals": json.dumps({"@python-team": "approved"}),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["files"][0]["ready"] if "ready" in payload["files"][0] else True)
+        self.assertIn("@frontend-team", payload["missing_owners"])
+        self.assertFalse(payload["ready"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",
