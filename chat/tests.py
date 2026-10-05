@@ -379,6 +379,23 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["recommended_bump"], "major")
         self.assertEqual(payload["removed"][0]["symbol"], "old_method")
 
+    def test_multi_repository_coordinator_orders_dependency_batches(self):
+        response = self.client.post("/api/coding/multi-repository/", {
+            "repositories": json.dumps([
+                {"name": "service-api", "depends_on": []},
+                {"name": "web-app", "depends_on": ["service-api"]},
+            ]),
+            "changes": json.dumps([
+                {"repository": "web-app", "title": "Update client"},
+                {"repository": "service-api", "title": "Add endpoint"},
+            ]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["order"], ["service-api", "web-app"])
+        self.assertEqual(payload["batches"][1]["changes"][0]["title"], "Update client")
+        self.assertTrue(payload["approval_required"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

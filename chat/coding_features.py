@@ -1217,3 +1217,22 @@ def analyze_package_compatibility(old_api, new_api):
         "checks": ["public exports", "function/class signatures", "CLI command surface", "type fields", "binary symbols when supplied"],
         "offline_only": True,
     }
+
+
+def coordinate_multi_repository(repositories, changes):
+    repositories = [item for item in (repositories or []) if isinstance(item, dict) and item.get("name")]
+    names = {str(item["name"]) for item in repositories}
+    dependencies = {name: {str(dep) for dep in (item.get("depends_on") or []) if str(dep) in names} for name, item in ((str(item["name"]), item) for item in repositories)}
+    order = []
+    remaining = set(names)
+    while remaining:
+        ready = sorted(name for name in remaining if not dependencies[name] & remaining)
+        if not ready:
+            return {"success": False, "error": "Repository dependency cycle detected.", "cycle_candidates": sorted(remaining), "offline_only": True}
+        order.extend(ready)
+        remaining -= set(ready)
+    batches = []
+    for index, name in enumerate(order, start=1):
+        repo_changes = [item for item in (changes or []) if isinstance(item, dict) and item.get("repository") == name]
+        batches.append({"batch": index, "repository": name, "depends_on": sorted(dependencies[name]), "changes": repo_changes, "checks": ["package compatibility", "consumer contracts", "local CI", "provenance"]})
+    return {"success": True, "order": order, "batches": batches, "unassigned_changes": [item for item in (changes or []) if isinstance(item, dict) and item.get("repository") not in names], "approval_required": True, "offline_only": True}

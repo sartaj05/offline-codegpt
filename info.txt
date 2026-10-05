@@ -408,6 +408,11 @@ After these migrations and feature updates, run:
    python manage.py test chat
    git diff --check
 
+- Multi-repository change coordination is available at
+  `/api/coding/multi-repository/`. Submit local repository dependencies and
+  changes to create ordered release batches with compatibility, contract, CI,
+  and provenance checks. Dependency cycles are rejected before work begins.
+
 - Review-comment resolution planning is available at
   `/api/coding/review-resolution/`. Submit local review comments, files, and
   test candidates to group work, prepare preview-only patch tasks, and require
