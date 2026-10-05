@@ -138,6 +138,10 @@ Troubleshooting
   local conflict buffer and choose `review`, `ours`, or `theirs` for a preview.
   Conflicts are never written automatically; approved resolutions should be
   followed by the affected tests and the existing review gate.
+- Release engineering planning is available at `/api/coding/release/`. Submit
+  local conventional commits and change notes to calculate the next semantic
+  version, generate a changelog, and produce a release-candidate checklist for
+  CI, security, migrations, provenance, CODEOWNERS, and rollback review.
 
 Coding workspace feature set
 ----------------------------

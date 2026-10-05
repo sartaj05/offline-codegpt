@@ -666,6 +666,57 @@ def resolve_merge_conflicts(content, strategy="review"):
     }
 
 
+def plan_release(current_version="0.1.0", commits=None, changes=None, migration_required=False):
+    commits = [str(item) for item in (commits or [])[:500]]
+    changes = changes if isinstance(changes, list) else []
+    breaking = any("BREAKING CHANGE" in item or re.match(r"^\w+!:", item) for item in commits)
+    features = sum(bool(re.match(r"^(feat|feature)(\(|:)", item, re.IGNORECASE)) for item in commits)
+    fixes = sum(bool(re.match(r"^(fix|bugfix)(\(|:)", item, re.IGNORECASE)) for item in commits)
+    try:
+        major, minor, patch = [int(part) for part in str(current_version).split(".")[:3]]
+    except (TypeError, ValueError):
+        major, minor, patch = 0, 1, 0
+    if breaking:
+        major += 1
+        minor = patch = 0
+        bump = "major"
+    elif features:
+        minor += 1
+        patch = 0
+        bump = "minor"
+    else:
+        patch += 1
+        bump = "patch"
+    sections = {"Breaking changes": [], "Features": [], "Fixes": [], "Other": []}
+    for item in commits + [str(value) for value in changes]:
+        if "BREAKING CHANGE" in item or re.match(r"^\w+!:", item):
+            sections["Breaking changes"].append(item)
+        elif re.match(r"^(feat|feature)(\(|:)", item, re.IGNORECASE):
+            sections["Features"].append(item)
+        elif re.match(r"^(fix|bugfix)(\(|:)", item, re.IGNORECASE):
+            sections["Fixes"].append(item)
+        else:
+            sections["Other"].append(item)
+    changelog = [f"## {major}.{minor}.{patch}", ""]
+    for heading, entries in sections.items():
+        if entries:
+            changelog.extend([f"### {heading}", ""] + [f"- {entry}" for entry in entries] + [""])
+    checklist = ["Run local CI.", "Run security/SBOM checks.", "Verify migration safety.", "Verify build provenance.", "Review CODEOWNERS approvals.", "Create a rollback plan."]
+    if migration_required:
+        checklist.insert(2, "Apply and verify migrations in a disposable local database.")
+    return {
+        "current_version": current_version,
+        "next_version": f"{major}.{minor}.{patch}",
+        "bump": bump,
+        "counts": {"breaking": int(breaking), "features": features, "fixes": fixes},
+        "changelog": "\n".join(changelog).strip() + "\n",
+        "release_checklist": checklist,
+        "candidate_validation": ["Run tests twice to check flakiness.", "Verify artifact attestation.", "Review generated-code synchronization.", "Confirm consumer contracts."],
+        "approval_required": True,
+        "offline_only": True,
+    }
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 

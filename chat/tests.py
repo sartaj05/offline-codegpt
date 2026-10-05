@@ -266,6 +266,20 @@ class ChatFeatureTests(TestCase):
         self.assertIn("right", theirs.json()["resolved_content"])
         self.assertNotIn("<<<<<<<", theirs.json()["resolved_content"])
 
+    def test_release_assistant_calculates_version_changelog_and_checklist(self):
+        response = self.client.post("/api/coding/release/", {
+            "current_version": "1.2.3",
+            "commits": json.dumps(["feat: add local debugger", "fix: handle empty input"]),
+            "changes": json.dumps(["Improve release notes"]),
+            "migration_required": "true",
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["next_version"], "1.3.0")
+        self.assertIn("### Features", payload["changelog"])
+        self.assertIn("disposable local database", " ".join(payload["release_checklist"]))
+        self.assertTrue(payload["approval_required"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",
