@@ -487,3 +487,7 @@ Next coding workspace features
   an in-memory-only cache. The endpoint does not call a remote model; a future
   model-backed provider must remain behind the local runtime and permission
   policy.
+- Durable background coding tasks are planned at `/api/coding/background-tasks/`.
+  Submit task steps and optional resume checkpoints to receive bounded queues,
+  worker assignments, checkpoint hashes, and recovery metadata. Execution is
+  approval-gated and local; no background task contacts a remote service.

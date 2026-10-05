@@ -571,6 +571,21 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["items"][0]["label"], "calculate_total")
         self.assertFalse(payload["privacy"]["source_sent_remote"])
 
+    def test_background_tasks_resume_from_checkpoint_and_bound_workers(self):
+        response = self.client.post("/api/coding/background-tasks/", {
+            "max_workers": "1",
+            "tasks": json.dumps([
+                {"id": "build", "title": "Build project", "steps": ["install", "test", "package"]},
+                {"id": "review", "title": "Review patch", "steps": ["diff", "review"], "status": "running"},
+            ]),
+            "resume_state": json.dumps({"build": {"step_index": 1, "status": "paused"}}),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["tasks"][0]["step_index"], 1)
+        self.assertEqual(payload["tasks"][0]["status"], "paused")
+        self.assertTrue(payload["recovery"]["resume_after_restart"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

@@ -167,6 +167,7 @@ urlpatterns = [
     path("api/coding/custom-agents/", views.coding_custom_agents, name="coding_custom_agents"),
     path("api/coding/ide-integration/", views.coding_ide_integration, name="coding_ide_integration"),
     path("api/coding/inline-completion/", views.coding_inline_completion, name="coding_inline_completion"),
+    path("api/coding/background-tasks/", views.coding_background_tasks, name="coding_background_tasks"),
     path("api/session/<int:session_id>/", views.session_messages, name="session_messages"),
     path("api/session/<int:session_id>/summary/", views.session_summary, name="session_summary"),
     path("api/session/<int:session_id>/revisions/", views.session_revisions, name="session_revisions"),

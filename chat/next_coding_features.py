@@ -134,3 +134,45 @@ def inline_completion(filename, code, prefix="", suffix="", language="auto", lim
         "privacy": {"source_sent_remote": False, "cache": "memory-only"},
         "offline_only": True,
     }
+
+
+def plan_background_tasks(tasks, resume_state=None, max_workers=1):
+    """Normalize long-running local coding work into resumable task records."""
+    tasks = tasks if isinstance(tasks, list) else []
+    resume_state = resume_state if isinstance(resume_state, dict) else {}
+    try:
+        max_workers = max(1, min(int(max_workers), 8))
+    except (TypeError, ValueError):
+        max_workers = 1
+    normalized = []
+    for index, item in enumerate(tasks[:100]):
+        if not isinstance(item, dict):
+            continue
+        task_id = str(item.get("id") or f"task-{index + 1}")[:100]
+        steps = [str(step)[:300] for step in (item.get("steps") or [])][:50]
+        saved = resume_state.get(task_id) if isinstance(resume_state.get(task_id), dict) else {}
+        step_index = max(0, min(int(saved.get("step_index", 0) or 0), len(steps)))
+        status = str(saved.get("status") or item.get("status") or "queued")
+        if status not in {"queued", "running", "paused", "failed", "completed", "cancelled"}:
+            status = "queued"
+        normalized.append({
+            "id": task_id,
+            "title": str(item.get("title") or task_id)[:200],
+            "steps": steps,
+            "step_index": step_index,
+            "next_step": steps[step_index] if step_index < len(steps) else None,
+            "status": status,
+            "checkpoint": _json_hash({"id": task_id, "step_index": step_index, "steps": steps})[:16],
+            "approval_required": bool(item.get("approval_required", True)),
+        })
+    running = [item["id"] for item in normalized if item["status"] == "running"]
+    return {
+        "tasks": normalized,
+        "queue": [item["id"] for item in normalized if item["status"] == "queued"],
+        "running": running[:max_workers],
+        "deferred": running[max_workers:],
+        "max_workers": max_workers,
+        "recovery": {"checkpointed": True, "resume_after_restart": True, "requires_review_on_failure": True},
+        "execution": "approval-gated-local-worker",
+        "offline_only": True,
+    }
