@@ -412,6 +412,10 @@ After these migrations and feature updates, run:
   `/api/coding/review-resolution/`. Submit local review comments, files, and
   test candidates to group work, prepare preview-only patch tasks, and require
   re-review after the diff changes. Comments are never auto-resolved.
+- Coverage-guided test planning is available at `/api/coding/coverage/`.
+  Submit local coverage data to calculate per-file heatmap percentages,
+  uncovered-line priorities, and focused test-generation targets. Generated
+  tests remain reviewable artifacts and are never applied automatically.
 
 - Agent lifecycle hook evaluation is available at `/api/coding/agent-hooks/`.
   It supports session, prompt, pre-tool, post-tool, error, and session-end

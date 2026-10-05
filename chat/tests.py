@@ -318,6 +318,19 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(payload["approval_required"])
         self.assertIn("Re-request review", " ".join(payload["workflow"]))
 
+    def test_coverage_guidance_calculates_heatmap_and_test_targets(self):
+        response = self.client.post("/api/coding/coverage/", {
+            "coverage": json.dumps({
+                "app.py": {"covered": 6, "total": 10, "missing": [4, 5, 9, 10]},
+                "healthy.py": {"covered": 10, "total": 10, "missing": []},
+            }),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["overall_percent"], 80.0)
+        self.assertEqual(payload["targets"][0]["filename"], "app.py")
+        self.assertTrue(payload["test_generation"]["requires_review"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

@@ -1081,3 +1081,28 @@ def plan_review_comment_resolution(comments, files=None, tests=None):
         "approval_required": True,
         "offline_only": True,
     }
+
+
+def analyze_coverage_guidance(coverage):
+    coverage = coverage if isinstance(coverage, dict) else {}
+    files = []
+    targets = []
+    for filename, data in coverage.items():
+        data = data if isinstance(data, dict) else {}
+        covered = int(data.get("covered", 0) or 0)
+        total = int(data.get("total", 0) or 0)
+        missing = data.get("missing", []) if isinstance(data.get("missing", []), list) else []
+        percent = round((covered / total) * 100, 2) if total else 100.0
+        row = {"filename": str(filename).replace("\\", "/"), "covered": covered, "total": total, "missing": missing[:200], "percent": percent}
+        files.append(row)
+        if missing or percent < 80:
+            targets.append({"filename": row["filename"], "priority": "high" if percent < 60 else "medium", "lines": missing[:50], "suggestion": "Generate focused boundary and failure-path tests for uncovered symbols."})
+    total_lines = sum(item["total"] for item in files)
+    covered_lines = sum(item["covered"] for item in files)
+    return {
+        "files": files,
+        "targets": targets,
+        "overall_percent": round((covered_lines / total_lines) * 100, 2) if total_lines else 100.0,
+        "test_generation": {"mode": "coverage-guided", "requires_review": True, "avoid": ["testing implementation details only", "duplicating existing cases"]},
+        "offline_only": True,
+    }

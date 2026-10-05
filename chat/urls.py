@@ -148,6 +148,7 @@ urlpatterns = [
     path("api/coding/agent-hooks/", views.coding_agent_hooks, name="coding_agent_hooks"),
     path("api/coding/repository-memory/", views.coding_repository_memory, name="coding_repository_memory"),
     path("api/coding/review-resolution/", views.coding_review_resolution, name="coding_review_resolution"),
+    path("api/coding/coverage/", views.coding_coverage, name="coding_coverage"),
     path("api/coding/refactor/", views.coding_refactor, name="coding_refactor"),
     path("api/coding/issue-to-pr/", views.coding_issue_to_pr, name="coding_issue_to_pr"),
     path("api/coding/pr-review/", views.coding_pr_review, name="coding_pr_review"),
