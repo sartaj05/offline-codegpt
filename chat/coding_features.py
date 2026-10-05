@@ -1061,3 +1061,23 @@ def validate_repository_memory(files, memories):
         "maintenance": ["Revalidate citations after source changes.", "Lower confidence when evidence is incomplete.", "Allow users to edit or delete repository facts.", "Expire unused facts rather than silently trusting stale context."],
         "offline_only": True,
     }
+
+
+def plan_review_comment_resolution(comments, files=None, tests=None):
+    filenames = {str(item.get("filename") or "").replace("\\", "/") for item in (files or []) if isinstance(item, dict)}
+    test_names = [str(item) for item in (tests or [])]
+    tasks = []
+    for index, comment in enumerate((comments or [])[:200], start=1):
+        if not isinstance(comment, dict):
+            continue
+        path = str(comment.get("path") or comment.get("filename") or "").replace("\\", "/")
+        tasks.append({"id": f"review-{index}", "path": path, "line": comment.get("line"), "body": str(comment.get("body") or comment.get("message") or "")[:2000], "file_present": path in filenames, "status": "open", "suggested_action": "Prepare patch, run affected tests, then request re-review."})
+    return {
+        "comments": tasks,
+        "open_count": len(tasks),
+        "missing_files": sorted({item["path"] for item in tasks if item["path"] and not item["file_present"]}),
+        "test_candidates": test_names[:100],
+        "workflow": ["Group comments by file and symbol.", "Generate a preview-only patch.", "Run impacted tests and local review.", "Re-request review after the diff fingerprint changes.", "Resolve only approved comments."],
+        "approval_required": True,
+        "offline_only": True,
+    }

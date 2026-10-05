@@ -306,6 +306,18 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(len(payload["stale_or_unverified"]), 1)
         self.assertTrue(payload["citation_required"])
 
+    def test_review_resolution_groups_comments_and_requires_re_review(self):
+        response = self.client.post("/api/coding/review-resolution/", {
+            "comments": json.dumps([{ "path": "chat/views.py", "line": 10, "body": "Add validation." }]),
+            "files": json.dumps([{ "filename": "chat/views.py" }]),
+            "tests": json.dumps(["python manage.py test chat"]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["comments"][0]["status"], "open")
+        self.assertTrue(payload["approval_required"])
+        self.assertIn("Re-request review", " ".join(payload["workflow"]))
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

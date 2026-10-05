@@ -408,6 +408,11 @@ After these migrations and feature updates, run:
    python manage.py test chat
    git diff --check
 
+- Review-comment resolution planning is available at
+  `/api/coding/review-resolution/`. Submit local review comments, files, and
+  test candidates to group work, prepare preview-only patch tasks, and require
+  re-review after the diff changes. Comments are never auto-resolved.
+
 - Agent lifecycle hook evaluation is available at `/api/coding/agent-hooks/`.
   It supports session, prompt, pre-tool, post-tool, error, and session-end
   events. Pre-tool policies can allow, ask, or deny based on local argument
