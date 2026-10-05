@@ -376,3 +376,7 @@ After these migrations and feature updates, run:
   source files and hashes. The endpoint detects stale or missing clients,
   types, serializers, migrations, and documentation, then returns a reviewed
   regeneration plan without editing files automatically.
+- Mutation testing is available at `/api/coding/mutation-testing/`. Submit a
+  local code buffer and optional per-mutant results to measure killed,
+  survived, and untested mutants. Surviving mutants become weak-test targets;
+  execution remains approval-gated through the guarded local test runner.

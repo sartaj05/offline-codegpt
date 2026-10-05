@@ -327,6 +327,36 @@ def analyze_generated_sync(files, manifest=None):
     }
 
 
+def mutation_test_plan(code, language="python", results=None):
+    results = results if isinstance(results, dict) else {}
+    replacements = [("==", "!="), ("!=", "=="), (" + ", " - "), (" - ", " + "), (" > ", " >= "), (" < ", " <= ")]
+    mutants = []
+    for index, (source, target) in enumerate(replacements, start=1):
+        position = code.find(source)
+        if position < 0:
+            continue
+        mutated = code[:position] + target + code[position + len(source):]
+        mutant_id = f"M{index:03d}"
+        status = str(results.get(mutant_id, "untested"))
+        mutants.append({"id": mutant_id, "operator": f"{source.strip()} -> {target.strip()}", "offset": position, "status": status, "code": mutated})
+    killed = sum(item["status"] == "killed" for item in mutants)
+    survived = sum(item["status"] == "survived" for item in mutants)
+    score = round((killed / (killed + survived)) * 100, 2) if killed + survived else None
+    return {
+        "runner": "offline-mutation-plan",
+        "language": language,
+        "mutants": mutants,
+        "killed": killed,
+        "survived": survived,
+        "untested": len(mutants) - killed - survived,
+        "mutation_score": score,
+        "weak_test_targets": [item["id"] for item in mutants if item["status"] == "survived"],
+        "execution": "Run each approved mutant through the guarded local test runner.",
+        "approval_required": True,
+        "offline_only": True,
+    }
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 

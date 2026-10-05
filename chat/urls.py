@@ -133,6 +133,7 @@ urlpatterns = [
     path("api/coding/migration-safety/", views.coding_migration_safety, name="coding_migration_safety"),
     path("api/coding/dependency-upgrades/", views.coding_dependency_upgrades, name="coding_dependency_upgrades"),
     path("api/coding/generated-sync/", views.coding_generated_sync, name="coding_generated_sync"),
+    path("api/coding/mutation-testing/", views.coding_mutation_testing, name="coding_mutation_testing"),
     path("api/coding/refactor/", views.coding_refactor, name="coding_refactor"),
     path("api/coding/issue-to-pr/", views.coding_issue_to_pr, name="coding_issue_to_pr"),
     path("api/coding/pr-review/", views.coding_pr_review, name="coding_pr_review"),

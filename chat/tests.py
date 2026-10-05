@@ -126,6 +126,19 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["stale"][0]["generated"], "client.py")
         self.assertEqual(payload["missing"][0]["generated"], "types.ts")
 
+    def test_mutation_testing_reports_surviving_mutants_and_score(self):
+        response = self.client.post("/api/coding/mutation-testing/", {
+            "code": "return left == right and left + right",
+            "language": "python",
+            "results": json.dumps({"M001": "killed", "M003": "survived"}),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["killed"], 1)
+        self.assertEqual(payload["survived"], 1)
+        self.assertEqual(payload["mutation_score"], 50.0)
+        self.assertEqual(payload["weak_test_targets"], ["M003"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",
