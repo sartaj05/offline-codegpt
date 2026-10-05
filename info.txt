@@ -371,3 +371,8 @@ After these migrations and feature updates, run:
   version/advisory catalog to generate preview-only upgrades with required
   install, test, CI, and security checks. The bot never downloads packages or
   queries a live registry while offline mode is active.
+- Generated-code synchronization is available at `/api/coding/generated-sync/`.
+  Provide local source files and a manifest mapping generated outputs to their
+  source files and hashes. The endpoint detects stale or missing clients,
+  types, serializers, migrations, and documentation, then returns a reviewed
+  regeneration plan without editing files automatically.

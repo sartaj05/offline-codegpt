@@ -109,6 +109,23 @@ class ChatFeatureTests(TestCase):
         self.assertIn("local CI", payload["updates"][0]["tests_required"])
         self.assertTrue(payload["patches_are_preview_only"])
 
+    def test_generated_code_sync_detects_stale_and_missing_outputs(self):
+        response = self.client.post("/api/coding/generated-sync/", {
+            "files": json.dumps([
+                {"filename": "schema.json", "content": "{\"version\": 2}"},
+                {"filename": "client.py", "content": "# @generated\n"},
+            ]),
+            "manifest": json.dumps({
+                "client.py": {"sources": ["schema.json"], "source_hash": "old-hash"},
+                "types.ts": {"sources": ["schema.json"], "source_hash": "old-hash"},
+            }),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["up_to_date"])
+        self.assertEqual(payload["stale"][0]["generated"], "client.py")
+        self.assertEqual(payload["missing"][0]["generated"], "types.ts")
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

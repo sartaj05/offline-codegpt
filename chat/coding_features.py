@@ -7,6 +7,7 @@ usable while the app is in offline mode.
 
 import ast
 import difflib
+import hashlib
 import json
 import os
 import re
@@ -294,6 +295,34 @@ def plan_dependency_upgrades(files, catalog=None):
         "patches_are_preview_only": True,
         "rollback": "Restore the lockfile and dependency manifest from the reviewed patch.",
         "network_policy": "blocked",
+        "offline_only": True,
+    }
+
+
+def analyze_generated_sync(files, manifest=None):
+    manifest = manifest if isinstance(manifest, dict) else {}
+    by_name = {str(item.get("filename") or "").replace("\\", "/"): str(item.get("content") or "") for item in (files or [])}
+    stale = []
+    missing = []
+    for generated, config in manifest.items():
+        config = config if isinstance(config, dict) else {"sources": config if isinstance(config, list) else []}
+        sources = [str(source).replace("\\", "/") for source in (config.get("sources") or [])]
+        source_blob = "\n".join(by_name.get(source, "") for source in sources)
+        source_hash = hashlib.sha256(source_blob.encode("utf-8")).hexdigest()[:16]
+        recorded = str(config.get("source_hash") or "")
+        if generated not in by_name:
+            missing.append({"generated": generated, "sources": sources, "source_hash": source_hash})
+        elif recorded and recorded != source_hash:
+            stale.append({"generated": generated, "sources": sources, "recorded_hash": recorded, "current_hash": source_hash})
+    generated_markers = [filename for filename, content in by_name.items() if "@generated" in content.lower() or "do not edit" in content.lower()]
+    return {
+        "generated_files": generated_markers,
+        "stale": stale,
+        "missing": missing,
+        "up_to_date": not stale and not missing,
+        "regeneration_plan": [{"generated": item["generated"], "action": "regenerate", "sources": item["sources"]} for item in stale + missing],
+        "supported_outputs": ["clients", "types", "serializers", "migrations", "documentation"],
+        "approval_required": True,
         "offline_only": True,
     }
 
