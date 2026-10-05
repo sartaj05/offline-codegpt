@@ -120,6 +120,23 @@ def preview_refactor(filename, code, operation="rename", old_name="", new_name="
     return {"success": True, "operation": operation, "filename": filename or "buffer", "old_name": old_name, "new_name": new_name, "replacements": count, "changed": updated != code, "content": updated, "diff": diff, "approval_required": True}
 
 
+def refactor_workspace(files, operation="rename", old_name="", new_name=""):
+    """Preview a coordinated rename across a set of local file buffers."""
+    if not _safe_identifier(old_name) or not _safe_identifier(new_name):
+        return {"success": False, "error": "Names must be valid identifiers."}
+    changes = []
+    total = 0
+    for item in (files or [])[:100]:
+        filename = str(item.get("filename") or "buffer")[:300]
+        result = preview_refactor(filename, str(item.get("content") or ""), operation, old_name, new_name)
+        if not result.get("success"):
+            return result
+        if result["changed"]:
+            changes.append(result)
+            total += result["replacements"]
+    return {"success": True, "operation": operation, "old_name": old_name, "new_name": new_name, "files_changed": len(changes), "replacements": total, "changes": changes, "approval_required": True, "rollback_supported": True}
+
+
 def issue_to_pr_plan(title, description, files=None, test_command=""):
     title = (title or "Untitled coding task").strip()[:200]
     description = (description or "").strip()[:10000]

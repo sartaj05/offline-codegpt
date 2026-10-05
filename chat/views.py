@@ -125,7 +125,7 @@ from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
 from .runtimes import RUNTIME_CHOICES, get_runtime_adapter
 from .symbols import extract_symbols
-from .coding_features import lsp_analyze
+from .coding_features import lsp_analyze, preview_refactor, refactor_workspace
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -603,6 +603,33 @@ def coding_lsp(request):
     if len(content.encode("utf-8")) > MAX_FILE_BYTES:
         return JsonResponse({"success": False, "error": "LSP buffers are limited to 1 MB."}, status=400)
     return JsonResponse({"success": True, **lsp_analyze(filename, content, language, operation, symbol)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def coding_refactor(request):
+    operation = request.POST.get("operation", "rename").strip().lower()
+    old_name = request.POST.get("old_name", "").strip()
+    new_name = request.POST.get("new_name", "").strip()
+    files = []
+    raw_files = request.POST.get("files", "").strip()
+    if raw_files:
+        try:
+            files = json.loads(raw_files)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return JsonResponse({"success": False, "error": "files must be a JSON array."}, status=400)
+    if files:
+        result = refactor_workspace(files, operation, old_name, new_name)
+    else:
+        result = preview_refactor(
+            request.POST.get("filename", "buffer.py"),
+            request.POST.get("content", ""),
+            operation,
+            old_name,
+            new_name,
+            request.POST.get("language", "auto"),
+        )
+    return JsonResponse(result, status=200 if result.get("success") else 400)
 
 
 def _user_ollama_settings(user):

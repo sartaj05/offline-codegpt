@@ -36,6 +36,20 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["definitions"][0]["name"], "add")
         self.assertGreaterEqual(len(payload["references"]), 2)
 
+    def test_ast_safe_refactor_previews_multi_file_rename(self):
+        response = self.client.post("/api/coding/refactor/", {
+            "old_name": "old_name",
+            "new_name": "new_name",
+            "files": json.dumps([
+                {"filename": "one.py", "content": "def old_name():\n    return old_name\n"},
+                {"filename": "two.py", "content": "from one import old_name\n"},
+            ]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["files_changed"], 2)
+        self.assertTrue(payload["approval_required"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

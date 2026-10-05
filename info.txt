@@ -135,6 +135,11 @@ Coding workspace feature set
   source code outside the device. The current built-in backend uses Python AST
   parsing and safe regex parsing for common languages; external language-server
   processes can be added later behind the same contract.
+- AST-safe refactoring previews are available at `/api/coding/refactor/`.
+  Submit one buffer or a JSON `files` array with `old_name` and `new_name` to
+  preview coordinated renames. The response includes unified diffs, affected
+  files, replacement counts, approval requirements, and rollback support; it
+  never writes files automatically.
 
 Privacy reminder
 ----------------
