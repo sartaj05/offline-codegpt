@@ -68,6 +68,7 @@ from .models import (
     LocalModelConfig,
     McpConnector,
     McpToolCall,
+    McpTask,
     NetworkLedger,
     ScheduledTask,
     ModelCapability,
@@ -4318,6 +4319,86 @@ def _mcp_log(user, tool_name, arguments, success, error):
     )
 
 
+def _mcp_task_payload(task):
+    return {
+        "taskId": str(task.task_id),
+        "status": task.status,
+        "tool_name": task.tool_name,
+        "progress": task.progress,
+        "inputRequests": task.input_requests or {},
+        "result": task.result or {},
+        "error": task.error,
+        "createdAt": task.created_at.isoformat(),
+        "lastUpdatedAt": task.updated_at.isoformat(),
+    }
+
+
+def _run_mcp_task(task):
+    if task.status in {"cancelled", "completed"}:
+        return task
+    task.status = "working"
+    task.progress = 10
+    task.save(update_fields=["status", "progress", "updated_at"])
+    success, result, error = _mcp_call(task.owner, task.tool_name, task.arguments or {})
+    _mcp_log(task.owner, task.tool_name, mask_json(task.owner, task.arguments or {}), success, mask_json(task.owner, error))
+    task.progress = 100
+    task.status = "completed" if success else "failed"
+    task.result = result if isinstance(result, dict) else {"value": result}
+    task.error = error[:2000]
+    task.completed_at = timezone.now()
+    task.save(update_fields=["status", "progress", "result", "error", "completed_at", "updated_at"])
+    return task
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def mcp_tasks(request):
+    if request.method == "GET":
+        return JsonResponse({"success": True, "tasks": [_mcp_task_payload(task) for task in McpTask.objects.filter(owner=request.user)[:100]]})
+    try:
+        payload = json.loads(request.body or "{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "Invalid task JSON."}, status=400)
+    tool_name = str(payload.get("tool_name", "")).strip()
+    arguments = payload.get("arguments") or {}
+    if not tool_name or not isinstance(arguments, dict):
+        return JsonResponse({"success": False, "error": "tool_name and object arguments are required."}, status=400)
+    task = McpTask.objects.create(owner=request.user, tool_name=tool_name, arguments=arguments)
+    return JsonResponse({"success": True, "task": _mcp_task_payload(task)}, status=201)
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["POST", "DELETE"])
+def mcp_task_action(request, task_id):
+    task = get_object_or_404(McpTask, task_id=task_id, owner=request.user)
+    if request.method == "DELETE":
+        task.status = "cancelled"
+        task.completed_at = timezone.now()
+        task.save(update_fields=["status", "completed_at", "updated_at"])
+        return JsonResponse({"success": True, "task": _mcp_task_payload(task)})
+    action = request.POST.get("action", "run").strip().lower()
+    if action == "cancel":
+        task.status = "cancelled"
+        task.completed_at = timezone.now()
+        task.save(update_fields=["status", "completed_at", "updated_at"])
+    elif action == "run":
+        _run_mcp_task(task)
+    elif action == "update":
+        raw = request.POST.get("arguments", "{}")
+        try:
+            arguments = json.loads(raw)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return JsonResponse({"success": False, "error": "arguments must be valid JSON."}, status=400)
+        if not isinstance(arguments, dict):
+            return JsonResponse({"success": False, "error": "arguments must be a JSON object."}, status=400)
+        task.arguments = {**(task.arguments or {}), **arguments}
+        task.status = "queued"
+        task.save(update_fields=["arguments", "status", "updated_at"])
+    else:
+        return JsonResponse({"success": False, "error": "Use run, update, or cancel."}, status=400)
+    return JsonResponse({"success": True, "task": _mcp_task_payload(task)})
+
+
 def _mcp_connector_payload(connector):
     return {
         "id": connector.id,
@@ -4436,11 +4517,37 @@ def mcp_rpc(request):
         params = payload.get("params") or {}
         tool_name = params.get("name", "")
         arguments = params.get("arguments") or {}
+        task_requested = bool(params.get("task") or (params.get("_meta") or {}).get("io.modelcontextprotocol/tasks"))
+        if task_requested:
+            task = McpTask.objects.create(owner=request.user, tool_name=tool_name, arguments=arguments)
+            result = {"resultType": "task", "taskId": str(task.task_id), "status": task.status, "pollIntervalMs": 500}
+            return JsonResponse({"jsonrpc": "2.0", "id": request_id, "result": result})
         success, result, error = _mcp_call(request.user, tool_name, arguments)
         _mcp_log(request.user, tool_name, mask_json(request.user, arguments), success, mask_json(request.user, error))
         if not success:
             return JsonResponse({"jsonrpc": "2.0", "id": request_id, "error": {"code": -32000, "message": mask_json(request.user, error)}}, status=400)
         result = {"content": [{"type": "text", "text": json.dumps(mask_json(request.user, result), ensure_ascii=False)}]}
+    elif method == "tasks/get":
+        task_id = (payload.get("params") or {}).get("taskId")
+        task = get_object_or_404(McpTask, task_id=task_id, owner=request.user)
+        result = _mcp_task_payload(task)
+    elif method == "tasks/update":
+        params = payload.get("params") or {}
+        task = get_object_or_404(McpTask, task_id=params.get("taskId"), owner=request.user)
+        input_responses = params.get("inputResponses") or {}
+        if isinstance(input_responses, dict):
+            task.arguments = {**(task.arguments or {}), **{key: value.get("content", value) if isinstance(value, dict) else value for key, value in input_responses.items()}}
+        task.save(update_fields=["arguments", "updated_at"])
+        if params.get("run", True):
+            task = _run_mcp_task(task)
+        result = _mcp_task_payload(task)
+    elif method == "tasks/cancel":
+        task_id = (payload.get("params") or {}).get("taskId")
+        task = get_object_or_404(McpTask, task_id=task_id, owner=request.user)
+        task.status = "cancelled"
+        task.completed_at = timezone.now()
+        task.save(update_fields=["status", "completed_at", "updated_at"])
+        result = _mcp_task_payload(task)
     else:
         return JsonResponse({"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": "Method not found."}}, status=400)
     return JsonResponse({"jsonrpc": "2.0", "id": request_id, "result": result})

@@ -272,6 +272,26 @@ class McpToolCall(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class McpTask(models.Model):
+    STATUS_CHOICES = (("queued", "Queued"), ("working", "Working"), ("input_required", "Input required"), ("completed", "Completed"), ("failed", "Failed"), ("cancelled", "Cancelled"))
+
+    task_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="mcp_tasks")
+    tool_name = models.CharField(max_length=120)
+    arguments = models.JSONField(default=dict)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="queued")
+    progress = models.PositiveIntegerField(default=0)
+    input_requests = models.JSONField(default=dict, blank=True)
+    result = models.JSONField(default=dict, blank=True)
+    error = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
 class AiEvent(models.Model):
     owner = models.ForeignKey(
         User,
