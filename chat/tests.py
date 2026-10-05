@@ -124,6 +124,17 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(len(payload["removed"]), 1)
         self.assertEqual(payload["changed"][0]["new_required_parameters"], ["org"])
 
+    def test_performance_profiler_reports_hotspots_and_benchmark_delta(self):
+        response = self.client.post("/api/coding/performance/", {
+            "files": json.dumps([{"filename": "slow.py", "content": "for item in items:\n    for child in item:\n        save(child)\n"}]),
+            "benchmark": json.dumps([{"phase": "before", "duration_ms": 100}, {"phase": "after", "duration_ms": 80}]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["benchmark"]["delta_percent"], -20.0)
+        self.assertEqual(payload["hotspots"][0]["filename"], "slow.py")
+        self.assertTrue(payload["patch_approval_required"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

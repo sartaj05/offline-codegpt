@@ -167,6 +167,11 @@ Coding workspace feature set
   old and new OpenAPI JSON documents to detect removed endpoints and newly
   required parameters. The response includes release safety, migration notes,
   and client/contract-test regeneration suggestions without network access.
+- Code performance profiling is available at `/api/coding/performance/`.
+  Submit local file buffers and optional before/after benchmark samples to get
+  complexity signals, loop/query hotspots, timing deltas, and optimization
+  guidance. It is an evidence helper; generated performance patches still
+  require review and benchmark confirmation.
 
 Privacy reminder
 ----------------

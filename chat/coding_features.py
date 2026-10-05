@@ -321,3 +321,34 @@ def evolve_api_contract(old_spec, new_spec):
         ],
         "offline_only": True,
     }
+
+
+def profile_code_performance(files, benchmark=None):
+    rows = []
+    for item in (files or [])[:100]:
+        filename = str(item.get("filename") or "buffer")[:300]
+        content = str(item.get("content") or "")
+        lines = content.splitlines()
+        loops = len(re.findall(r"\b(for|while)\b", content))
+        calls = len(re.findall(r"\b[A-Za-z_]\w*\s*\(", content))
+        sql_queries = len(re.findall(r"\b(select|insert|update|delete)\b", content, re.IGNORECASE))
+        score = min(100, 20 + len(lines) // 10 + loops * 5 + sql_queries * 8)
+        rows.append({"filename": filename, "lines": len(lines), "loops": loops, "calls": calls, "sql_queries": sql_queries, "complexity_signal": score})
+    measurements = benchmark if isinstance(benchmark, list) else []
+    before = sum(float(item.get("duration_ms", 0) or 0) for item in measurements if item.get("phase") == "before")
+    after = sum(float(item.get("duration_ms", 0) or 0) for item in measurements if item.get("phase") == "after")
+    delta = round(((after - before) / before) * 100, 2) if before else None
+    hotspots = sorted(rows, key=lambda item: (-item["complexity_signal"], -item["lines"]))[:10]
+    return {
+        "profiler": "offline-static-and-benchmark",
+        "files": rows,
+        "hotspots": hotspots,
+        "benchmark": {"before_ms": before, "after_ms": after, "delta_percent": delta, "samples": len(measurements)},
+        "optimization_suggestions": [
+            "Measure a baseline before applying a code change.",
+            "Prioritize high-signal loops and database query sites.",
+            "Run the same benchmark after the patch and keep the change only when tests still pass.",
+        ],
+        "patch_approval_required": True,
+        "offline_only": True,
+    }
