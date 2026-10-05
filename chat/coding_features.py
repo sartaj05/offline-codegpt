@@ -284,3 +284,40 @@ def browser_debug_plan(base_url, flow, report="", snapshot_name="workspace"):
         "network_policy": "local-target-only",
         "approval_required_for_patch": True,
     }
+
+
+def evolve_api_contract(old_spec, new_spec):
+    def endpoints(spec):
+        output = {}
+        for path, operations in (spec.get("paths") or {}).items():
+            for method, operation in (operations or {}).items():
+                if method.lower() in {"get", "post", "put", "patch", "delete", "options", "head"}:
+                    output[(method.lower(), path.rstrip("/") or "/")] = operation or {}
+        return output
+
+    before = endpoints(old_spec if isinstance(old_spec, dict) else {})
+    after = endpoints(new_spec if isinstance(new_spec, dict) else {})
+    removed = sorted(set(before) - set(after))
+    added = sorted(set(after) - set(before))
+    changed = []
+    for endpoint in sorted(set(before) & set(after)):
+        old_parameters = {(item.get("name"), item.get("in"), bool(item.get("required"))) for item in before[endpoint].get("parameters", [])}
+        new_parameters = {(item.get("name"), item.get("in"), bool(item.get("required"))) for item in after[endpoint].get("parameters", [])}
+        new_required = sorted(item[0] for item in new_parameters - old_parameters if item[2])
+        if new_required:
+            changed.append({"method": endpoint[0].upper(), "path": endpoint[1], "new_required_parameters": new_required})
+    breaking = [{"method": method.upper(), "path": path, "reason": "Endpoint removed."} for method, path in removed]
+    breaking.extend({"method": item["method"], "path": item["path"], "reason": "New required parameter."} for item in changed)
+    return {
+        "breaking": breaking,
+        "removed": [{"method": method.upper(), "path": path} for method, path in removed],
+        "added": [{"method": method.upper(), "path": path} for method, path in added],
+        "changed": changed,
+        "safe_to_release": not breaking,
+        "suggestions": [
+            "Generate a migration note for removed endpoints.",
+            "Regenerate typed clients and contract tests for added endpoints.",
+            "Add compatibility tests for every new required parameter.",
+        ],
+        "offline_only": True,
+    }

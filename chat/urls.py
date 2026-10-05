@@ -131,6 +131,7 @@ urlpatterns = [
     path("api/coding/local-ci/", views.coding_local_ci, name="coding_local_ci"),
     path("api/coding/security-sbom/", views.coding_security_sbom, name="coding_security_sbom"),
     path("api/coding/browser-debug/", views.coding_browser_debug, name="coding_browser_debug"),
+    path("api/coding/api-evolution/", views.coding_api_evolution, name="coding_api_evolution"),
     path("api/session/<int:session_id>/", views.session_messages, name="session_messages"),
     path("api/session/<int:session_id>/summary/", views.session_summary, name="session_summary"),
     path("api/session/<int:session_id>/revisions/", views.session_revisions, name="session_revisions"),

@@ -163,6 +163,10 @@ Coding workspace feature set
   local Playwright test, analyzes a supplied report, and returns a safe repair
   loop for console/network/screenshot/trace evidence. Browser targets remain
   local-only and generated patches require explicit approval.
+- API contract evolution is available at `/api/coding/api-evolution/`. Submit
+  old and new OpenAPI JSON documents to detect removed endpoints and newly
+  required parameters. The response includes release safety, migration notes,
+  and client/contract-test regeneration suggestions without network access.
 
 Privacy reminder
 ----------------

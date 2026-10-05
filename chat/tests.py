@@ -111,6 +111,19 @@ class ChatFeatureTests(TestCase):
         self.assertIn("@playwright/test", payload["test_code"])
         self.assertTrue(payload["approval_required_for_patch"])
 
+    def test_api_evolution_detects_removed_and_new_required_parameters(self):
+        old_spec = {"paths": {"/users": {"get": {}}, "/legacy": {"get": {}}}}
+        new_spec = {"paths": {"/users": {"get": {"parameters": [{"name": "org", "in": "query", "required": True}]}}, "/new": {"post": {}}}}
+        response = self.client.post("/api/coding/api-evolution/", {
+            "old_spec": json.dumps(old_spec),
+            "new_spec": json.dumps(new_spec),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["safe_to_release"])
+        self.assertEqual(len(payload["removed"]), 1)
+        self.assertEqual(payload["changed"][0]["new_required_parameters"], ["org"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",
