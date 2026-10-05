@@ -644,6 +644,21 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["advisories"][0]["id"], "LOCAL-1")
         self.assertFalse(payload["network_used"])
 
+    def test_dev_environment_detects_ecosystems_and_redacts_secret_names(self):
+        response = self.client.post("/api/coding/dev-environment/", {
+            "files": json.dumps([
+                {"filename": "package.json", "content": "{}"},
+                {"filename": "pnpm-lock.yaml", "content": ""},
+                {"filename": ".env.example", "content": "DATABASE_URL=x\nAPI_TOKEN=y"},
+            ]),
+            "hardware": json.dumps({"ram_gb": 16, "api_key": "do-not-return"}),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("node", payload["ecosystems"])
+        self.assertIn("API_TOKEN", payload["secret_variables_redacted"])
+        self.assertNotIn("api_key", payload["hardware"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

@@ -172,6 +172,7 @@ urlpatterns = [
     path("api/coding/task-replay/", views.coding_task_replay, name="coding_task_replay"),
     path("api/coding/change-risk/", views.coding_change_risk, name="coding_change_risk"),
     path("api/coding/offline-dependencies/", views.coding_offline_dependencies, name="coding_offline_dependencies"),
+    path("api/coding/dev-environment/", views.coding_dev_environment, name="coding_dev_environment"),
     path("api/session/<int:session_id>/", views.session_messages, name="session_messages"),
     path("api/session/<int:session_id>/summary/", views.session_summary, name="session_summary"),
     path("api/session/<int:session_id>/revisions/", views.session_revisions, name="session_revisions"),

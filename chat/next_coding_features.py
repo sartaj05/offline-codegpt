@@ -372,3 +372,51 @@ def analyze_offline_dependencies(files, catalog=None):
         "approval_required_for_install": True,
         "offline_only": True,
     }
+
+
+def plan_dev_environment(files, hardware=None, commands=None):
+    """Build a safe reproducible-environment plan from local repository files."""
+    files = files if isinstance(files, list) else []
+    hardware = hardware if isinstance(hardware, dict) else {}
+    supplied_commands = [str(item)[:300] for item in (commands or []) if str(item).strip()][:30]
+    names = {_filename(item) for item in files if isinstance(item, dict)}
+    lower_names = {name.lower() for name in names}
+    ecosystems = []
+    if any(name.endswith(("requirements.txt", "pyproject.toml", "poetry.lock")) for name in lower_names):
+        ecosystems.append("python")
+    if any(name.endswith(("package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock")) for name in lower_names):
+        ecosystems.append("node")
+    if any(name.endswith(("cargo.toml", "cargo.lock")) for name in lower_names):
+        ecosystems.append("rust")
+    if any(name.endswith(("go.mod", "go.sum")) for name in lower_names):
+        ecosystems.append("go")
+    if any(name.endswith(("dockerfile", "docker-compose.yml", "docker-compose.yaml")) for name in lower_names):
+        ecosystems.append("container")
+    setup = []
+    if "python" in ecosystems:
+        setup.append("python -m venv .venv")
+        setup.append("python -m pip install --requirement requirements.txt")
+    if "node" in ecosystems:
+        setup.append("npm ci")
+    if "rust" in ecosystems:
+        setup.append("cargo build --locked")
+    if "go" in ecosystems:
+        setup.append("go mod download")
+    if "container" in ecosystems or ".devcontainer/devcontainer.json" in lower_names:
+        setup.append("docker compose build")
+    env_names = set()
+    for item in files:
+        content = str((item or {}).get("content") or "")
+        env_names.update(re.findall(r"\b[A-Z][A-Z0-9_]{2,}\b", content))
+    secret_like = sorted(name for name in env_names if any(token in name.lower() for token in ("key", "token", "secret", "password")))
+    return {
+        "ecosystems": sorted(set(ecosystems)),
+        "detected_files": sorted(names),
+        "setup_commands": supplied_commands or setup,
+        "required_lockfiles": sorted(name for name in names if name.lower().endswith((".lock", "-lock.json", "lock.yaml", "lock.yml"))),
+        "environment_variables": sorted(env_names - set(secret_like)),
+        "secret_variables_redacted": secret_like,
+        "hardware": {key: str(value)[:120] for key, value in hardware.items() if not any(token in key.lower() for token in ("secret", "token", "password", "key"))},
+        "execution": "preview-only-until-approved",
+        "offline_only": True,
+    }
