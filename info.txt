@@ -134,6 +134,10 @@ Troubleshooting
   `/api/coding/provenance/`. Create local SHA-256 subject hashes and optional
   local signatures, then verify the attestation offline. Secret-like metadata
   keys are excluded and no artifact is uploaded or signed by a remote service.
+- Three-way conflict review is available at `/api/coding/conflicts/`. Submit a
+  local conflict buffer and choose `review`, `ours`, or `theirs` for a preview.
+  Conflicts are never written automatically; approved resolutions should be
+  followed by the affected tests and the existing review gate.
 
 Coding workspace feature set
 ----------------------------

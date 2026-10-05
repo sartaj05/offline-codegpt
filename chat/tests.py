@@ -256,6 +256,16 @@ class ChatFeatureTests(TestCase):
         verified = self.client.post("/api/coding/provenance/", {"action": "verify", "attestation": json.dumps(attestation), "signing_secret": "local-only-secret"})
         self.assertTrue(verified.json()["valid"])
 
+    def test_conflict_resolver_previews_review_and_theirs_strategies(self):
+        content = "before\n<<<<<<< ours\nleft\n=======\nright\n>>>>>>> theirs\nafter\n"
+        reviewed = self.client.post("/api/coding/conflicts/", {"content": content, "strategy": "review"})
+        self.assertEqual(reviewed.status_code, 200)
+        self.assertEqual(reviewed.json()["conflict_count"], 1)
+        self.assertTrue(reviewed.json()["approval_required"])
+        theirs = self.client.post("/api/coding/conflicts/", {"content": content, "strategy": "theirs"})
+        self.assertIn("right", theirs.json()["resolved_content"])
+        self.assertNotIn("<<<<<<<", theirs.json()["resolved_content"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

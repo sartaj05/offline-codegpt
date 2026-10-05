@@ -627,6 +627,45 @@ def verify_provenance(attestation, signing_secret=""):
     return {"valid": digest_valid and signature_valid, "digest_valid": digest_valid, "signature_valid": signature_valid, "subjects": len(payload["subjects"]), "offline_only": True}
 
 
+def resolve_merge_conflicts(content, strategy="review"):
+    lines = (content or "").splitlines(True)
+    conflicts = []
+    resolved = []
+    index = 0
+    while index < len(lines):
+        if not lines[index].startswith("<<<<<<<"):
+            resolved.append(lines[index])
+            index += 1
+            continue
+        start = index + 1
+        separator = next((pos for pos in range(start, len(lines)) if lines[pos].startswith("=======")), None)
+        end = next((pos for pos in range((separator or start) + 1, len(lines)) if lines[pos].startswith(">>>>>>>")), None)
+        if separator is None or end is None:
+            return {"success": False, "error": "Unterminated merge conflict marker."}
+        ours = lines[start:separator]
+        theirs = lines[separator + 1:end]
+        conflict = {"index": len(conflicts) + 1, "ours": "".join(ours), "theirs": "".join(theirs), "start_line": start + 1, "end_line": end + 1}
+        conflicts.append(conflict)
+        if strategy == "ours":
+            resolved.extend(ours)
+        elif strategy == "theirs":
+            resolved.extend(theirs)
+        else:
+            resolved.extend(lines[index:end + 1])
+        index = end + 1
+    return {
+        "success": True,
+        "conflict_count": len(conflicts),
+        "conflicts": conflicts,
+        "strategy": strategy if strategy in {"review", "ours", "theirs"} else "review",
+        "resolved_content": "".join(resolved),
+        "clean": not conflicts,
+        "approval_required": bool(conflicts),
+        "rerun_tests_after_resolution": bool(conflicts),
+        "offline_only": True,
+    }
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 
