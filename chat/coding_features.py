@@ -1236,3 +1236,29 @@ def coordinate_multi_repository(repositories, changes):
         repo_changes = [item for item in (changes or []) if isinstance(item, dict) and item.get("repository") == name]
         batches.append({"batch": index, "repository": name, "depends_on": sorted(dependencies[name]), "changes": repo_changes, "checks": ["package compatibility", "consumer contracts", "local CI", "provenance"]})
     return {"success": True, "order": order, "batches": batches, "unassigned_changes": [item for item in (changes or []) if isinstance(item, dict) and item.get("repository") not in names], "approval_required": True, "offline_only": True}
+
+
+def triage_ci_failure(logs, jobs=None, title="CI failure repair"):
+    jobs = jobs if isinstance(jobs, list) else []
+    lines = [line.strip() for line in (logs or "").splitlines() if line.strip()]
+    failures = [line[:500] for line in lines if re.search(r"\b(error|failed|failure|exception|traceback)\b", line, re.IGNORECASE)]
+    frame_lines = [line[:500] for line in lines if re.search(r"(?:File\s+[\"']|\bat\s+[\"'])", line, re.IGNORECASE)]
+    evidence = frame_lines + [line for line in failures if line not in frame_lines]
+    locations = []
+    for line in evidence:
+        match = re.search(r"(?:File\s+|at\s+)?[\"']?([^\"'\s:]+)[\"']?(?:,?\s+line\s+|:)(\d+)", line, re.IGNORECASE)
+        if match:
+            locations.append({"filename": match.group(1).replace("\\", "/"), "line": int(match.group(2)), "evidence": line})
+    primary = evidence[0] if evidence else "No explicit failure line was found; inspect job artifacts."
+    workflow = issue_to_pr_plan(title, primary, [item["filename"] for item in locations], "Rerun the smallest failing job, then the affected test set")
+    return {
+        "summary": f"{len(failures)} failure signal(s) across {len(lines)} log line(s).",
+        "primary_failure": primary,
+        "failures": failures[:100],
+        "locations": locations[:50],
+        "jobs": jobs[:100],
+        "repair_workflow": workflow,
+        "rerun_policy": ["Rerun once to distinguish infrastructure flake from deterministic failure.", "Run affected tests before the full pipeline.", "Review the patch and diff fingerprint.", "Require successful CI before resolving the failure."],
+        "approval_required": True,
+        "offline_only": True,
+    }

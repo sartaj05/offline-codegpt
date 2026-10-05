@@ -154,6 +154,7 @@ urlpatterns = [
     path("api/coding/query-optimizer/", views.coding_query_optimizer, name="coding_query_optimizer"),
     path("api/coding/package-compatibility/", views.coding_package_compatibility, name="coding_package_compatibility"),
     path("api/coding/multi-repository/", views.coding_multi_repository, name="coding_multi_repository"),
+    path("api/coding/ci-repair/", views.coding_ci_repair, name="coding_ci_repair"),
     path("api/coding/refactor/", views.coding_refactor, name="coding_refactor"),
     path("api/coding/issue-to-pr/", views.coding_issue_to_pr, name="coding_issue_to_pr"),
     path("api/coding/pr-review/", views.coding_pr_review, name="coding_pr_review"),

@@ -396,6 +396,18 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["batches"][1]["changes"][0]["title"], "Update client")
         self.assertTrue(payload["approval_required"])
 
+    def test_ci_repair_triage_finds_primary_failure_and_creates_workflow(self):
+        response = self.client.post("/api/coding/ci-repair/", {
+            "title": "Repair failing build",
+            "logs": "INFO start\nFile \"app.py\", line 12, in build\nERROR assertion failed",
+            "jobs": json.dumps([{ "name": "unit-tests", "status": "failed" }]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("File", payload["primary_failure"])
+        self.assertEqual(payload["locations"][0]["filename"], "app.py")
+        self.assertEqual(payload["repair_workflow"]["isolation"], "agent-worktree")
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

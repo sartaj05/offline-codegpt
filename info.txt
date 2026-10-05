@@ -412,6 +412,10 @@ After these migrations and feature updates, run:
   `/api/coding/multi-repository/`. Submit local repository dependencies and
   changes to create ordered release batches with compatibility, contract, CI,
   and provenance checks. Dependency cycles are rejected before work begins.
+- CI failure triage and repair planning is available at
+  `/api/coding/ci-repair/`. Submit local job logs and metadata to identify the
+  primary failure, extract source locations, and create an approval-gated
+  issue-to-PR repair workflow with affected-test rerun rules.
 
 - Review-comment resolution planning is available at
   `/api/coding/review-resolution/`. Submit local review comments, files, and
