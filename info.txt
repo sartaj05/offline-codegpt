@@ -424,6 +424,10 @@ After these migrations and feature updates, run:
   `/api/coding/flaky-quarantine/`. It tracks owners, expiry dates, active and
   expired quarantines, and release-blocking tests. Expired quarantines cannot
   silently hide instability.
+- SQL query-plan analysis is available at `/api/coding/query-optimizer/`.
+  Submit local SQL and EXPLAIN output to detect sequential scans, unbounded
+  writes, unsafe joins, SELECT *, and repeated N+1 query shapes. Index changes
+  remain suggestions and must be benchmarked before migration.
 
 - Agent lifecycle hook evaluation is available at `/api/coding/agent-hooks/`.
   It supports session, prompt, pre-tool, post-tool, error, and session-end

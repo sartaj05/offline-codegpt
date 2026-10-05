@@ -358,6 +358,16 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["release_blocked_by"], ["test_race"])
         self.assertTrue(payload["policy"]["expiry_required"])
 
+    def test_query_optimizer_finds_scan_unbounded_write_and_n_plus_one(self):
+        repeated = {"name": "load-user", "sql": "SELECT * FROM users", "explain": "Seq Scan on users"}
+        response = self.client.post("/api/coding/query-optimizer/", {"queries": json.dumps([repeated, repeated, repeated, {"sql": "DELETE FROM users"}])})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        kinds = {item["kind"] for item in payload["findings"]}
+        self.assertIn("sequential-scan", kinds)
+        self.assertIn("unbounded-write", kinds)
+        self.assertEqual(payload["n_plus_one_candidates"][0]["count"], 3)
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

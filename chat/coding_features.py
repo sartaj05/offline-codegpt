@@ -1156,3 +1156,34 @@ def manage_flaky_quarantine(tests, quarantine=None, today=""):
         "policy": {"owner_required": True, "expiry_required": True, "follow_up_required": True, "expired_quarantine_blocks_release": True},
         "offline_only": True,
     }
+
+
+def analyze_query_plans(queries):
+    findings = []
+    rows = []
+    for item in (queries or [])[:500]:
+        if not isinstance(item, dict):
+            continue
+        sql = str(item.get("sql") or "")
+        explain = str(item.get("explain") or "")
+        normalized = re.sub(r"\s+", " ", sql.strip())
+        query_findings = []
+        if re.search(r"\bSELECT\s+\*", sql, re.IGNORECASE):
+            query_findings.append({"severity": "low", "kind": "select-star", "message": "Select explicit columns to reduce payload and coupling."})
+        if re.search(r"Seq Scan|table scan|full scan", explain, re.IGNORECASE):
+            query_findings.append({"severity": "medium", "kind": "sequential-scan", "message": "Execution plan indicates a sequential/full table scan; inspect indexes and selectivity."})
+        if re.search(r"JOIN", sql, re.IGNORECASE) and not re.search(r"\bON\b", sql, re.IGNORECASE):
+            query_findings.append({"severity": "high", "kind": "join-without-condition", "message": "Join has no visible ON condition and may create a Cartesian product."})
+        if not re.search(r"\bWHERE\b", sql, re.IGNORECASE) and re.search(r"\bUPDATE\b|\bDELETE\b", sql, re.IGNORECASE):
+            query_findings.append({"severity": "high", "kind": "unbounded-write", "message": "Write query has no WHERE clause."})
+        rows.append({"name": item.get("name", f"query-{len(rows) + 1}"), "sql": normalized, "duration_ms": item.get("duration_ms", 0), "findings": query_findings})
+        findings.extend(query_findings)
+    duplicate_sql = Counter(row["sql"] for row in rows if row["sql"])
+    n_plus_one = [{"sql": sql, "count": count, "message": "Repeated query shape may indicate an N+1 access pattern."} for sql, count in duplicate_sql.items() if count >= 3]
+    return {
+        "queries": rows,
+        "findings": findings + [{"severity": "medium", "kind": "n-plus-one", **item} for item in n_plus_one],
+        "n_plus_one_candidates": n_plus_one,
+        "index_suggestions": ["Compare EXPLAIN before and after each index change.", "Index selective WHERE and JOIN columns.", "Avoid adding indexes without measuring write cost."],
+        "offline_only": True,
+    }
