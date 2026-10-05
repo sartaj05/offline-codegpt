@@ -140,6 +140,10 @@ Coding workspace feature set
   preview coordinated renames. The response includes unified diffs, affected
   files, replacement counts, approval requirements, and rollback support; it
   never writes files automatically.
+- Issue-to-PR planning is available at `/api/coding/issue-to-pr/`. Submit an
+  issue title, description, optional file list, and test command to create an
+  approval-gated AgentTask workflow. The workflow uses the existing isolated
+  agent-worktree controls and does not edit or merge code automatically.
 
 Privacy reminder
 ----------------

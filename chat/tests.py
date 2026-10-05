@@ -50,6 +50,19 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["files_changed"], 2)
         self.assertTrue(payload["approval_required"])
 
+    def test_issue_to_pr_creates_approval_gated_agent_workflow(self):
+        response = self.client.post("/api/coding/issue-to-pr/", {
+            "title": "Add health endpoint",
+            "description": "Create a local health endpoint and cover it with tests.",
+            "files": json.dumps(["chat/views.py", "chat/tests.py"]),
+            "test_command": "python manage.py test chat",
+        })
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["workflow"]["isolation"], "agent-worktree")
+        self.assertEqual(len(payload["workflow"]["workflow"]), 6)
+        self.assertTrue(all(step["approval_required"] for step in payload["workflow"]["workflow"][1:]))
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

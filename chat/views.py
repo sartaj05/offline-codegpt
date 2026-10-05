@@ -125,7 +125,7 @@ from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
 from .runtimes import RUNTIME_CHOICES, get_runtime_adapter
 from .symbols import extract_symbols
-from .coding_features import lsp_analyze, preview_refactor, refactor_workspace
+from .coding_features import issue_to_pr_plan, lsp_analyze, preview_refactor, refactor_workspace
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -630,6 +630,30 @@ def coding_refactor(request):
             request.POST.get("language", "auto"),
         )
     return JsonResponse(result, status=200 if result.get("success") else 400)
+
+
+@login_required(login_url="/login/")
+@require_POST
+def coding_issue_to_pr(request):
+    title = request.POST.get("title", "").strip()
+    description = request.POST.get("description", request.POST.get("goal", "")).strip()
+    test_command = request.POST.get("test_command", "").strip()
+    try:
+        files = json.loads(request.POST.get("files", "[]"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "files must be a JSON array."}, status=400)
+    if not title or not description:
+        return JsonResponse({"success": False, "error": "Issue title and description are required."}, status=400)
+    plan = issue_to_pr_plan(title, description, files, test_command)
+    task = AgentTask.objects.create(
+        owner=request.user,
+        title=plan["title"],
+        goal=plan["goal"],
+        plan=plan["workflow"],
+        status="planned",
+        logs=[{"message": "Issue-to-PR task created in offline mode.", "kind": "system"}],
+    )
+    return JsonResponse({"success": True, "task_id": task.id, "task": _agent_payload(task), "workflow": plan}, status=201)
 
 
 def _user_ollama_settings(user):
