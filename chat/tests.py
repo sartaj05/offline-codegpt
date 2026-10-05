@@ -139,6 +139,23 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["mutation_score"], 50.0)
         self.assertEqual(payload["weak_test_targets"], ["M003"])
 
+    def test_environment_fingerprint_detects_toolchains_and_excludes_secrets(self):
+        response = self.client.post("/api/coding/environment/", {
+            "files": json.dumps([
+                {"filename": "requirements.txt", "content": "Django==5.0\nSECRET_KEY=do-not-export"},
+                {"filename": "uv.lock", "content": ""},
+                {"filename": ".python-version", "content": "3.12"},
+                {"filename": "devcontainer.json", "content": "{}"},
+            ]),
+            "hardware": json.dumps({"ram_gb": 16}),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["manifests"][0]["ecosystem"], "python")
+        self.assertIn(".python-version", payload["toolchain_files"])
+        self.assertNotIn("SECRET_KEY", payload["environment_keys"])
+        self.assertFalse(payload["secrets_included"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

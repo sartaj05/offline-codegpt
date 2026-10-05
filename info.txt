@@ -380,3 +380,8 @@ After these migrations and feature updates, run:
   local code buffer and optional per-mutant results to measure killed,
   survived, and untested mutants. Surviving mutants become weak-test targets;
   execution remains approval-gated through the guarded local test runner.
+- Reproducible environment fingerprinting is available at
+  `/api/coding/environment/`. It detects Python/Node/Rust manifests, lockfiles,
+  toolchain files, and non-secret environment variable names, then returns a
+  portable local manifest with hardware hints. Secret values are never
+  included.

@@ -125,7 +125,7 @@ from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
 from .runtimes import RUNTIME_CHOICES, get_runtime_adapter
 from .symbols import extract_symbols
-from .coding_features import analyze_generated_sync, analyze_migration_safety, analyze_test_impact, browser_debug_plan, discover_local_ci, discover_repository_instructions, evolve_api_contract, incident_to_fix, issue_to_pr_plan, lsp_adapter_catalog, lsp_analyze, mutation_test_plan, orchestrate_monorepo, plan_dependency_upgrades, plan_git_bisect, preview_refactor, profile_code_performance, refactor_workspace, review_pull_request, security_sbom_report
+from .coding_features import analyze_generated_sync, analyze_migration_safety, analyze_test_impact, browser_debug_plan, discover_local_ci, discover_repository_instructions, evolve_api_contract, fingerprint_workspace_environment, incident_to_fix, issue_to_pr_plan, lsp_adapter_catalog, lsp_analyze, mutation_test_plan, orchestrate_monorepo, plan_dependency_upgrades, plan_git_bisect, preview_refactor, profile_code_performance, refactor_workspace, review_pull_request, security_sbom_report
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -694,6 +694,17 @@ def coding_mutation_testing(request):
     except (TypeError, ValueError, json.JSONDecodeError):
         return JsonResponse({"success": False, "error": "results must be a JSON object."}, status=400)
     return JsonResponse({"success": True, **mutation_test_plan(request.POST.get("code", ""), request.POST.get("language", "python"), results)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def coding_environment_fingerprint(request):
+    try:
+        files = json.loads(request.POST.get("files", "[]"))
+        hardware = json.loads(request.POST.get("hardware", "{}"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "files and hardware must be valid JSON."}, status=400)
+    return JsonResponse({"success": True, **fingerprint_workspace_environment(files, hardware)})
 
 
 @login_required(login_url="/login/")

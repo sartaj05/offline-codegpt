@@ -357,6 +357,36 @@ def mutation_test_plan(code, language="python", results=None):
     }
 
 
+def fingerprint_workspace_environment(files, hardware=None):
+    hardware = hardware if isinstance(hardware, dict) else {}
+    names = {str(item.get("filename") or "").replace("\\", "/") for item in (files or [])}
+    manifests = []
+    if "requirements.txt" in {name.lower() for name in names} or any(name.endswith("pyproject.toml") for name in names):
+        manifests.append({"ecosystem": "python", "manager": "pip/uv", "lockfiles": [name for name in names if name.endswith(("requirements.lock", "poetry.lock", "uv.lock"))]})
+    if any(name.endswith("package.json") for name in names):
+        manifests.append({"ecosystem": "javascript", "manager": "npm/pnpm/yarn", "lockfiles": [name for name in names if name.endswith(("package-lock.json", "pnpm-lock.yaml", "yarn.lock"))]})
+    if any(name.endswith("Cargo.toml") for name in names):
+        manifests.append({"ecosystem": "rust", "manager": "cargo", "lockfiles": [name for name in names if name.endswith("Cargo.lock")]})
+    toolchain_files = [name for name in names if name.endswith((".tool-versions", ".python-version", ".nvmrc", "rust-toolchain.toml", "Dockerfile", "devcontainer.json"))]
+    env_keys = sorted({match.group(1) for item in (files or []) for match in [re.search(r"^\s*([A-Z][A-Z0-9_]{2,})\s*=", str(item.get("content") or ""), re.MULTILINE)] if match and not re.search(r"(SECRET|KEY|TOKEN|PASSWORD|PASSWD|PRIVATE)", match.group(1), re.IGNORECASE)})
+    return {
+        "fingerprint": "offline-workspace-environment-v1",
+        "manifests": manifests,
+        "toolchain_files": toolchain_files,
+        "environment_keys": env_keys,
+        "hardware_requirements": hardware,
+        "reproducibility_checks": [
+            "Pin interpreter and compiler versions.",
+            "Commit or verify lockfiles for every package manager.",
+            "Keep local environment secrets outside the generated manifest.",
+            "Run the same local CI pipeline inside the selected environment.",
+        ],
+        "generated_manifest": {"manifests": manifests, "toolchain_files": toolchain_files, "environment_keys": env_keys, "hardware": hardware},
+        "secrets_included": False,
+        "offline_only": True,
+    }
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 
