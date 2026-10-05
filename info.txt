@@ -499,6 +499,10 @@ Next coding workspace features
   They hash prompts, files, tool inputs, and runtime settings, detect file
   drift, and require review before writes. Prompt contents and tool arguments
   are not stored in the replay manifest.
+- Change-risk analysis is available at `/api/coding/change-risk/`.
+  Submit changed files, local dependency relations, tests, and optional
+  security-path rules to receive a score, severity, affected-file blast radius,
+  and merge approval requirement. The analyzer only reads supplied metadata.
 - Multi-agent coding plans are available at `/api/coding/agent-orchestration/`.
   Submit specialist profiles and dependency-linked tasks to receive execution
   waves, cycle detection, and a review-before-merge policy. Agents are not

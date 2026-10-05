@@ -267,3 +267,53 @@ def prepare_task_replay(record, current=None):
         "workflow": ["Load exact local files", "Confirm model/runtime", "Replay read-only steps", "Approve writes", "Compare tests and diff"],
         "offline_only": True,
     }
+
+
+def assess_change_risk(files, changed_files=None, relations=None, tests=None, security_paths=None):
+    """Score local patch risk and explain the affected-file blast radius."""
+    files = files if isinstance(files, list) else []
+    changed = sorted({str(item).replace("\\", "/").lstrip("./") for item in (changed_files or [])})
+    relations = relations if isinstance(relations, dict) else {}
+    tests = [str(item).replace("\\", "/").lstrip("./") for item in (tests or [])]
+    security_paths = [str(item).lower().replace("\\", "/") for item in (security_paths or ["auth", "security", "secret", ".env", "permission"])]
+    file_names = {_filename(item) for item in files if isinstance(item, dict)}
+    affected = set(changed)
+    frontier = deque(changed)
+    while frontier and len(affected) < 500:
+        source = frontier.popleft()
+        for dependent in relations.get(source, []) if isinstance(relations.get(source), list) else []:
+            dependent = str(dependent).replace("\\", "/").lstrip("./")
+            if dependent not in affected:
+                affected.add(dependent)
+                frontier.append(dependent)
+    findings = []
+    score = min(25, len(changed) * 4) + min(25, max(0, len(affected) - len(changed)) * 3)
+    for filename in changed:
+        lower = filename.lower()
+        if any(token in lower for token in security_paths):
+            score += 20
+            findings.append({"severity": "high", "kind": "security-sensitive", "filename": filename})
+        if re.search(r"(^|/)(migrations?|schema)(/|[._-])", lower):
+            score += 15
+            findings.append({"severity": "high", "kind": "schema-change", "filename": filename})
+        if lower.endswith((".json", ".yaml", ".yml")) and ("api" in lower or "openapi" in lower):
+            score += 10
+            findings.append({"severity": "medium", "kind": "contract-change", "filename": filename})
+    if not tests:
+        score += 15
+        findings.append({"severity": "medium", "kind": "no-test-evidence", "message": "No affected test list was supplied."})
+    score = min(100, score)
+    level = "low" if score < 25 else "medium" if score < 50 else "high" if score < 75 else "critical"
+    return {
+        "score": score,
+        "level": level,
+        "changed_files": changed,
+        "affected_files": sorted(affected | (file_names & affected)),
+        "blast_radius": max(0, len(affected) - len(changed)),
+        "findings": findings,
+        "test_requirements": sorted(set(tests)) or ["Run the affected test suite before merge."],
+        "approval_required": level in {"high", "critical"} or any(
+            item.get("kind") in {"security-sensitive", "schema-change"} for item in findings
+        ),
+        "offline_only": True,
+    }

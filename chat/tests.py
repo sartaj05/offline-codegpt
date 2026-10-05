@@ -619,6 +619,19 @@ class ChatFeatureTests(TestCase):
         self.assertFalse(payload["replayable"])
         self.assertFalse(payload["redaction"]["prompt_contents_stored"])
 
+    def test_change_risk_reports_security_finding_and_blast_radius(self):
+        response = self.client.post("/api/coding/change-risk/", {
+            "files": json.dumps([{ "filename": "auth/service.py", "content": "" }, {"filename": "api/routes.py", "content": ""}]),
+            "changed_files": json.dumps(["auth/service.py"]),
+            "relations": json.dumps({"auth/service.py": ["api/routes.py"]}),
+            "tests": json.dumps(["tests/test_auth.py"]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["blast_radius"], 1)
+        self.assertIn("security-sensitive", {item["kind"] for item in payload["findings"]})
+        self.assertTrue(payload["approval_required"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

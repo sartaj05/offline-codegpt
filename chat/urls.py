@@ -170,6 +170,7 @@ urlpatterns = [
     path("api/coding/background-tasks/", views.coding_background_tasks, name="coding_background_tasks"),
     path("api/coding/agent-orchestration/", views.coding_agent_orchestration, name="coding_agent_orchestration"),
     path("api/coding/task-replay/", views.coding_task_replay, name="coding_task_replay"),
+    path("api/coding/change-risk/", views.coding_change_risk, name="coding_change_risk"),
     path("api/session/<int:session_id>/", views.session_messages, name="session_messages"),
     path("api/session/<int:session_id>/summary/", views.session_summary, name="session_summary"),
     path("api/session/<int:session_id>/revisions/", views.session_revisions, name="session_revisions"),
