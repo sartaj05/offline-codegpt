@@ -224,6 +224,40 @@ def incident_to_fix(logs="", traces="", metrics="", title="Incident repair"):
     }
 
 
+def analyze_migration_safety(old_schema=None, new_schema=None, migration_sql=""):
+    old_schema = old_schema if isinstance(old_schema, dict) else {}
+    new_schema = new_schema if isinstance(new_schema, dict) else {}
+    old_tables = old_schema.get("tables") or {}
+    new_tables = new_schema.get("tables") or {}
+    findings = []
+    for table in sorted(set(old_tables) - set(new_tables)):
+        findings.append({"severity": "critical", "kind": "drop-table", "table": table, "message": "Table removal can cause irreversible data loss."})
+    for table in sorted(set(old_tables) & set(new_tables)):
+        old_columns = old_tables[table].get("columns", {}) if isinstance(old_tables[table], dict) else {}
+        new_columns = new_tables[table].get("columns", {}) if isinstance(new_tables[table], dict) else {}
+        for column in sorted(set(old_columns) - set(new_columns)):
+            findings.append({"severity": "high", "kind": "drop-column", "table": table, "column": column, "message": "Column removal can cause data loss."})
+        for column in sorted(set(new_columns) - set(old_columns)):
+            definition = new_columns[column] if isinstance(new_columns[column], dict) else {}
+            if definition.get("required") and not definition.get("default"):
+                findings.append({"severity": "high", "kind": "required-column", "table": table, "column": column, "message": "Adding a required column without a default may fail on existing rows."})
+    sql_lines = [line.strip() for line in (migration_sql or "").splitlines() if line.strip()]
+    for line in sql_lines:
+        upper = line.upper()
+        if re.search(r"\bDROP\s+(TABLE|COLUMN)\b", upper):
+            findings.append({"severity": "critical", "kind": "destructive-sql", "message": line[:500]})
+        elif "ALTER COLUMN" in upper and "TYPE" in upper:
+            findings.append({"severity": "high", "kind": "type-change", "message": line[:500]})
+    return {
+        "safe": not any(item["severity"] in {"critical", "high"} for item in findings),
+        "findings": findings,
+        "dry_run": {"statements": sql_lines, "statement_count": len(sql_lines), "executed": False},
+        "rollback_guidance": ["Back up affected tables before applying changes.", "Use expand/contract for required fields and type changes.", "Keep a tested reverse migration for every destructive operation."],
+        "approval_required": True,
+        "offline_only": True,
+    }
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 

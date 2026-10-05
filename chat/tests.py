@@ -86,6 +86,18 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(payload["requires_regression_test"])
         self.assertEqual(payload["fix_workflow"]["isolation"], "agent-worktree")
 
+    def test_migration_safety_flags_dropped_table_and_required_column(self):
+        response = self.client.post("/api/coding/migration-safety/", {
+            "old_schema": json.dumps({"tables": {"users": {"columns": {"id": {}}}, "legacy": {"columns": {"id": {}}}}}),
+            "new_schema": json.dumps({"tables": {"users": {"columns": {"id": {}, "email": {"required": True}}}}}),
+            "migration_sql": "DROP TABLE legacy;",
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["safe"])
+        self.assertTrue(any(item["kind"] == "drop-table" for item in payload["findings"]))
+        self.assertFalse(payload["dry_run"]["executed"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

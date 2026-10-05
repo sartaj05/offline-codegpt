@@ -208,6 +208,11 @@ Next coding workspace features
   Submit local logs, traces, and metrics to extract stack-frame locations,
   identify likely causes, draft a postmortem, and create an approval-gated
   issue-to-PR workflow that requires a regression test.
+- Database migration safety analysis is available at
+  `/api/coding/migration-safety/`. Submit old/new local schema JSON and optional
+  SQL to detect dropped tables/columns, unsafe required fields, type changes,
+  and destructive statements. SQL is returned as an unexecuted dry run with
+  rollback guidance and explicit approval requirements.
 
 Privacy reminder
 ----------------
