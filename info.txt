@@ -154,6 +154,11 @@ Coding workspace feature set
   returned pipeline is approval-gated, network-blocked, locally cached, and
   designed to produce JSON, JUnit, coverage, and SARIF artifacts. Use the
   existing guarded test runner to execute selected commands.
+- Coding security and SBOM reporting is available at
+  `/api/coding/security-sbom/`. It combines the local source/dependency scan
+  with SPDX output, SARIF output, license inventory, and optional matches from
+  a user-imported advisory snapshot. No live vulnerability lookup is made;
+  advisory freshness depends on the imported local database.
 
 Privacy reminder
 ----------------

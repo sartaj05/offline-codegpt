@@ -125,7 +125,7 @@ from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
 from .runtimes import RUNTIME_CHOICES, get_runtime_adapter
 from .symbols import extract_symbols
-from .coding_features import discover_local_ci, issue_to_pr_plan, lsp_analyze, preview_refactor, refactor_workspace, review_pull_request
+from .coding_features import discover_local_ci, issue_to_pr_plan, lsp_analyze, preview_refactor, refactor_workspace, review_pull_request, security_sbom_report
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -682,6 +682,17 @@ def coding_local_ci(request):
     if not isinstance(files, list):
         return JsonResponse({"success": False, "error": "files must be a JSON array."}, status=400)
     return JsonResponse({"success": True, **discover_local_ci(files)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def coding_security_sbom(request):
+    try:
+        files = json.loads(request.POST.get("files", "[]"))
+        advisory_snapshot = json.loads(request.POST.get("advisory_snapshot", "{}"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "files and advisory_snapshot must be valid JSON."}, status=400)
+    return JsonResponse({"success": True, **security_sbom_report(files, advisory_snapshot)})
 
 
 def _user_ollama_settings(user):

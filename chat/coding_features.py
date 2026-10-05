@@ -223,3 +223,43 @@ def discover_local_ci(files):
         "artifact_formats": ["json", "junit", "coverage", "sarif"],
         "cache": "local-only",
     }
+
+
+def security_sbom_report(files, advisory_snapshot=None):
+    """Return local findings plus SARIF and optional imported advisory matches."""
+    from .security import scan_files
+
+    report = scan_files(files or [])
+    snapshot = advisory_snapshot if isinstance(advisory_snapshot, dict) else {}
+    advisory_matches = []
+    for dependency in report["dependencies"]:
+        key = f"{dependency['name']}@{dependency['version']}"
+        if key in snapshot:
+            advisory_matches.append({"dependency": dependency, "advisories": snapshot[key]})
+    rules = []
+    results = []
+    for finding in report["findings"]:
+        rule_id = finding.get("rule", "local-security")
+        if rule_id not in {item["id"] for item in rules}:
+            rules.append({"id": rule_id, "shortDescription": {"text": finding["message"][:120]}, "properties": {"severity": finding["severity"]}})
+        location = {"physicalLocation": {"artifactLocation": {"uri": finding.get("filename", "buffer")}}}
+        if finding.get("line"):
+            location["physicalLocation"]["region"] = {"startLine": finding["line"]}
+        results.append({"ruleId": rule_id, "level": "error" if finding["severity"] in {"critical", "high"} else "warning", "message": {"text": finding["message"]}, "locations": [location]})
+    sarif = {
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{"tool": {"driver": {"name": "Offline CodeGPT Security", "rules": rules}}, "results": results}],
+    }
+    return {
+        "summary": report["summary"],
+        "findings": report["findings"],
+        "dependencies": report["dependencies"],
+        "licenses": report["licenses"],
+        "sbom": report["sbom"],
+        "sarif": sarif,
+        "advisory_matches": advisory_matches,
+        "advisory_source": "imported-local-snapshot" if snapshot else "none",
+        "offline_only": True,
+        "limitations": report["limitations"],
+    }

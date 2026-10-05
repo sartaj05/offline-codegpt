@@ -88,6 +88,17 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(any(item["id"] == "python-tests" for item in payload["commands"]))
         self.assertTrue(payload["approval_required"])
 
+    def test_security_sbom_returns_sarif_and_imported_advisory_matches(self):
+        response = self.client.post("/api/coding/security-sbom/", {
+            "files": json.dumps([{"filename": "requirements.txt", "content": "demo==1.0"}]),
+            "advisory_snapshot": json.dumps({"demo@1.0": [{"id": "LOCAL-001", "severity": "high"}]}),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["sarif"]["version"], "2.1.0")
+        self.assertEqual(payload["advisory_matches"][0]["advisories"][0]["id"], "LOCAL-001")
+        self.assertTrue(payload["offline_only"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",
