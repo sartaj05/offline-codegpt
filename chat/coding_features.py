@@ -156,3 +156,37 @@ def issue_to_pr_plan(title, description, files=None, test_command=""):
         "isolation": "agent-worktree",
         "offline_only": True,
     }
+
+
+def review_pull_request(files, diff="", tests="", language="auto"):
+    """Run the existing local review gate and attach diff-aware comments."""
+    from .review import review_gate
+
+    gate = review_gate(files or [], language, diff, tests)
+    comments = []
+    current_file = ""
+    new_line = 0
+    for raw in (diff or "").splitlines():
+        if raw.startswith("+++ b/"):
+            current_file = raw[6:].strip()
+        elif raw.startswith("@@"):
+            match = re.search(r"\+(\d+)", raw)
+            new_line = int(match.group(1)) if match else 0
+        elif raw.startswith("+") and not raw.startswith("+++"):
+            for finding in gate["findings"]:
+                if finding.get("filename") == current_file and finding.get("line") == new_line:
+                    comments.append({"path": current_file, "line": new_line, "severity": finding["severity"], "body": finding["message"], "source": finding["source"]})
+            new_line += 1
+        elif not raw.startswith("-") and raw and not raw.startswith("\\"):
+            new_line += 1
+    return {
+        "ready": gate["ready"],
+        "score": gate["score"],
+        "summary": gate["summary"],
+        "checks": gate["checks"],
+        "findings": gate["findings"],
+        "comments": comments,
+        "diff_lines": gate["diff_lines"],
+        "review_fingerprint": __import__("hashlib").sha256((diff or "").encode("utf-8")).hexdigest()[:16],
+        "rerun_required_after_push": True,
+    }

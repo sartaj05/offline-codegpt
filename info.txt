@@ -144,6 +144,11 @@ Coding workspace feature set
   issue title, description, optional file list, and test command to create an
   approval-gated AgentTask workflow. The workflow uses the existing isolated
   agent-worktree controls and does not edit or merge code automatically.
+- Diff-aware PR review is available at `/api/coding/pr-review/`. Send a JSON
+  `files` array, unified `diff`, and test evidence to receive local quality and
+  security findings, line-aware comments, merge readiness, and a review
+  fingerprint. A new push should trigger re-review; this endpoint never
+  merges or publishes code.
 
 Privacy reminder
 ----------------

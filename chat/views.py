@@ -125,7 +125,7 @@ from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
 from .runtimes import RUNTIME_CHOICES, get_runtime_adapter
 from .symbols import extract_symbols
-from .coding_features import issue_to_pr_plan, lsp_analyze, preview_refactor, refactor_workspace
+from .coding_features import issue_to_pr_plan, lsp_analyze, preview_refactor, refactor_workspace, review_pull_request
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -654,6 +654,22 @@ def coding_issue_to_pr(request):
         logs=[{"message": "Issue-to-PR task created in offline mode.", "kind": "system"}],
     )
     return JsonResponse({"success": True, "task_id": task.id, "task": _agent_payload(task), "workflow": plan}, status=201)
+
+
+@login_required(login_url="/login/")
+@require_POST
+def coding_pr_review(request):
+    try:
+        files = json.loads(request.POST.get("files", "[]"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "files must be a JSON array."}, status=400)
+    result = review_pull_request(
+        files,
+        request.POST.get("diff", ""),
+        request.POST.get("tests", ""),
+        request.POST.get("language", "auto"),
+    )
+    return JsonResponse({"success": True, **result})
 
 
 def _user_ollama_settings(user):

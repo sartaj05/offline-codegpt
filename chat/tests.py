@@ -63,6 +63,18 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(len(payload["workflow"]["workflow"]), 6)
         self.assertTrue(all(step["approval_required"] for step in payload["workflow"]["workflow"][1:]))
 
+    def test_pr_review_returns_line_aware_gate_and_fingerprint(self):
+        response = self.client.post("/api/coding/pr-review/", {
+            "files": json.dumps([{"filename": "app.py", "content": "def run():\n    return eval(user_input)\n"}]),
+            "diff": "@@ -0,0 +1,2 @@\n+def run():\n+    return eval(user_input)\n",
+            "tests": "python -m pytest",
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["ready"])
+        self.assertEqual(len(payload["review_fingerprint"]), 16)
+        self.assertTrue(payload["rerun_required_after_push"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

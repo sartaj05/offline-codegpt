@@ -127,6 +127,7 @@ urlpatterns = [
     path("api/coding/lsp/", views.coding_lsp, name="coding_lsp"),
     path("api/coding/refactor/", views.coding_refactor, name="coding_refactor"),
     path("api/coding/issue-to-pr/", views.coding_issue_to_pr, name="coding_issue_to_pr"),
+    path("api/coding/pr-review/", views.coding_pr_review, name="coding_pr_review"),
     path("api/session/<int:session_id>/", views.session_messages, name="session_messages"),
     path("api/session/<int:session_id>/summary/", views.session_summary, name="session_summary"),
     path("api/session/<int:session_id>/revisions/", views.session_revisions, name="session_revisions"),
