@@ -176,3 +176,56 @@ def plan_background_tasks(tasks, resume_state=None, max_workers=1):
         "execution": "approval-gated-local-worker",
         "offline_only": True,
     }
+
+
+def plan_agent_orchestration(goal, agents, tasks):
+    """Build dependency-aware specialist-agent waves without starting agents."""
+    agents = agents if isinstance(agents, list) else []
+    tasks = tasks if isinstance(tasks, list) else []
+    allowed_agents = {str(item.get("name")): item for item in agents if isinstance(item, dict) and item.get("name")}
+    rows = {}
+    for index, item in enumerate(tasks[:100]):
+        if not isinstance(item, dict):
+            continue
+        task_id = str(item.get("id") or f"step-{index + 1}")[:100]
+        depends = [str(dep)[:100] for dep in (item.get("depends_on") or []) if str(dep)[:100] != task_id]
+        agent_name = str(item.get("agent") or "general")[:100]
+        rows[task_id] = {
+            "id": task_id,
+            "title": str(item.get("title") or task_id)[:200],
+            "agent": agent_name,
+            "depends_on": depends,
+            "known_agent": agent_name in allowed_agents,
+            "approval_required": True,
+        }
+    indegree = {task_id: sum(1 for dep in row["depends_on"] if dep in rows) for task_id, row in rows.items()}
+    outgoing = defaultdict(list)
+    for task_id, row in rows.items():
+        for dep in row["depends_on"]:
+            if dep in rows:
+                outgoing[dep].append(task_id)
+    waves = []
+    ready = sorted(task_id for task_id, degree in indegree.items() if degree == 0)
+    processed = set()
+    while ready:
+        wave = list(ready)
+        waves.append([rows[task_id] for task_id in wave])
+        ready = []
+        for task_id in wave:
+            processed.add(task_id)
+            for child in outgoing[task_id]:
+                indegree[child] -= 1
+                if indegree[child] == 0:
+                    ready.append(child)
+        ready.sort()
+    cycle = sorted(set(rows) - processed)
+    return {
+        "goal": str(goal or "")[:1000],
+        "agents": [{"name": str(item.get("name")), "role": str(item.get("role") or "general"), "tools": item.get("tools") or []} for item in agents if isinstance(item, dict) and item.get("name")],
+        "waves": waves,
+        "cycle": cycle,
+        "valid": not cycle and bool(rows),
+        "merge_policy": "review-each-agent-output-before-integration",
+        "approval_required": True,
+        "offline_only": True,
+    }

@@ -586,6 +586,24 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["tasks"][0]["status"], "paused")
         self.assertTrue(payload["recovery"]["resume_after_restart"])
 
+    def test_agent_orchestration_creates_dependency_waves(self):
+        response = self.client.post("/api/coding/agent-orchestration/", {
+            "goal": "Implement and verify a feature",
+            "agents": json.dumps([
+                {"name": "coder", "role": "implementation", "tools": ["project.write"]},
+                {"name": "tester", "role": "testing", "tools": ["project.test"]},
+            ]),
+            "tasks": json.dumps([
+                {"id": "code", "title": "Implement", "agent": "coder"},
+                {"id": "test", "title": "Test", "agent": "tester", "depends_on": ["code"]},
+            ]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["valid"])
+        self.assertEqual(payload["waves"][0][0]["id"], "code")
+        self.assertEqual(payload["waves"][1][0]["id"], "test")
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",
