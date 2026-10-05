@@ -126,6 +126,11 @@ Troubleshooting
    node --check static\chat\app.js
    git diff --check
 
+- Consumer-driven contract checks are available at
+  `/api/coding/consumer-contracts/`. Submit provider endpoints and local
+  consumer expectations to detect missing or unused routes and generate a
+  release-blocking contract-test plan without calling a remote provider.
+
 Coding workspace feature set
 ----------------------------
 - Local LSP support is available at `/api/coding/lsp/`. POST a filename,

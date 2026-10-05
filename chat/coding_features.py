@@ -579,6 +579,31 @@ def generate_fuzz_cases(code, language="python", seed_inputs=None):
     }
 
 
+def analyze_consumer_contracts(provider_endpoints, consumer_contracts):
+    def normalize(item):
+        if isinstance(item, str):
+            parts = item.split(None, 1)
+            return (parts[0].lower(), parts[1].rstrip("/") or "/") if len(parts) == 2 else ("get", item.rstrip("/") or "/")
+        return (str(item.get("method", "get")).lower(), str(item.get("path", "/")).rstrip("/") or "/")
+
+    provider = {normalize(item) for item in (provider_endpoints or [])}
+    consumers = []
+    for contract in (consumer_contracts or [])[:500]:
+        item = normalize(contract)
+        consumers.append({"consumer": contract.get("consumer", "unknown") if isinstance(contract, dict) else "unknown", "method": item[0].upper(), "path": item[1], "present": item in provider})
+    missing = [item for item in consumers if not item["present"]]
+    unused = [{"method": method.upper(), "path": path} for method, path in sorted(provider - {(item["method"].lower(), item["path"]) for item in consumers})]
+    return {
+        "provider_endpoints": [{"method": method.upper(), "path": path} for method, path in sorted(provider)],
+        "consumer_contracts": consumers,
+        "missing_provider_endpoints": missing,
+        "unused_provider_endpoints": unused,
+        "compatible": not missing,
+        "test_plan": ["Run each consumer contract against the local provider.", "Validate status, schema, and error responses.", "Block release when a required contract is missing."],
+        "offline_only": True,
+    }
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 

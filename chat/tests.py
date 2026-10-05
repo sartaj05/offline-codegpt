@@ -230,6 +230,20 @@ class ChatFeatureTests(TestCase):
         self.assertIn("empty-input", [item["name"] for item in payload["cases"]])
         self.assertIn("reduce strings by half", payload["shrinking"])
 
+    def test_consumer_contracts_detect_missing_provider_endpoint(self):
+        response = self.client.post("/api/coding/consumer-contracts/", {
+            "provider_endpoints": json.dumps([{ "method": "GET", "path": "/users" }]),
+            "consumer_contracts": json.dumps([
+                {"consumer": "web", "method": "GET", "path": "/users"},
+                {"consumer": "billing", "method": "POST", "path": "/invoices"},
+            ]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["compatible"])
+        self.assertEqual(payload["missing_provider_endpoints"][0]["path"], "/invoices")
+        self.assertEqual(payload["consumer_contracts"][0]["consumer"], "web")
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

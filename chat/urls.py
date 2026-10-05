@@ -141,6 +141,7 @@ urlpatterns = [
     path("api/coding/taint-analysis/", views.coding_taint_analysis, name="coding_taint_analysis"),
     path("api/coding/flaky-tests/", views.coding_flaky_tests, name="coding_flaky_tests"),
     path("api/coding/fuzz-testing/", views.coding_fuzz_testing, name="coding_fuzz_testing"),
+    path("api/coding/consumer-contracts/", views.coding_consumer_contracts, name="coding_consumer_contracts"),
     path("api/coding/refactor/", views.coding_refactor, name="coding_refactor"),
     path("api/coding/issue-to-pr/", views.coding_issue_to_pr, name="coding_issue_to_pr"),
     path("api/coding/pr-review/", views.coding_pr_review, name="coding_pr_review"),
