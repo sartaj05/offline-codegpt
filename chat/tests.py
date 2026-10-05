@@ -534,6 +534,21 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(all(task["package"] == "ui" for task in payload["tasks"]))
         self.assertTrue(payload["approval_required"])
 
+    def test_custom_agents_discovers_skills_and_selects_local_profile(self):
+        response = self.client.post("/api/coding/custom-agents/", {
+            "task": "Review the security of the backend",
+            "files": json.dumps([
+                {"filename": "AGENTS.md", "content": "Use local tests."},
+                {"filename": ".agents/skills/security/SKILL.md", "content": "Check inputs."},
+            ]),
+            "agents": json.dumps([{"name": "security", "tools": ["project.read"], "skills": ["security"]}]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["selected_profile"]["name"], "security")
+        self.assertEqual(payload["skills"][0]["name"], "security")
+        self.assertTrue(payload["offline_only"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

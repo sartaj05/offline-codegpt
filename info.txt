@@ -470,3 +470,11 @@ After these migrations and feature updates, run:
   toolchain files, and non-secret environment variable names, then returns a
   portable local manifest with hardware hints. Secret values are never
   included.
+
+Next coding workspace features
+------------------------------
+- Custom coding agents and skills are catalogued at `/api/coding/custom-agents/`.
+  Submit local instruction files, skill files, agent profiles, and a task to
+  select a specialist profile. Writes, shell commands, Git writes, and package
+  installs remain approval-gated. No external marketplace or network is used.
+  Test with `python manage.py test chat --keepdb`.

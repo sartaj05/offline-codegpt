@@ -164,6 +164,7 @@ urlpatterns = [
     path("api/coding/api-evolution/", views.coding_api_evolution, name="coding_api_evolution"),
     path("api/coding/performance/", views.coding_performance, name="coding_performance"),
     path("api/coding/monorepo/", views.coding_monorepo, name="coding_monorepo"),
+    path("api/coding/custom-agents/", views.coding_custom_agents, name="coding_custom_agents"),
     path("api/session/<int:session_id>/", views.session_messages, name="session_messages"),
     path("api/session/<int:session_id>/summary/", views.session_summary, name="session_summary"),
     path("api/session/<int:session_id>/revisions/", views.session_revisions, name="session_revisions"),
