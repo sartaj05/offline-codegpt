@@ -232,3 +232,48 @@ The privacy proof and local runtime adapters are designed for localhost
 endpoints. Pull/delete remains Ollama-specific; LM Studio and llama.cpp model
 installation is managed by their local runtime. Desktop onboarding currently
 provides diagnostics and a PowerShell launcher rather than a compiled MSI.
+
+Latest 10-feature extension set
+--------------------------------
+- Layout-aware document intelligence stores page, heading, paragraph, and
+  table sections. Inspect a document with `/api/project/<id>/layout/`.
+- Model capabilities are stored per runtime/model through
+  `/api/models/capabilities/`. Probe a model with POST `model=...`; the result
+  includes inferred vision, embedding, tool, JSON-schema, reasoning, context,
+  quantization, and hardware hints.
+- Durable MCP tasks support asynchronous task handles from `tools/call` and
+  the JSON-RPC methods `tasks/get`, `tasks/update`, and `tasks/cancel`. Direct
+  management is available at `/api/mcp/tasks/`.
+- The zero-trust MCP gateway adds per-tool policy, risk scores, path allowlists,
+  localhost-only network rules, rate limits, and signed policy hashes. Review a
+  call with `/api/mcp/security/check/` before executing it.
+- Code intelligence now stores symbol relations and exposes a graph from
+  `/api/project/graph/?name=SYMBOL`, including references, imports, tests, and
+  affected files.
+- The VS Code extension adds Explain Selection, Generate Tests, and Ask
+  Project commands. JetBrains plugins can use the same localhost-only
+  `/api/cli/ask/` streaming contract documented in `vscode-extension/README.md`.
+- Structured data analysis supports CSV, JSON, basic XLSX, and SQLite files at
+  `/api/data/analyze/`. It returns schema, null counts, type hints, samples,
+  filtered rows, and chart suggestions without uploading data externally.
+- Evaluation replay runs a saved regression suite against a selected local
+  model and records score, latency, success rate, output size, and regression
+  status at `/api/evaluations/replays/`.
+- Encrypted LAN sync supports peer pairing, token rotation, content-hash
+  manifests, and encrypted backup bundles. Use `/api/sync/peers/`,
+  `/api/sync/manifest/`, and `/api/sync/bundle/`.
+- Screen understanding is available at `/api/screen/understand/` and the
+  workspace now includes screenshot analysis. Local text-to-speech uses the
+  optional `pyttsx3` package through `/api/speech/synthesize/`; install it with
+  `pip install -r requirements.txt` on machines that need TTS.
+
+Additional verification
+-----------------------
+After these migrations and feature updates, run:
+
+   python manage.py migrate
+   python manage.py check
+   node --check static\chat\app.js
+   node --check vscode-extension\extension.js
+   python manage.py test chat
+   git diff --check
