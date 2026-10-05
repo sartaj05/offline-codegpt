@@ -263,3 +263,24 @@ def security_sbom_report(files, advisory_snapshot=None):
         "offline_only": True,
         "limitations": report["limitations"],
     }
+
+
+def browser_debug_plan(base_url, flow, report="", snapshot_name="workspace"):
+    from .browser_testing import analyze_browser_report, generate_playwright_test
+
+    analysis = analyze_browser_report(report)
+    return {
+        "runner": "local-playwright",
+        "base_url": (base_url or "http://127.0.0.1:8000").strip().rstrip("/"),
+        "test_code": generate_playwright_test(base_url, flow, snapshot_name),
+        "report": analysis,
+        "repair_loop": [
+            "Run the generated test in the local browser.",
+            "Capture console, network, screenshot, and trace evidence.",
+            "Review the suggested patch before applying it.",
+            "Re-run the test and update the visual baseline only after approval.",
+        ],
+        "artifacts": ["trace.zip", "screenshot.png", "console.log", "network.json"],
+        "network_policy": "local-target-only",
+        "approval_required_for_patch": True,
+    }

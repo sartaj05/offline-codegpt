@@ -159,6 +159,10 @@ Coding workspace feature set
   with SPDX output, SARIF output, license inventory, and optional matches from
   a user-imported advisory snapshot. No live vulnerability lookup is made;
   advisory freshness depends on the imported local database.
+- Browser debugging is available at `/api/coding/browser-debug/`. It creates a
+  local Playwright test, analyzes a supplied report, and returns a safe repair
+  loop for console/network/screenshot/trace evidence. Browser targets remain
+  local-only and generated patches require explicit approval.
 
 Privacy reminder
 ----------------

@@ -99,6 +99,18 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["advisory_matches"][0]["advisories"][0]["id"], "LOCAL-001")
         self.assertTrue(payload["offline_only"])
 
+    def test_browser_debug_returns_local_repair_loop_and_playwright_test(self):
+        response = self.client.post("/api/coding/browser-debug/", {
+            "base_url": "http://127.0.0.1:8000",
+            "flow": "Open dashboard and verify title",
+            "report": "1 failed screenshot comparison",
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["runner"], "local-playwright")
+        self.assertIn("@playwright/test", payload["test_code"])
+        self.assertTrue(payload["approval_required_for_patch"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",
