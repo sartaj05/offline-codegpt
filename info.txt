@@ -126,6 +126,16 @@ Troubleshooting
    node --check static\chat\app.js
    git diff --check
 
+Coding workspace feature set
+----------------------------
+- Local LSP support is available at `/api/coding/lsp/`. POST a filename,
+  content, and optional operation (`diagnostics`, `definition`, `references`,
+  `completion`, or `all`). It returns an LSP-shaped response with diagnostics,
+  symbols, definitions, references, and completion candidates without sending
+  source code outside the device. The current built-in backend uses Python AST
+  parsing and safe regex parsing for common languages; external language-server
+  processes can be added later behind the same contract.
+
 Privacy reminder
 ----------------
 Keep .env and local model/data directories out of Git. Do not store API keys or

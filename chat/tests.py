@@ -23,6 +23,19 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "FREE PREVIEW")
 
+    def test_local_lsp_returns_symbols_diagnostics_and_references(self):
+        response = self.client.post("/api/coding/lsp/", {
+            "filename": "app.py",
+            "content": "def add(left, right):\n    return left + right\n\nadd(1, 2)\n",
+            "operation": "all",
+            "symbol": "add",
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["backend"], "local-ast-regex")
+        self.assertEqual(payload["definitions"][0]["name"], "add")
+        self.assertGreaterEqual(len(payload["references"]), 2)
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

@@ -125,6 +125,7 @@ from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
 from .runtimes import RUNTIME_CHOICES, get_runtime_adapter
 from .symbols import extract_symbols
+from .coding_features import lsp_analyze
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -589,6 +590,19 @@ def cli_ask(request):
     if request.META.get("REMOTE_ADDR") not in {"127.0.0.1", "::1", "localhost"}:
         return JsonResponse({"success": False, "error": "CLI access is limited to the local machine."}, status=403)
     return ask_code(request)
+
+
+@login_required(login_url="/login/")
+@require_POST
+def coding_lsp(request):
+    filename = request.POST.get("filename", "buffer.py").strip()[:300]
+    content = request.POST.get("content", "")
+    operation = request.POST.get("operation", "all").strip().lower()
+    language = request.POST.get("language", "auto").strip().lower()
+    symbol = request.POST.get("symbol", "").strip()[:240]
+    if len(content.encode("utf-8")) > MAX_FILE_BYTES:
+        return JsonResponse({"success": False, "error": "LSP buffers are limited to 1 MB."}, status=400)
+    return JsonResponse({"success": True, **lsp_analyze(filename, content, language, operation, symbol)})
 
 
 def _user_ollama_settings(user):
