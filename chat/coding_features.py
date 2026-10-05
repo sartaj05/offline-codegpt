@@ -190,3 +190,36 @@ def review_pull_request(files, diff="", tests="", language="auto"):
         "review_fingerprint": __import__("hashlib").sha256((diff or "").encode("utf-8")).hexdigest()[:16],
         "rerun_required_after_push": True,
     }
+
+
+def discover_local_ci(files):
+    """Build a deterministic offline CI plan from repository manifests."""
+    names = {str(item.get("filename") or "").replace("\\", "/").lower() for item in (files or [])}
+    commands = []
+    if "requirements.txt" in names or "pyproject.toml" in names or "manage.py" in names:
+        commands.extend([
+            {"id": "python-compile", "stage": "lint", "command": "python -m compileall -q ."},
+            {"id": "python-tests", "stage": "test", "command": "python manage.py test" if "manage.py" in names else "python -m pytest"},
+        ])
+    if "package.json" in names:
+        commands.extend([
+            {"id": "npm-lint", "stage": "lint", "command": "npm run lint --if-present"},
+            {"id": "npm-tests", "stage": "test", "command": "npm test -- --runInBand"},
+            {"id": "npm-build", "stage": "build", "command": "npm run build --if-present"},
+        ])
+    if "cargo.toml" in names:
+        commands.extend([
+            {"id": "cargo-check", "stage": "lint", "command": "cargo check"},
+            {"id": "cargo-test", "stage": "test", "command": "cargo test"},
+        ])
+    if not commands:
+        commands = [{"id": "manual-test", "stage": "test", "command": "Select a local test command before running."}]
+    return {
+        "runner": "offline-local-ci",
+        "commands": commands,
+        "stages": sorted({item["stage"] for item in commands}),
+        "approval_required": True,
+        "network_policy": "blocked",
+        "artifact_formats": ["json", "junit", "coverage", "sarif"],
+        "cache": "local-only",
+    }

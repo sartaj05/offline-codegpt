@@ -149,6 +149,11 @@ Coding workspace feature set
   security findings, line-aware comments, merge readiness, and a review
   fingerprint. A new push should trigger re-review; this endpoint never
   merges or publishes code.
+- Local CI planning is available at `/api/coding/local-ci/`. Send the project
+  file manifest to detect Python, Node, or Rust lint/test/build commands. The
+  returned pipeline is approval-gated, network-blocked, locally cached, and
+  designed to produce JSON, JUnit, coverage, and SARIF artifacts. Use the
+  existing guarded test runner to execute selected commands.
 
 Privacy reminder
 ----------------

@@ -75,6 +75,19 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(len(payload["review_fingerprint"]), 16)
         self.assertTrue(payload["rerun_required_after_push"])
 
+    def test_local_ci_detects_project_commands_and_requires_approval(self):
+        response = self.client.post("/api/coding/local-ci/", {
+            "files": json.dumps([
+                {"filename": "manage.py", "content": ""},
+                {"filename": "requirements.txt", "content": "Django==5.0"},
+            ]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["runner"], "offline-local-ci")
+        self.assertTrue(any(item["id"] == "python-tests" for item in payload["commands"]))
+        self.assertTrue(payload["approval_required"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

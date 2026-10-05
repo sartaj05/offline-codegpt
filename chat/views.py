@@ -125,7 +125,7 @@ from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
 from .runtimes import RUNTIME_CHOICES, get_runtime_adapter
 from .symbols import extract_symbols
-from .coding_features import issue_to_pr_plan, lsp_analyze, preview_refactor, refactor_workspace, review_pull_request
+from .coding_features import discover_local_ci, issue_to_pr_plan, lsp_analyze, preview_refactor, refactor_workspace, review_pull_request
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -670,6 +670,18 @@ def coding_pr_review(request):
         request.POST.get("language", "auto"),
     )
     return JsonResponse({"success": True, **result})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def coding_local_ci(request):
+    try:
+        files = json.loads(request.POST.get("files", "[]"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "files must be a JSON array."}, status=400)
+    if not isinstance(files, list):
+        return JsonResponse({"success": False, "error": "files must be a JSON array."}, status=400)
+    return JsonResponse({"success": True, **discover_local_ci(files)})
 
 
 def _user_ollama_settings(user):
