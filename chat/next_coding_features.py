@@ -69,3 +69,36 @@ def plan_custom_agents(files, agents=None, task=""):
         "offline_only": True,
         "task_fingerprint": _json_hash({"task": task, "files": [_filename(item) for item in files]}),
     }
+
+
+def plan_ide_integration(files, editor="vscode", runtime="local"):
+    """Return a local IDE integration manifest without installing extensions."""
+    files = files if isinstance(files, list) else []
+    extensions = sorted({os.path.splitext(_filename(item))[1].lower() for item in files if os.path.splitext(_filename(item))[1]})
+    languages = sorted({
+        {".py": "python", ".js": "javascript", ".ts": "typescript", ".tsx": "typescript",
+         ".go": "go", ".rs": "rust", ".java": "java", ".php": "php"}.get(ext, "text")
+        for ext in extensions
+    })
+    editor = str(editor or "vscode").lower()
+    return {
+        "editor": editor if editor in {"vscode", "jetbrains"} else "vscode",
+        "runtime": runtime if runtime in {"local", "ollama", "lmstudio", "llamacpp"} else "local",
+        "languages": languages,
+        "workspace_extensions": extensions,
+        "commands": [
+            "offlineCodeGPT.askSelection", "offlineCodeGPT.explainSymbol",
+            "offlineCodeGPT.generateTests", "offlineCodeGPT.reviewPatch",
+            "offlineCodeGPT.runApprovedTask",
+        ],
+        "capabilities": ["inline-chat", "diagnostics", "symbol-context", "reviewed-patches", "test-runner", "local-model-picker"],
+        "api_contract": {
+            "ask": "/api/cli/ask/",
+            "coding": "/api/coding/",
+            "streaming": True,
+            "authorization": "same-device-session",
+        },
+        "permission_prompts": ["write files", "run tests", "run shell", "apply Git changes"],
+        "network_policy": "localhost-only",
+        "offline_only": True,
+    }

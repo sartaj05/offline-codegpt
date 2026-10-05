@@ -549,6 +549,17 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["skills"][0]["name"], "security")
         self.assertTrue(payload["offline_only"])
 
+    def test_ide_integration_returns_local_commands_and_language_capabilities(self):
+        response = self.client.post("/api/coding/ide-integration/", {
+            "editor": "vscode",
+            "files": json.dumps([{ "filename": "app.py", "content": "" }, { "filename": "ui.tsx", "content": "" }]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["languages"], ["python", "typescript"])
+        self.assertIn("offlineCodeGPT.reviewPatch", payload["commands"])
+        self.assertEqual(payload["network_policy"], "localhost-only")
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

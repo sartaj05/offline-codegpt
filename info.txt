@@ -478,3 +478,7 @@ Next coding workspace features
   select a specialist profile. Writes, shell commands, Git writes, and package
   installs remain approval-gated. No external marketplace or network is used.
   Test with `python manage.py test chat --keepdb`.
+- IDE integration planning is available at `/api/coding/ide-integration/`.
+  It returns VS Code or JetBrains commands, detected languages, localhost API
+  contracts, streaming support, and confirmation prompts. No extension is
+  downloaded automatically; network access remains localhost-only.
