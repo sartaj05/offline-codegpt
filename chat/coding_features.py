@@ -182,6 +182,27 @@ def analyze_test_impact(files, changed_files=None):
     }
 
 
+def plan_git_bisect(failing_test, known_good="", known_bad="HEAD", commits=None):
+    commits = [str(item).strip()[:80] for item in (commits or []) if str(item).strip()][:200]
+    safe_test = " ".join(shlex.split(failing_test or "python -m pytest"))
+    return {
+        "assistant": "offline-git-bisect",
+        "known_good": known_good or "<last-known-good>",
+        "known_bad": known_bad or "HEAD",
+        "failing_test": safe_test,
+        "candidate_commits": commits,
+        "commands": [
+            f"git bisect start {known_bad or 'HEAD'} {known_good or '<last-known-good>'}",
+            f"git bisect run {safe_test}",
+            "git bisect reset",
+        ],
+        "workflow": ["Confirm a clean worktree.", "Run the failing test at each candidate.", "Inspect the first bad commit.", "Prepare a reviewed repair patch."],
+        "destructive": False,
+        "approval_required": True,
+        "offline_only": True,
+    }
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 

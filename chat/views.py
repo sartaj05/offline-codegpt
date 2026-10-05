@@ -125,7 +125,7 @@ from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
 from .runtimes import RUNTIME_CHOICES, get_runtime_adapter
 from .symbols import extract_symbols
-from .coding_features import analyze_test_impact, browser_debug_plan, discover_local_ci, discover_repository_instructions, evolve_api_contract, issue_to_pr_plan, lsp_adapter_catalog, lsp_analyze, orchestrate_monorepo, preview_refactor, profile_code_performance, refactor_workspace, review_pull_request, security_sbom_report
+from .coding_features import analyze_test_impact, browser_debug_plan, discover_local_ci, discover_repository_instructions, evolve_api_contract, issue_to_pr_plan, lsp_adapter_catalog, lsp_analyze, orchestrate_monorepo, plan_git_bisect, preview_refactor, profile_code_performance, refactor_workspace, review_pull_request, security_sbom_report
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -630,6 +630,16 @@ def coding_test_impact(request):
     except (TypeError, ValueError, json.JSONDecodeError):
         return JsonResponse({"success": False, "error": "files and changed_files must be valid JSON."}, status=400)
     return JsonResponse({"success": True, **analyze_test_impact(files, changed_files)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def coding_git_bisect(request):
+    try:
+        commits = json.loads(request.POST.get("commits", "[]"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "commits must be a JSON array."}, status=400)
+    return JsonResponse({"success": True, **plan_git_bisect(request.POST.get("failing_test", ""), request.POST.get("known_good", ""), request.POST.get("known_bad", "HEAD"), commits)})
 
 
 @login_required(login_url="/login/")

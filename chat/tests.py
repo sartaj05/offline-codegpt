@@ -60,6 +60,19 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["impacted_tests"][0]["filename"], "tests/test_math.py")
         self.assertEqual(payload["skipped_tests"][0]["filename"], "tests/test_other.py")
 
+    def test_git_bisect_assistant_generates_safe_reproduction_plan(self):
+        response = self.client.post("/api/coding/git-bisect/", {
+            "failing_test": "python -m pytest tests/test_api.py -q",
+            "known_good": "abc123",
+            "known_bad": "def456",
+            "commits": json.dumps(["abc123", "mid456", "def456"]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("git bisect run python -m pytest tests/test_api.py -q", payload["commands"])
+        self.assertFalse(payload["destructive"])
+        self.assertTrue(payload["approval_required"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

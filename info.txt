@@ -200,6 +200,10 @@ Next coding workspace features
   local file manifest and changed-file list to map changed symbols to tests,
   report impacted tests, and explain skipped tests. It is approval-gated and
   should be used to select commands in the existing guarded test runner.
+- Git bisect planning is available at `/api/coding/git-bisect/`. Provide a
+  failing test and known-good/known-bad revisions to receive reproducible local
+  bisect commands and a review workflow. The endpoint never runs bisect or
+  changes Git state automatically; clean-worktree confirmation is required.
 
 Privacy reminder
 ----------------

@@ -128,6 +128,7 @@ urlpatterns = [
     path("api/coding/lsp/adapters/", views.coding_lsp_adapters, name="coding_lsp_adapters"),
     path("api/coding/repository-instructions/", views.coding_repository_instructions, name="coding_repository_instructions"),
     path("api/coding/test-impact/", views.coding_test_impact, name="coding_test_impact"),
+    path("api/coding/git-bisect/", views.coding_git_bisect, name="coding_git_bisect"),
     path("api/coding/refactor/", views.coding_refactor, name="coding_refactor"),
     path("api/coding/issue-to-pr/", views.coding_issue_to_pr, name="coding_issue_to_pr"),
     path("api/coding/pr-review/", views.coding_pr_review, name="coding_pr_review"),
