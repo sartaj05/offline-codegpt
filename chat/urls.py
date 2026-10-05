@@ -32,6 +32,7 @@ urlpatterns = [
     path("api/project/save/", views.project_document_create, name="project_document_create"),
     path("api/project/<int:document_id>/", views.project_document_delete, name="project_document_delete"),
     path("api/project/<int:document_id>/content/", views.project_document_content, name="project_document_content"),
+    path("api/project/<int:document_id>/layout/", views.project_document_layout, name="project_document_layout"),
     path("api/project/<int:document_id>/reindex/", views.project_document_reindex, name="project_document_reindex"),
     path("api/execute/", views.execute_code, name="execute_code"),
     path("api/sandbox/policy/", views.sandbox_policy_api, name="sandbox_policy_api"),

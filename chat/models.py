@@ -515,6 +515,28 @@ class KnowledgeDocument(models.Model):
         return self.filename or self.title
 
 
+class DocumentSection(models.Model):
+    SECTION_TYPES = (
+        ("page", "Page"),
+        ("heading", "Heading"),
+        ("table", "Table"),
+        ("paragraph", "Paragraph"),
+    )
+
+    document = models.ForeignKey(KnowledgeDocument, on_delete=models.CASCADE, related_name="sections")
+    section_type = models.CharField(max_length=20, choices=SECTION_TYPES, default="paragraph")
+    title = models.CharField(max_length=300, blank=True, default="")
+    content = models.TextField()
+    page_number = models.PositiveIntegerField(null=True, blank=True)
+    order = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["order", "id"]
+        indexes = [models.Index(fields=["document", "page_number"]), models.Index(fields=["section_type"])]
+
+
 class KnowledgeCollection(models.Model):
     RETRIEVAL_CHOICES = (("hybrid", "Hybrid RAG"), ("full", "Full document"))
 

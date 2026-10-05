@@ -60,6 +60,7 @@ from .models import (
     ConversationRevision,
     KnowledgeChunk,
     KnowledgeDocument,
+    DocumentSection,
     KnowledgeCollection,
     KnowledgeCollectionDocument,
     CodeSymbol,
@@ -688,6 +689,47 @@ def _extract_document_text(filename, raw_content):
     return text
 
 
+def _extract_document_sections(filename, file_text):
+    """Create lightweight local layout metadata without sending documents anywhere."""
+    extension = PurePosixPath(filename).suffix.lower()
+    sections = []
+    order = 0
+    if extension == ".pdf":
+        page_blocks = re.split(r"\n\s*\[Page (\d+)\]\s*\n", file_text)
+        if len(page_blocks) > 1:
+            for index in range(1, len(page_blocks), 2):
+                page_number = int(page_blocks[index])
+                content = page_blocks[index + 1].strip()
+                if content:
+                    sections.append({"section_type": "page", "title": f"Page {page_number}", "content": content, "page_number": page_number, "order": order, "metadata": {"source": "pdf"}})
+                    order += 1
+            return sections
+    current_page = None
+    for raw_line in file_text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        page_match = re.match(r"^\[Page (\d+)\]$", line, re.IGNORECASE)
+        if page_match:
+            current_page = int(page_match.group(1))
+            continue
+        if re.match(r"^#{1,6}\s+", line):
+            title = re.sub(r"^#{1,6}\s+", "", line).strip()[:300]
+            section_type = "heading"
+        elif "|" in line and line.count("|") >= 2:
+            title = "Table row"
+            section_type = "table"
+        elif "\t" in line:
+            title = "Tabular row"
+            section_type = "table"
+        else:
+            title = ""
+            section_type = "paragraph"
+        sections.append({"section_type": section_type, "title": title, "content": line, "page_number": current_page, "order": order, "metadata": {"source": "text"}})
+        order += 1
+    return sections
+
+
 def _save_knowledge_document(filename, file_text, source_type, owner):
     content_hash = hashlib.sha256(file_text.encode("utf-8")).hexdigest()
     document = KnowledgeDocument.objects.filter(owner=owner, filename=filename).first()
@@ -702,6 +744,11 @@ def _save_knowledge_document(filename, file_text, source_type, owner):
     document.content_hash = content_hash
     document.is_active = True
     document.save()
+    document.sections.all().delete()
+    DocumentSection.objects.bulk_create([
+        DocumentSection(document=document, **section)
+        for section in _extract_document_sections(filename, file_text)
+    ])
     _index_knowledge_document(document, owner)
     return document
 
@@ -1811,6 +1858,29 @@ def project_document_content(request, document_id):
         "document_id": document.id,
         "chunks": document.chunks.count(),
         "saved_at": document.uploaded_at.strftime("%d-%m-%Y %H:%M"),
+    })
+
+
+@login_required(login_url="/login/")
+@require_GET
+def project_document_layout(request, document_id):
+    document = get_object_or_404(KnowledgeDocument, id=document_id, owner=request.user)
+    return JsonResponse({
+        "success": True,
+        "document_id": document.id,
+        "filename": document.filename or document.title,
+        "sections": [
+            {
+                "id": section.id,
+                "type": section.section_type,
+                "title": section.title,
+                "content": section.content,
+                "page": section.page_number,
+                "order": section.order,
+                "metadata": section.metadata or {},
+            }
+            for section in document.sections.all()
+        ],
     })
 
 
