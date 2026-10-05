@@ -387,6 +387,39 @@ def fingerprint_workspace_environment(files, hardware=None):
     }
 
 
+def dap_session_plan(language="python", program="", cwd="", breakpoints=None, exception_breakpoints=True):
+    adapters = {
+        "python": {"id": "debugpy", "command": "python -m debugpy.adapter"},
+        "javascript": {"id": "js-debug", "command": "js-debug-adapter"},
+        "typescript": {"id": "js-debug", "command": "js-debug-adapter"},
+        "go": {"id": "delve", "command": "dlv dap"},
+        "rust": {"id": "codelldb", "command": "codelldb"},
+        "java": {"id": "java-debug", "command": "java-debug-adapter"},
+    }
+    language = (language or "python").lower()
+    adapter = adapters.get(language, {"id": "custom", "command": "configure a local DAP adapter"})
+    points = []
+    for item in (breakpoints or [])[:100]:
+        try:
+            line = max(1, int(item.get("line", 1))) if isinstance(item, dict) else max(1, int(item))
+        except (TypeError, ValueError):
+            continue
+        points.append({"file": item.get("file", "") if isinstance(item, dict) else "", "line": line, "verified": False})
+    return {
+        "protocol": "debug-adapter-protocol",
+        "version": "1.71",
+        "adapter": adapter,
+        "program": str(program or "")[:500],
+        "cwd": str(cwd or "")[:500],
+        "breakpoints": points,
+        "exception_breakpoints": bool(exception_breakpoints),
+        "capabilities": ["initialize", "launch", "attach", "setBreakpoints", "stackTrace", "scopes", "variables", "evaluate", "next", "stepIn", "stepOut", "continue", "pause", "disconnect"],
+        "approval_required": True,
+        "network_policy": "blocked",
+        "offline_only": True,
+    }
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 

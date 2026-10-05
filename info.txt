@@ -191,6 +191,11 @@ Next coding workspace features
   TypeScript, gopls, Rust Analyzer, JDTLS, and Intelephense executables. The
   built-in AST/regex backend remains the offline fallback; no adapter is
   downloaded automatically and network access stays blocked.
+- Debug Adapter Protocol session planning is available at
+  `/api/coding/debug/dap/`. It supports local adapter contracts for Python,
+  JavaScript/TypeScript, Go, Rust, and Java, including breakpoints, exception
+  pauses, stack frames, variables, watches, and stepping. Starting a debug
+  process remains approval-gated and network-blocked.
 - Repository instructions and coding skills are discovered at
   `/api/coding/repository-instructions/`. Submit local files to detect
   `AGENTS.md`, Copilot instructions, path-specific `*.instructions.md` files,

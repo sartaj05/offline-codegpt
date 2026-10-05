@@ -156,6 +156,19 @@ class ChatFeatureTests(TestCase):
         self.assertNotIn("SECRET_KEY", payload["environment_keys"])
         self.assertFalse(payload["secrets_included"])
 
+    def test_dap_session_plan_exposes_debug_capabilities_and_breakpoints(self):
+        response = self.client.post("/api/coding/debug/dap/", {
+            "language": "python",
+            "program": "manage.py",
+            "breakpoints": json.dumps([{ "file": "chat/views.py", "line": 40 }]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["protocol"], "debug-adapter-protocol")
+        self.assertEqual(payload["adapter"]["id"], "debugpy")
+        self.assertEqual(payload["breakpoints"][0]["line"], 40)
+        self.assertTrue(payload["approval_required"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",
