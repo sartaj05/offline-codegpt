@@ -346,6 +346,18 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["error_spans"][0]["filename"], "repo/views.py")
         self.assertIn("repo/db.py", payload["hotspots"])
 
+    def test_flaky_quarantine_manager_enforces_owner_and_expiry(self):
+        response = self.client.post("/api/coding/flaky-quarantine/", {
+            "today": "2026-10-05",
+            "tests": json.dumps([{ "name": "test_race", "passed": 2, "failed": 1, "flaky": True }]),
+            "quarantine": json.dumps({"test_race": {"quarantined": True, "owner": "team", "expires_at": "2026-10-01"}}),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["expired"], ["test_race"])
+        self.assertEqual(payload["release_blocked_by"], ["test_race"])
+        self.assertTrue(payload["policy"]["expiry_required"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",

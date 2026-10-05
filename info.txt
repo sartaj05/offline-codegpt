@@ -420,6 +420,10 @@ After these migrations and feature updates, run:
   Submit OpenTelemetry-style spans and local files to correlate slow/error spans
   with source paths and lines. The response reports hotspots and supported
   semantic fields without sending telemetry to an external service.
+- Flaky-test quarantine lifecycle management is available at
+  `/api/coding/flaky-quarantine/`. It tracks owners, expiry dates, active and
+  expired quarantines, and release-blocking tests. Expired quarantines cannot
+  silently hide instability.
 
 - Agent lifecycle hook evaluation is available at `/api/coding/agent-hooks/`.
   It supports session, prompt, pre-tool, post-tool, error, and session-end

@@ -150,6 +150,7 @@ urlpatterns = [
     path("api/coding/review-resolution/", views.coding_review_resolution, name="coding_review_resolution"),
     path("api/coding/coverage/", views.coding_coverage, name="coding_coverage"),
     path("api/coding/trace-debugging/", views.coding_trace_debugging, name="coding_trace_debugging"),
+    path("api/coding/flaky-quarantine/", views.coding_flaky_quarantine, name="coding_flaky_quarantine"),
     path("api/coding/refactor/", views.coding_refactor, name="coding_refactor"),
     path("api/coding/issue-to-pr/", views.coding_issue_to_pr, name="coding_issue_to_pr"),
     path("api/coding/pr-review/", views.coding_pr_review, name="coding_pr_review"),

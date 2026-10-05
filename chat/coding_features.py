@@ -1133,3 +1133,26 @@ def correlate_traces(traces, files=None, slow_threshold_ms=500):
         "semantic_fields": ["trace_id", "span_id", "duration_ms", "status", "code.filepath", "code.lineno"],
         "offline_only": True,
     }
+
+
+def manage_flaky_quarantine(tests, quarantine=None, today=""):
+    quarantine = quarantine if isinstance(quarantine, dict) else {}
+    today = today or time.strftime("%Y-%m-%d")
+    records = []
+    for test in (tests or [])[:500]:
+        if not isinstance(test, dict) or not test.get("name"):
+            continue
+        name = str(test["name"])
+        config = quarantine.get(name, {}) if isinstance(quarantine.get(name, {}), dict) else {}
+        expiry = str(config.get("expires_at", ""))
+        expired = bool(expiry and expiry < today)
+        flaky = bool(test.get("flaky") or (test.get("failed", 0) and test.get("passed", 0)))
+        records.append({"name": name, "flaky": flaky, "owner": config.get("owner", ""), "expires_at": expiry, "expired": expired, "quarantined": bool(config.get("quarantined", False)) and not expired, "release_blocking": flaky and not config.get("quarantined", False) or (expired and flaky)})
+    return {
+        "tests": records,
+        "active_quarantine": [item["name"] for item in records if item["quarantined"]],
+        "expired": [item["name"] for item in records if item["expired"]],
+        "release_blocked_by": [item["name"] for item in records if item["release_blocking"]],
+        "policy": {"owner_required": True, "expiry_required": True, "follow_up_required": True, "expired_quarantine_blocks_release": True},
+        "offline_only": True,
+    }
