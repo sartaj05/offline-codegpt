@@ -125,7 +125,7 @@ from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
 from .runtimes import RUNTIME_CHOICES, get_runtime_adapter
 from .symbols import extract_symbols
-from .coding_features import analyze_generated_sync, analyze_migration_safety, analyze_test_impact, analyze_taint_flow, browser_debug_plan, dap_session_plan, discover_local_ci, discover_repository_instructions, evolve_api_contract, fingerprint_workspace_environment, incident_to_fix, issue_to_pr_plan, lsp_adapter_catalog, lsp_analyze, mutation_test_plan, orchestrate_monorepo, plan_dependency_upgrades, plan_git_bisect, plan_merge_queue, preview_refactor, profile_code_performance, refactor_workspace, review_pull_request, route_codeowners, security_sbom_report
+from .coding_features import analyze_generated_sync, analyze_migration_safety, analyze_test_impact, analyze_taint_flow, browser_debug_plan, dap_session_plan, detect_flaky_tests, discover_local_ci, discover_repository_instructions, evolve_api_contract, fingerprint_workspace_environment, incident_to_fix, issue_to_pr_plan, lsp_adapter_catalog, lsp_analyze, mutation_test_plan, orchestrate_monorepo, plan_dependency_upgrades, plan_git_bisect, plan_merge_queue, preview_refactor, profile_code_performance, refactor_workspace, review_pull_request, route_codeowners, security_sbom_report
 
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -746,6 +746,16 @@ def coding_taint_analysis(request):
     except (TypeError, ValueError, json.JSONDecodeError):
         return JsonResponse({"success": False, "error": "files must be a JSON array."}, status=400)
     return JsonResponse({"success": True, **analyze_taint_flow(files)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def coding_flaky_tests(request):
+    try:
+        runs = json.loads(request.POST.get("runs", "[]"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "runs must be a JSON array."}, status=400)
+    return JsonResponse({"success": True, **detect_flaky_tests(runs)})
 
 
 @login_required(login_url="/login/")

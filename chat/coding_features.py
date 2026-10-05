@@ -535,6 +535,30 @@ def analyze_taint_flow(files):
     }
 
 
+def detect_flaky_tests(runs):
+    grouped = defaultdict(list)
+    for run in (runs or [])[:2000]:
+        if not isinstance(run, dict) or not run.get("name"):
+            continue
+        grouped[str(run["name"])].append(run)
+    tests = []
+    for name, samples in sorted(grouped.items()):
+        passed = sum(str(item.get("status", "")).lower() in {"pass", "passed", "ok", "success"} for item in samples)
+        failed = sum(str(item.get("status", "")).lower() in {"fail", "failed", "error"} for item in samples)
+        total = len(samples)
+        failure_rate = round(failed / total, 3) if total else 0
+        flaky = total >= 3 and passed > 0 and failed > 0
+        tests.append({"name": name, "runs": total, "passed": passed, "failed": failed, "failure_rate": failure_rate, "flaky": flaky, "avg_duration_ms": round(sum(float(item.get("duration_ms", 0) or 0) for item in samples) / total, 2) if total else 0})
+    flaky_tests = [item for item in tests if item["flaky"]]
+    return {
+        "tests": tests,
+        "flaky_tests": flaky_tests,
+        "quarantine_candidates": [{"name": item["name"], "reason": "Mixed outcomes across repeated local runs.", "requires_owner_review": True} for item in flaky_tests],
+        "policy": "Do not silently ignore a flaky test; quarantine only with an owner, expiry date, and follow-up issue.",
+        "offline_only": True,
+    }
+
+
 def _safe_identifier(value):
     return bool(re.fullmatch(r"[A-Za-z_$][\w$]*", value or ""))
 

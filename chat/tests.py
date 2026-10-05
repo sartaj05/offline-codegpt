@@ -205,6 +205,20 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["findings"][0]["category"], "sql")
         self.assertEqual(payload["findings"][0]["line"], 2)
 
+    def test_flaky_test_detector_reports_mixed_outcomes_and_quarantine(self):
+        response = self.client.post("/api/coding/flaky-tests/", {
+            "runs": json.dumps([
+                {"name": "test_checkout", "status": "passed", "duration_ms": 10},
+                {"name": "test_checkout", "status": "failed", "duration_ms": 12},
+                {"name": "test_checkout", "status": "passed", "duration_ms": 11},
+            ]),
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["flaky_tests"][0]["name"], "test_checkout")
+        self.assertEqual(payload["flaky_tests"][0]["failure_rate"], 0.333)
+        self.assertTrue(payload["quarantine_candidates"][0]["requires_owner_review"])
+
     def test_local_lsp_returns_symbols_diagnostics_and_references(self):
         response = self.client.post("/api/coding/lsp/", {
             "filename": "app.py",
