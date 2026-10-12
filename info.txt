@@ -531,3 +531,8 @@ Next coding workspace features
   and the existing signed coding attestations. This prevents endpoint name
   collisions and keeps both verification formats working.
   Test with `python manage.py test chat.tests.ChatFeatureTests.test_provenance_generator_and_verifier --keepdb`.
+- Responsive regression coverage is available in `tests/responsive.spec.js`.
+  It checks `/`, `/login/`, and `/signup/` at 320px, 375px, 768px, and 1024px,
+  with an optional authenticated workspace screenshot. Run
+  `npx playwright test tests/responsive.spec.js` after installing Playwright
+  locally. Browser binaries are not downloaded automatically in offline mode.

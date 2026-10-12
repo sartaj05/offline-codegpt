@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
@@ -22,6 +23,21 @@ class ChatFeatureTests(TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "FREE PREVIEW")
+
+    def test_responsive_ui_contract_covers_required_viewports(self):
+        project_root = Path(__file__).resolve().parents[1]
+        stylesheet = (project_root / "static" / "chat" / "app.css").read_text(encoding="utf-8")
+        template = (project_root / "templates" / "chat" / "index.html").read_text(encoding="utf-8")
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="viewport"')
+        for breakpoint in ("max-width: 380px", "max-width: 600px", "max-width: 840px", "max-width: 1100px"):
+            self.assertIn(breakpoint, stylesheet)
+        for selector in (".chat-box", ".composer", ".workspace-tools-grid", ".topbar-actions"):
+            self.assertIn(selector, stylesheet)
+        for marker in ("codingCenterPanel", "codingFeaturePanel", "agentProgressPanel"):
+            self.assertIn(marker, template)
 
     def test_lsp_adapter_catalog_reports_local_fallback_and_servers(self):
         response = self.client.get("/api/coding/lsp/adapters/")
