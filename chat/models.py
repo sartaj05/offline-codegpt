@@ -603,6 +603,22 @@ class ProjectWorkspace(models.Model):
         return self.name
 
 
+class WorkspaceFileState(models.Model):
+    workspace = models.ForeignKey(ProjectWorkspace, on_delete=models.CASCADE, related_name="file_states")
+    relative_path = models.CharField(max_length=500)
+    content_hash = models.CharField(max_length=128, blank=True, default="")
+    size_bytes = models.BigIntegerField(default=0)
+    mtime_ns = models.BigIntegerField(default=0)
+    active = models.BooleanField(default=True)
+    last_error = models.CharField(max_length=300, blank=True, default="")
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    last_indexed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["workspace", "relative_path"], name="unique_workspace_file_state")]
+        ordering = ["relative_path"]
+
+
 class DocumentSection(models.Model):
     SECTION_TYPES = (
         ("page", "Page"),

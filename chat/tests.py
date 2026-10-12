@@ -11,7 +11,7 @@ from django.core.management import call_command
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import AgentJob, AgentTask, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, ExtensionInstall, ExtensionPackage, KnowledgeChunk, KnowledgeDocument, PatchRevision, ProjectWorkspace, SandboxPolicy, SecretVaultItem, Workspace, WorkspaceMembership, WorkspacePolicy
+from .models import AgentJob, AgentTask, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, ExtensionInstall, ExtensionPackage, KnowledgeChunk, KnowledgeDocument, PatchRevision, ProjectWorkspace, SandboxPolicy, SecretVaultItem, Workspace, WorkspaceFileState, WorkspaceMembership, WorkspacePolicy
 from .views import _search_knowledge
 
 
@@ -67,6 +67,11 @@ class ChatFeatureTests(TestCase):
             self.assertEqual(second.status_code, 200)
             self.assertEqual(second.json()["workspace"]["skipped_count"], 1)
             self.assertEqual(ProjectWorkspace.objects.filter(owner=self.user).count(), 1)
+            self.assertEqual(WorkspaceFileState.objects.filter(workspace__owner=self.user, active=True).count(), 1)
+            Path(folder, "app.py").unlink()
+            removed = self.client.post("/api/project/workspaces/", {"root_path": folder})
+            self.assertEqual(removed.status_code, 200)
+            self.assertEqual(WorkspaceFileState.objects.filter(workspace__owner=self.user, active=True).count(), 0)
 
     def test_guided_coding_workflow_form_contract_is_present(self):
         response = self.client.get("/")

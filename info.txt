@@ -65,6 +65,9 @@ Useful options:
 
 The watcher incrementally indexes supported files and updates semantic
 embeddings when the local files change.
+Index state is persisted in the workspace database, so restarts do not lose
+change detection. Removed files are marked inactive instead of being silently
+left in search results.
 
 Windows worker auto-start
 -------------------------

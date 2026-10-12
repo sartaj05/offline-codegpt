@@ -4,10 +4,8 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth.models import User
 
-from chat.views import MAX_FILE_BYTES, _extract_document_text, _safe_filename, _save_knowledge_document
-
-
-WATCHABLE_EXTENSIONS = {".py", ".js", ".ts", ".tsx", ".jsx", ".java", ".cs", ".php", ".sql", ".html", ".css", ".json", ".md", ".txt", ".pdf", ".docx"}
+from chat.models import ProjectWorkspace
+from chat.workspace_indexer import scan_workspace
 
 
 class Command(BaseCommand):
@@ -28,28 +26,10 @@ class Command(BaseCommand):
         except User.DoesNotExist as exc:
             raise CommandError("Choose an existing local user with --username.") from exc
 
-        state = {}
-
         def scan():
-            for path in root.rglob("*"):
-                if not path.is_file() or path.suffix.lower() not in WATCHABLE_EXTENSIONS:
-                    continue
-                try:
-                    stat = path.stat()
-                    marker = (stat.st_mtime_ns, stat.st_size)
-                    if state.get(str(path)) == marker:
-                        continue
-                    if stat.st_size > MAX_FILE_BYTES:
-                        self.stdout.write(self.style.WARNING(f"Skipped large file: {path.name}"))
-                        state[str(path)] = marker
-                        continue
-                    relative_name = _safe_filename(path.relative_to(root).as_posix())
-                    text = _extract_document_text(relative_name, path.read_bytes())
-                    _save_knowledge_document(relative_name, text, "project", owner)
-                    state[str(path)] = marker
-                    self.stdout.write(f"Indexed {relative_name}")
-                except (OSError, ValueError) as exc:
-                    self.stdout.write(self.style.WARNING(f"Skipped {path.name}: {exc}"))
+            workspace, _ = ProjectWorkspace.objects.get_or_create(owner=owner, root_path=str(root), defaults={"name": root.name or str(root)})
+            result = scan_workspace(workspace)
+            self.stdout.write(f"Scan {result.status}: {result.indexed_count} indexed, {result.skipped_count} unchanged/skipped.")
 
         scan()
         if options["once"]:

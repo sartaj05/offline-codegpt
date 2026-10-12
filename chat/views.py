@@ -2344,48 +2344,8 @@ def _project_workspace_payload(workspace):
 
 
 def _scan_project_workspace(workspace):
-    root = Path(workspace.root_path).resolve()
-    workspace.status = "scanning"
-    workspace.save(update_fields=["status", "updated_at"])
-    files_seen = indexed_count = skipped_count = 0
-    errors = []
-    try:
-        candidates = []
-        for current_root, directories, filenames in os.walk(root):
-            directories[:] = [name for name in directories if name not in IGNORED_WORKSPACE_DIRECTORIES]
-            for filename in filenames:
-                path = Path(current_root) / filename
-                if path.suffix.lower() in WATCHABLE_WORKSPACE_EXTENSIONS:
-                    candidates.append(path)
-        for path in sorted(candidates)[:MAX_PROJECT_FILES]:
-            files_seen += 1
-            try:
-                if path.stat().st_size > MAX_FILE_BYTES:
-                    skipped_count += 1
-                    continue
-                relative_name = _safe_filename(path.relative_to(root).as_posix())
-                text = _extract_document_text(relative_name, path.read_bytes())
-                existing = KnowledgeDocument.objects.filter(owner=workspace.owner, filename=relative_name).first()
-                digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
-                if existing and existing.content_hash == digest and existing.is_active:
-                    skipped_count += 1
-                    continue
-                _save_knowledge_document(relative_name, text, "project", workspace.owner)
-                indexed_count += 1
-            except (OSError, ValueError, UnicodeError) as exc:
-                errors.append(f"{path.name}: {str(exc)[:240]}")
-        workspace.status = "ready" if not errors else "error"
-    except OSError as exc:
-        errors.append(str(exc)[:240])
-        workspace.status = "error"
-    workspace.files_seen = files_seen
-    workspace.indexed_count = indexed_count
-    workspace.skipped_count = skipped_count
-    workspace.error_count = len(errors)
-    workspace.errors = errors[-50:]
-    workspace.last_scan_at = timezone.now()
-    workspace.save(update_fields=["status", "files_seen", "indexed_count", "skipped_count", "error_count", "errors", "last_scan_at", "updated_at"])
-    return workspace
+    from .workspace_indexer import scan_workspace
+    return scan_workspace(workspace)
 
 
 @login_required(login_url="/login/")
