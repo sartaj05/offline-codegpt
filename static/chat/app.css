@@ -640,3 +640,149 @@ select { padding: 0 10px; }
 .composer-controls { justify-content: flex-start; }
 .composer-controls span { color: #7f8da2; }
 @media (max-width: 720px) { .workspace-tools-grid { right: auto; left: 0; grid-template-columns: repeat(2, minmax(105px, 1fr)); } }
+
+/* Responsive workspace layer
+   The product has many optional workspaces. These rules keep every panel
+   inside the viewport and turn dense desktop rows into readable touch layouts. */
+@media (max-width: 1100px) {
+    .app { grid-template-columns: 244px minmax(0, 1fr); }
+    .topbar { padding-right: 30px; padding-left: 30px; }
+    .composer { padding-right: 30px; padding-left: 30px; }
+    .observability-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .deployment-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sandbox-policy-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .policy-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 840px) {
+    body { overflow-x: hidden; }
+    .app { display: block; min-height: 100vh; overflow: visible; }
+    .sidebar {
+        min-height: 0;
+        padding: 13px 16px 12px;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+    }
+    .sidebar-brand { padding: 0 0 13px; }
+    .sidebar-header { padding: 0; }
+    .history-title, .history-list, .project-search, .project-workspace, .git-workspace, .sidebar-footer { display: none; }
+    .main { min-height: calc(100vh - 74px); }
+    .topbar { min-height: 0; padding: 18px 20px; }
+    .topbar-actions { width: 100%; justify-content: flex-start; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
+    .topbar-actions > * { flex: 0 0 auto; }
+    .chat-box { padding: 30px 20px 42px; }
+    .composer { padding: 13px 20px 18px; }
+    .message-inner { width: 100%; padding: 18px 0; }
+    .sample-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .observability-panel, .workspace-panel, .devops-panel, .deployment-panel,
+    .documentation-panel, .review-gate-panel, .dependencies-panel, .browser-tests-panel,
+    .model-router-panel, .devcontainer-panel, .incident-panel, .architecture-panel,
+    .contracts-panel, .provenance-panel, .identity-policy-panel, .secrets-panel,
+    .memory-panel, .evaluation-panel { margin-right: 16px; margin-left: 16px; }
+    .workspace-columns, .review-gate-row, .incident-grid, .evaluation-dashboard-columns { grid-template-columns: 1fr; }
+    .evaluation-task-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .evaluation-task-form textarea:first-of-type { grid-column: 1 / -1; }
+    .evaluation-dashboard-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .settings-grid, .mcp-connector-grid, .remote-pr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .deployment-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ollama-settings-panel, .remote-integration-panel, .mcp-panel, .extensions-panel,
+    .privacy-panel, .setup-panel, .backup-panel { right: 16px; width: calc(100% - 32px); }
+    .ollama-settings-panel, .remote-integration-panel, .mcp-panel, .extensions-panel,
+    .privacy-panel, .setup-panel, .backup-panel { top: 118px; }
+}
+
+@media (max-width: 600px) {
+    .sidebar { padding: 11px 12px; }
+    .sidebar-brand { gap: 9px; padding-bottom: 10px; }
+    .brand-mark { width: 31px; height: 31px; flex-basis: 31px; }
+    .sidebar-brand strong { font-size: 13px; }
+    .sidebar-brand span { font-size: 10px; }
+    .new-chat-btn { min-height: 42px; padding: 10px 12px; }
+    .topbar { gap: 15px; padding: 16px 14px; }
+    .topbar h1 { font-size: 20px; }
+    .topbar p { font-size: 11px; line-height: 1.45; }
+    .topbar-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; gap: 6px; overflow: visible; }
+    .topbar-actions > *, .topbar-actions form { min-width: 0; width: 100%; }
+    .topbar-actions button, .topbar-link, .topbar-primary { width: 100%; min-height: 38px; padding: 8px 7px; font-size: 10px; }
+    .chat-box { min-height: 52vh; padding: 22px 12px 34px; }
+    .welcome { margin-top: 30px; }
+    .welcome h2 { margin-top: 15px; font-size: 34px; }
+    .welcome p { font-size: 12px; }
+    .sample-grid { grid-template-columns: 1fr; gap: 7px; margin-top: 21px; }
+    .sample-grid button { min-height: 66px; padding: 11px; }
+    .message-inner { gap: 8px; padding: 14px 0; }
+    .avatar { width: 28px; height: 28px; flex-basis: 28px; font-size: 10px; }
+    .message-content { font-size: 12px; line-height: 1.6; }
+    .message-content pre { margin: 9px 0; padding: 9px; font-size: 10px; }
+    .message-content code { font-size: 10px; }
+    .composer { padding: 11px 12px 15px; }
+    .task-mode-row, .composer-controls, .format-control, .quality-row, .test-actions,
+    .agent-controls, .patch-actions, .enterprise-identity-actions, .remote-actions,
+    .panel-actions, .memory-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; gap: 6px; }
+    .task-mode-label, .composer-controls span { grid-column: 1 / -1; }
+    .task-mode-row button, .composer-controls button, .format-control select, .quality-row > *,
+    .test-actions button, .agent-controls button, .patch-actions button, .enterprise-identity-actions button,
+    .remote-actions button, .panel-actions button, .memory-actions button { width: 100%; min-height: 36px; }
+    .format-control { align-items: stretch; }
+    .format-control label { grid-column: 1 / -1; }
+    .format-control textarea { grid-column: 1 / -1; }
+    .advanced-composer { padding: 8px; }
+    .form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+    .form-row select, .form-row .file-picker, .form-row button { width: 100%; min-width: 0; min-height: 38px; }
+    .smart-route-control { grid-column: 1 / -1; min-height: 34px; }
+    .editor-toolbar { align-items: stretch; flex-direction: column; gap: 8px; }
+    .editor-toolbar button { width: 100%; min-height: 36px; }
+    #codeInput { min-height: 150px; font-size: 12px; }
+    .prompt-bar { flex-direction: column; gap: 7px; }
+    #sendBtn { width: 100%; min-height: 42px; flex-basis: auto; }
+    .composer-hint { line-height: 1.45; }
+    .observability-panel, .workspace-panel, .devops-panel, .deployment-panel,
+    .documentation-panel, .review-gate-panel, .dependencies-panel, .browser-tests-panel,
+    .model-router-panel, .devcontainer-panel, .incident-panel, .architecture-panel,
+    .contracts-panel, .provenance-panel, .identity-policy-panel, .secrets-panel,
+    .memory-panel, .evaluation-panel { margin: 9px 12px 0; padding: 12px; }
+    .settings-heading, .test-heading, .agent-heading, .security-heading, .patch-heading,
+    .evaluation-dashboard-heading { align-items: stretch; flex-direction: column; }
+    .settings-heading > button, .test-heading > button, .security-heading > button { width: 100%; min-height: 36px; }
+    .settings-grid, .policy-grid, .sandbox-policy-grid, .mcp-connector-grid, .remote-pr-grid,
+    .deployment-form, .evaluation-task-form, .workspace-columns, .review-gate-row,
+    .incident-grid { grid-template-columns: 1fr; }
+    .settings-grid label:first-child, .evaluation-task-form textarea:first-of-type { grid-column: auto; }
+    .evaluation-dashboard-stats, .observability-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .workspace-tools-grid { position: fixed; top: auto; right: 12px; bottom: 12px; left: 12px; width: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .workspace-tools-grid button { min-height: 38px; }
+    .setup-panel, .backup-panel, .ollama-settings-panel, .remote-integration-panel,
+    .mcp-panel, .extensions-panel, .privacy-panel { top: 114px; right: 8px; width: calc(100% - 16px); max-height: calc(100vh - 126px); overflow-y: auto; }
+    .setup-row, .backup-row, .model-manager-row, .documentation-row, .dependencies-row,
+    .browser-tests-row, .devcontainer-row, .provenance-row, .workspace-create-row,
+    .workspace-member-row, .devops-row { display: grid; grid-template-columns: 1fr; align-items: stretch; }
+    .setup-row > *, .backup-row > *, .model-manager-row > *, .documentation-row > *,
+    .dependencies-row > *, .browser-tests-row > *, .devcontainer-row > *, .provenance-row > *,
+    .workspace-create-row > *, .workspace-member-row > *, .devops-row > * { width: 100%; min-width: 0; }
+    .setup-row select, .setup-row button, .backup-row button, .model-manager-row button { min-height: 38px; }
+    .privacy-controls { gap: 10px; }
+    .privacy-controls label { display: flex; align-items: flex-start; gap: 8px; line-height: 1.4; }
+    .privacy-controls input { flex: 0 0 auto; margin-top: 2px; }
+    .project-file, .git-file, .extension-row, .mcp-connector { align-items: flex-start; }
+    .source-citations { align-items: stretch; }
+    .source-citation { overflow-wrap: anywhere; }
+    pre, textarea { max-width: 100%; }
+    .auth-page { min-height: 100svh; padding: 8px; }
+    .auth-shell { width: 100%; border-radius: 15px; }
+    .auth-showcase { min-height: 220px; padding: 23px 18px; }
+    .showcase-copy h1 { font-size: 39px; }
+    .showcase-copy p { font-size: 12px; }
+    .showcase-features span { padding: 6px 8px; font-size: 10px; }
+    .auth-card { padding: 28px 18px; }
+    .auth-card-heading h2 { font-size: 25px; }
+}
+
+@media (max-width: 380px) {
+    .topbar-actions, .task-mode-row, .composer-controls, .format-control, .quality-row,
+    .test-actions, .agent-controls, .patch-actions, .enterprise-identity-actions,
+    .remote-actions, .panel-actions, .memory-actions, .form-row { grid-template-columns: 1fr; }
+    .task-mode-label, .composer-controls span, .format-control label, .format-control textarea,
+    .smart-route-control { grid-column: auto; }
+    .welcome h2 { font-size: 30px; }
+    .observability-stats, .evaluation-dashboard-stats { grid-template-columns: 1fr; }
+}
