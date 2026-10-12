@@ -120,6 +120,7 @@
                             <button type="button" onclick="toggleObservability()">Metrics</button>
                             <button type="button" onclick="toggleEvaluationLab()">Eval Lab</button>
                             <button type="button" onclick="toggleCodingFeaturePanel()">Coding APIs</button>
+                            <button type="button" onclick="toggleCodingCenter()">Coding Center</button>
                             <button type="button" onclick="toggleWorkspace()">Team</button>
                             <button type="button" onclick="toggleDevops()">DevOps</button>
                             <button type="button" onclick="toggleDeployment()">Deploy</button>
@@ -170,6 +171,22 @@
             <textarea id="codingFeaturePayload" class="coding-feature-payload" spellcheck="false" placeholder='Enter JSON payload for the selected coding feature...'></textarea>
             <div id="codingFeatureStatus" class="coding-feature-status">Select a feature to begin.</div>
             <pre id="codingFeatureOutput" class="coding-feature-output">Results will appear here.</pre>
+        </section>
+        <section id="codingCenterPanel" class="coding-center-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Coding Command Center</strong>
+                    <span>Find and launch coding workflows from one local dashboard.</span>
+                </div>
+                <button type="button" onclick="toggleCodingCenter()">Close</button>
+            </div>
+            <div class="coding-center-toolbar">
+                <input id="codingCenterSearch" type="search" placeholder="Search coding features..." oninput="renderCodingCenter()">
+                <select id="codingCenterFilter" onchange="renderCodingCenter()"><option value="all">All status</option><option value="ready">Not run</option><option value="used">Used</option><option value="favorite">Favorites</option></select>
+                <button type="button" onclick="resetCodingCenterState()">Reset status</button>
+            </div>
+            <div id="codingCenterStats" class="coding-center-stats"></div>
+            <div id="codingCenterCards" class="coding-center-cards"></div>
         </section>
         <section id="ollamaSettingsPanel" class="ollama-settings-panel" hidden>
             <div class="settings-heading">

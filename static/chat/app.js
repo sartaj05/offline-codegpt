@@ -308,6 +308,59 @@ const codingFeatureDefinitions = [
     { id: "git-archaeology", label: "Git archaeology", sample: { commits: [{ author: "local", message: "Fix parser edge case", files: ["parser.py"] }], blame: [], changed_files: ["parser.py"] } },
 ];
 
+function codingCenterState() {
+    try { return JSON.parse(localStorage.getItem("offlineCodeGPT.codingCenter") || "{}"); } catch (error) { return {}; }
+}
+
+function saveCodingCenterState(state) { localStorage.setItem("offlineCodeGPT.codingCenter", JSON.stringify(state)); }
+
+function toggleCodingCenter() {
+    const panel = document.getElementById("codingCenterPanel");
+    if (!panel) return;
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) renderCodingCenter();
+}
+
+function renderCodingCenter() {
+    const cards = document.getElementById("codingCenterCards");
+    const stats = document.getElementById("codingCenterStats");
+    const search = (document.getElementById("codingCenterSearch")?.value || "").toLowerCase().trim();
+    const filter = document.getElementById("codingCenterFilter")?.value || "all";
+    if (!cards || !stats) return;
+    const state = codingCenterState();
+    const filtered = codingFeatureDefinitions.filter((feature) => {
+        const item = state[feature.id] || {};
+        const matchesSearch = !search || `${feature.label} ${feature.id}`.toLowerCase().includes(search);
+        const matchesFilter = filter === "all" || (filter === "favorite" ? item.favorite : filter === "used" ? item.used : !item.used);
+        return matchesSearch && matchesFilter;
+    });
+    const used = codingFeatureDefinitions.filter((feature) => state[feature.id]?.used).length;
+    const favorites = codingFeatureDefinitions.filter((feature) => state[feature.id]?.favorite).length;
+    stats.innerHTML = `<span><strong>${codingFeatureDefinitions.length}</strong> workflows</span><span><strong>${used}</strong> used</span><span><strong>${favorites}</strong> favorites</span>`;
+    cards.innerHTML = filtered.map((feature) => {
+        const item = state[feature.id] || {};
+        const status = item.used ? "Used" : "Ready";
+        return `<article class="coding-center-card"><div><span class="coding-center-status ${item.used ? "used" : ""}">${status}</span><strong>${escapeHtml(feature.label)}</strong><small>/api/coding/${feature.id}/</small></div><div class="coding-center-card-actions"><button type="button" onclick="favoriteCodingFeature('${feature.id}')" aria-label="Favorite ${escapeHtml(feature.label)}">${item.favorite ? "★" : "☆"}</button><button type="button" onclick="launchCodingFeature('${feature.id}')">Open</button></div></article>`;
+    }).join("") || `<div class="coding-center-empty">No coding workflows match this filter.</div>`;
+}
+
+function favoriteCodingFeature(id) {
+    const state = codingCenterState();
+    state[id] = { ...(state[id] || {}), favorite: !(state[id] || {}).favorite };
+    saveCodingCenterState(state);
+    renderCodingCenter();
+}
+
+function resetCodingCenterState() { localStorage.removeItem("offlineCodeGPT.codingCenter"); renderCodingCenter(); }
+
+function launchCodingFeature(id) {
+    const select = document.getElementById("codingFeatureSelect");
+    if (select) select.value = id;
+    toggleCodingCenter();
+    toggleCodingFeaturePanel();
+    loadCodingFeatureExample();
+}
+
 function toggleCodingFeaturePanel() {
     const panel = document.getElementById("codingFeaturePanel");
     if (!panel) return;
@@ -350,7 +403,13 @@ async function runCodingFeature() {
         const response = await fetch(`/api/coding/${select.value}/`, { method: "POST", headers: { "X-CSRFToken": csrfToken }, body });
         const result = await response.json();
         output.textContent = JSON.stringify(result, null, 2);
+        if (response.ok) {
+            const state = codingCenterState();
+            state[select.value] = { ...(state[select.value] || {}), used: true, lastRun: new Date().toISOString() };
+            saveCodingCenterState(state);
+        }
         if (status) status.textContent = response.ok ? "Completed locally." : (result.error || "The local feature returned an error.");
+        renderCodingCenter();
     } catch (error) {
         output.textContent = String(error);
         if (status) status.textContent = "Local request failed.";
