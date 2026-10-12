@@ -455,6 +455,11 @@ POST     /api/mcp/                          MCP JSON-RPC tools
 - Network access is blocked by the secure runtime policy.
 - Remote Git and repository features are optional and can change external state; review actions and permissions before using them.
 - Generated Docker, Kubernetes, CI, backup, and rollback files must be reviewed before production use.
+
+Scanned PDFs are indexed with the local vision runtime when native PDF text
+extraction returns no useful text. Set `LOCAL_OCR_ENABLED=0` to disable this
+fallback or lower `LOCAL_OCR_MAX_PAGES` for large documents. OCR remains local
+to the configured runtime and is not sent to a hosted provider.
 - Do not paste production secrets into prompts, logs, issue descriptions, or generated files.
 
 ## Testing and verification

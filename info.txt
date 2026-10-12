@@ -89,6 +89,9 @@ Feature notes
   source citations. PDF/DOCX support uses pypdf and python-docx.
 - OCR is available from the workspace OCR control for images and scanned PDFs.
   It uses the local vision model and PyMuPDF for PDF page rendering.
+  Workspace indexing also falls back to local vision OCR when native PDF text
+  extraction is empty. Set `LOCAL_OCR_ENABLED=0` to disable that fallback and
+  `LOCAL_OCR_MAX_PAGES` to bound scanned-page processing.
 - Offline voice input uses the local faster-whisper runtime. Use the
   "Record offline audio" control in the workspace.
 - Live tool/job events are streamed through /api/agent/events/ and displayed in

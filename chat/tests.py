@@ -73,6 +73,21 @@ class ChatFeatureTests(TestCase):
             self.assertEqual(removed.status_code, 200)
             self.assertEqual(WorkspaceFileState.objects.filter(workspace__owner=self.user, active=True).count(), 0)
 
+    def test_scanned_pdf_uses_local_ocr_when_native_text_is_empty(self):
+        class EmptyPage:
+            def extract_text(self):
+                return ""
+
+        class EmptyPdfReader:
+            def __init__(self, stream):
+                self.pages = [EmptyPage()]
+
+        with patch("chat.views.PdfReader", EmptyPdfReader), patch("chat.views.ocr_scanned_pdf", return_value="[Page 1]\nScanned source code"):
+            from .views import _extract_document_text
+            text = _extract_document_text("scan.pdf", b"fake pdf bytes")
+        self.assertIn("Scanned source code", text)
+        self.assertIn("[Page 1]", text)
+
     def test_guided_coding_workflow_form_contract_is_present(self):
         response = self.client.get("/")
         self.assertContains(response, "guidedCodingPanel")

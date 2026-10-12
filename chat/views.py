@@ -115,6 +115,7 @@ from .devops import analyze_logs, generate_artifact
 from .documentation import generate_documentation
 from .dependencies import analyze_dependencies
 from .browser_testing import analyze_browser_report, generate_playwright_test
+from .ocr import ocr_scanned_pdf
 from .model_router import route_model
 from .devcontainer import generate_devcontainer
 from .data_workspace import analyze_data_file
@@ -1373,10 +1374,20 @@ def _extract_document_text(filename, raw_content):
         if PdfReader is None:
             raise ValueError("PDF support requires the pypdf package.")
         pages = PdfReader(io.BytesIO(raw_content)).pages
-        return "\n\n".join(
+        extracted = "\n\n".join(
             f"[Page {index + 1}]\n{page.extract_text() or ''}"
             for index, page in enumerate(pages)
         ).strip()
+        if len(re.sub(r"\[Page\s+\d+\]", "", extracted).strip()) >= 8:
+            return extracted
+        if os.environ.get("LOCAL_OCR_ENABLED", "1").lower() not in {"0", "false", "no"}:
+            try:
+                ocr_text = ocr_scanned_pdf(raw_content)
+                if ocr_text:
+                    return ocr_text.strip()
+            except (OSError, ValueError, requests.RequestException, TypeError):
+                pass
+        return extracted
     if extension == ".docx":
         if DocxDocument is None:
             raise ValueError("DOCX support requires the python-docx package.")
