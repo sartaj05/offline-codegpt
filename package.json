@@ -1,0 +1,9 @@
+{
+  "name": "syntax-local-ai-quality",
+  "private": true,
+  "scripts": {
+    "test:js": "node --check static/chat/app.js",
+    "test:extension": "node --check vscode-extension/extension.js",
+    "test:browser": "npx playwright test tests/responsive.spec.js"
+  }
+}

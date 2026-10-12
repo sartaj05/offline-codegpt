@@ -20,7 +20,7 @@ def _redact_coding_string(value):
         (r"(?i)(authorization\s*:\s*bearer\s+)[A-Za-z0-9._~+/=-]+", r"\1[REDACTED_TOKEN]"),
         (r"(?i)\b(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_-]{16,})\b", "[REDACTED_API_KEY]"),
         (r"-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+ PRIVATE KEY-----", "[REDACTED_PRIVATE_KEY]"),
-        (r"(?i)(\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*)([^\s,;]+)", r"\1[REDACTED_SECRET]"),
+        (r"(?i)(\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*)([^\s,;\"']+)", r"\1[REDACTED_SECRET]"),
     ]
     for pattern, replacement in replacements:
         masked = re.sub(pattern, replacement, masked)
@@ -67,7 +67,7 @@ def redact_coding_response(text):
         (r"(?i)(authorization\s*:\s*bearer\s+)[A-Za-z0-9._~+/=-]+", r"\1[REDACTED_TOKEN]"),
         (r"(?i)\b(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_-]{16,})\b", "[REDACTED_API_KEY]"),
         (r"-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+ PRIVATE KEY-----", "[REDACTED_PRIVATE_KEY]"),
-        (r"(?i)(\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*)([^\s,;]+)", r"\1[REDACTED_SECRET]"),
+        (r"(?i)(\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*)([^\s,;\"']+)", r"\1[REDACTED_SECRET]"),
     ):
         masked = re.sub(pattern, replacement, masked)
     return masked

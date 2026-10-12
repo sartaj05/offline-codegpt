@@ -84,6 +84,19 @@ For a guided Windows setup, run:
 .\scripts\setup-offline.ps1
 ~~~
 
+## Local release checks
+
+Run the complete local validation suite from PowerShell:
+
+~~~powershell
+.\scripts\test-all.ps1
+~~~
+
+This checks Django configuration, migration drift, the full Django test suite,
+chat JavaScript syntax, and the VS Code extension manifest. Add
+`-WithBrowser` only after Playwright and its browser are already installed
+locally; the script never downloads browser binaries automatically.
+
 Use `-SkipOllama` when preparing the Python environment on a machine that will receive Ollama separately.
 
 ### Windows PowerShell
