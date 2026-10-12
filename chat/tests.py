@@ -39,6 +39,22 @@ class ChatFeatureTests(TestCase):
         for marker in ("codingCenterPanel", "codingFeaturePanel", "agentProgressPanel"):
             self.assertIn(marker, template)
 
+    def test_onboarding_and_accessibility_contract_is_present(self):
+        project_root = Path(__file__).resolve().parents[1]
+        stylesheet = (project_root / "static" / "chat" / "app.css").read_text(encoding="utf-8")
+        response = self.client.get("/")
+        self.assertContains(response, 'role="dialog"')
+        self.assertContains(response, 'aria-live="polite"')
+        self.assertContains(response, "onboarding-steps")
+        self.assertIn(":focus-visible", stylesheet)
+        self.assertIn("prefers-reduced-motion", stylesheet)
+
+        self.client.logout()
+        login = self.client.get("/login/")
+        signup = self.client.get("/signup/")
+        self.assertContains(login, 'aria-label="Sign in form"')
+        self.assertContains(signup, 'aria-label="Create account form"')
+
     def test_lsp_adapter_catalog_reports_local_fallback_and_servers(self):
         response = self.client.get("/api/coding/lsp/adapters/")
         self.assertEqual(response.status_code, 200)

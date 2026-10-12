@@ -545,3 +545,8 @@ Next coding workspace features
   availability, an automatic recommendation, bounded health/connect/generation
   timeouts, cancellation behavior, and local model RAM estimates. It never
   downloads or installs a model automatically.
+- First-run onboarding now has an accessible setup dialog with explicit steps,
+  live status announcements, keyboard focus handling, and a local-ready state.
+  Login/signup forms have named labels and alert semantics. Global focus-visible
+  styles, disabled-state feedback, and `prefers-reduced-motion` support are
+  included for keyboard and assistive-technology users.

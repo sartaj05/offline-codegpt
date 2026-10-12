@@ -256,15 +256,20 @@
             <pre id="privacyProofOutput" class="privacy-proof-output">No local network events loaded.</pre>
             <div id="privacyStatus" class="settings-status"></div>
         </section>
-        <section id="setupPanel" class="setup-panel" hidden>
+        <section id="setupPanel" class="setup-panel" role="dialog" aria-labelledby="setupPanelTitle" aria-describedby="setupPanelDescription" hidden>
             <div class="settings-heading">
                 <div>
-                    <strong>Local setup</strong>
-                    <span>Check Ollama, install a model, and start chatting.</span>
+                    <strong id="setupPanelTitle">Local setup</strong>
+                    <span id="setupPanelDescription">Check your local runtime, install a model, and start chatting privately.</span>
                 </div>
-                <button type="button" onclick="toggleSetupPanel()">Close</button>
+                <button type="button" onclick="toggleSetupPanel()" aria-label="Close local setup">Close</button>
             </div>
-            <div id="setupStatus" class="setup-status">Checking your local AI setup...</div>
+            <ol class="onboarding-steps" aria-label="Setup steps">
+                <li>Check the local runtime</li>
+                <li>Choose or install a model</li>
+                <li>Mark setup ready when you are done</li>
+            </ol>
+            <div id="setupStatus" class="setup-status" role="status" aria-live="polite">Checking your local AI setup...</div>
             <div class="setup-row">
                 <select id="setupModel" aria-label="Setup model">
                     <option value="qwen2.5-coder:1.5b">qwen2.5-coder:1.5b</option>
@@ -275,7 +280,7 @@
                 <button type="button" onclick="installSetupModel()">Install model</button>
                 <button type="button" onclick="finishSetup()">Mark ready</button>
             </div>
-            <pre id="setupDiagnosticsOutput" class="setup-status">Full hardware and runtime diagnostics have not run.</pre>
+            <pre id="setupDiagnosticsOutput" class="setup-status" role="status" aria-live="polite">Full hardware and runtime diagnostics have not run.</pre>
         </section>
         <section id="schedulerPanel" class="setup-panel" hidden>
             <div class="settings-heading">

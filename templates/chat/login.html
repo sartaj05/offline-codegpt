@@ -22,18 +22,18 @@
                 <span>◉ Vision uploads</span>
             </div>
         </section>
-        <main class="auth-card">
+        <main class="auth-card" aria-labelledby="authTitle">
             <div class="auth-card-heading">
                 <div class="auth-mobile-mark">✦</div>
                 <div class="eyebrow">WELCOME BACK</div>
-                <h2>Sign in to your workspace</h2>
+                <h2 id="authTitle">Sign in to your workspace</h2>
                 <p>Continue where you left off.</p>
             </div>
-            {% if error %}<div class="auth-error">{{ error }}</div>{% endif %}
-            <form method="post">
+            {% if error %}<div class="auth-error" role="alert">{{ error }}</div>{% endif %}
+            <form method="post" aria-label="Sign in form">
                 {% csrf_token %}
-                <label>Username<input name="username" autocomplete="username" required autofocus></label>
-                <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+                <label for="loginUsername">Username<input id="loginUsername" name="username" autocomplete="username" required autofocus></label>
+                <label for="loginPassword">Password<input id="loginPassword" name="password" type="password" autocomplete="current-password" required></label>
                 <button type="submit">Sign in <span>↗</span></button>
             </form>
             <div class="sso-divider"><span>or continue with enterprise SSO</span></div>

@@ -22,19 +22,19 @@
                 <span>◉ Image understanding</span>
             </div>
         </section>
-        <main class="auth-card">
+        <main class="auth-card" aria-labelledby="authTitle">
             <div class="auth-card-heading">
                 <div class="auth-mobile-mark">✦</div>
                 <div class="eyebrow">GET STARTED</div>
-                <h2>Create your workspace</h2>
+                <h2 id="authTitle">Create your workspace</h2>
                 <p>Free forever for local development.</p>
             </div>
-            {% if error %}<div class="auth-error">{{ error }}</div>{% endif %}
-            <form method="post">
+            {% if error %}<div class="auth-error" role="alert">{{ error }}</div>{% endif %}
+            <form method="post" aria-label="Create account form">
                 {% csrf_token %}
-                <label>Username<input name="username" autocomplete="username" required autofocus></label>
-                <label>Password<input name="password" type="password" autocomplete="new-password" minlength="8" required></label>
-                <label>Confirm password<input name="confirmation" type="password" autocomplete="new-password" minlength="8" required></label>
+                <label for="signupUsername">Username<input id="signupUsername" name="username" autocomplete="username" required autofocus></label>
+                <label for="signupPassword">Password<input id="signupPassword" name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+                <label for="signupConfirmation">Confirm password<input id="signupConfirmation" name="confirmation" type="password" autocomplete="new-password" minlength="8" required></label>
                 <button type="submit">Create free account <span>↗</span></button>
             </form>
             <p class="auth-switch">Already have an account? <a href="{% url 'login' %}">Sign in</a></p>

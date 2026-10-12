@@ -441,7 +441,11 @@ function openAdvancedComposer() {
 }
 function toggleSetupPanel() {
     if (setupPanel) setupPanel.hidden = !setupPanel.hidden;
-    if (setupPanel && !setupPanel.hidden) runSetupCheck();
+    if (setupPanel && !setupPanel.hidden) {
+        runSetupCheck();
+        const firstControl = setupPanel.querySelector("select, button, input");
+        if (firstControl) window.setTimeout(() => firstControl.focus(), 0);
+    }
 }
 
 function toggleSchedulerPanel() {
@@ -674,6 +678,7 @@ async function installSetupModel() {
 
 function finishSetup() {
     localStorage.setItem("syntaxLocalSetupComplete", "1");
+    if (setupStatus) setupStatus.innerText = "Setup marked ready. Your data remains on this device.";
     if (setupPanel) setupPanel.hidden = true;
 }
 
@@ -681,6 +686,8 @@ function maybeShowSetup() {
     if (!setupPanel || localStorage.getItem("syntaxLocalSetupComplete") === "1") return;
     setupPanel.hidden = false;
     runSetupCheck();
+    const firstControl = setupPanel.querySelector("select, button, input");
+    if (firstControl) window.setTimeout(() => firstControl.focus(), 0);
 }
 
 function toggleBackupPanel() {
