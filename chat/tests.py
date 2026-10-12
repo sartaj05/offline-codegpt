@@ -7,6 +7,7 @@ from urllib.parse import parse_qs, urlparse
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.core.management import call_command
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
@@ -820,6 +821,15 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(AgentJob.objects.get(id=job_id).checkpoint["stage"], "completed")
         paused = self.client.post(f"/api/agent/job/{job_id}/control/", {"action": "retry"})
         self.assertEqual(paused.json()["job"]["status"], "queued")
+
+    def test_persistent_agent_worker_processes_queued_job(self):
+        task = self.client.post("/api/agent/plan/", {"goal": "Worker test"}).json()["task"]
+        queued = self.client.post("/api/agent/jobs/", {"task_id": task["id"], "code": "def add(a, b):\n    return a + b", "test_code": "assert add(2, 2) == 4"})
+        self.assertEqual(queued.status_code, 201)
+        call_command("run_agent_jobs", "--limit", "1", verbosity=0)
+        job = AgentJob.objects.get(id=queued.json()["job"]["id"])
+        self.assertEqual(job.status, "completed")
+        self.assertEqual(job.checkpoint["stage"], "completed")
 
     def test_evaluation_tasks_can_be_created_listed_and_deleted(self):
         created = self.client.post("/api/evaluations/tasks/", {

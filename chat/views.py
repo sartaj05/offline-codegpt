@@ -3606,6 +3606,7 @@ def agent_jobs(request):
             "success": True,
             "jobs": [_agent_job_payload(job) for job in jobs],
             "recovery": {"running": AgentJob.objects.filter(owner=request.user, status="running").count(), "queued": AgentJob.objects.filter(owner=request.user, status="queued").count()},
+            "worker_command": "python manage.py run_agent_jobs --loop",
         })
     task = get_object_or_404(AgentTask, id=request.POST.get("task_id"), owner=request.user)
     job = AgentJob.objects.create(

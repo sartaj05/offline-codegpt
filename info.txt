@@ -561,3 +561,8 @@ Next coding workspace features
   environment analysis. They build the existing API payloads and summarize key
   findings before showing the full JSON result; the advanced JSON runner remains
   available for custom workflows.
+- Persistent agent jobs can now be processed by the local worker command
+  `python manage.py run_agent_jobs --loop`. It claims queued `AgentJob` records,
+  runs guarded checks/tests, writes checkpoints and logs, and preserves pause,
+  retry, cancel, failure, and restart recovery state. Use `--limit N` for a
+  bounded one-shot worker run.
