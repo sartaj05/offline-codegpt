@@ -536,3 +536,7 @@ Next coding workspace features
   with an optional authenticated workspace screenshot. Run
   `npx playwright test tests/responsive.spec.js` after installing Playwright
   locally. Browser binaries are not downloaded automatically in offline mode.
+- Coding workflow artifacts now enforce a bounded JSON payload, reject absolute
+  and parent-directory paths, and redact API keys, bearer tokens, passwords,
+  and private keys before local persistence or response. Rejected payloads
+  return HTTP 400 and are not written to the database.

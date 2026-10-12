@@ -121,6 +121,7 @@ from .incident import analyze_incident
 from .architecture import analyze_architecture
 from .cross_repository import analyze_cross_repository
 from .vault import decrypt_blob, decrypt_secret, encrypt_blob, encrypt_secret, mask_json, redact_sensitive_text
+from .security import sanitize_coding_payload
 from .api_contract import analyze_api_contract
 from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
@@ -1192,6 +1193,10 @@ def coding_workflow_artifacts(request):
         return JsonResponse({"success": False, "error": "payload must be a valid JSON object."}, status=400)
     if not isinstance(payload, dict):
         return JsonResponse({"success": False, "error": "payload must be a JSON object."}, status=400)
+    try:
+        payload = sanitize_coding_payload(payload)
+    except ValueError as exc:
+        return JsonResponse({"success": False, "error": str(exc)}, status=400)
     kind = request.POST.get("kind", "result").strip().lower()
     valid_kinds = {choice[0] for choice in CodingWorkflowArtifact.KIND_CHOICES}
     if kind not in valid_kinds:

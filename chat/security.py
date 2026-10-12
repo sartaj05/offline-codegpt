@@ -2,6 +2,64 @@ import json
 import re
 
 
+MAX_CODING_PAYLOAD_BYTES = 250_000
+_PATH_KEYS = {"filename", "filepath", "path", "file", "cwd", "directory", "worktree"}
+_SECRET_KEYS = {"api_key", "apikey", "authorization", "password", "passwd", "private_key", "secret", "token"}
+
+
+def _safe_relative_path(value):
+    normalized = str(value or "").replace("\\", "/").strip()
+    if not normalized or normalized.startswith("/") or re.match(r"^[A-Za-z]:", normalized):
+        return False
+    return all(part not in {"..", ""} for part in normalized.split("/"))
+
+
+def _redact_coding_string(value):
+    masked = str(value)
+    replacements = [
+        (r"(?i)(authorization\s*:\s*bearer\s+)[A-Za-z0-9._~+/=-]+", r"\1[REDACTED_TOKEN]"),
+        (r"(?i)\b(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_-]{16,})\b", "[REDACTED_API_KEY]"),
+        (r"-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+ PRIVATE KEY-----", "[REDACTED_PRIVATE_KEY]"),
+        (r"(?i)(\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*)([^\s,;]+)", r"\1[REDACTED_SECRET]"),
+    ]
+    for pattern, replacement in replacements:
+        masked = re.sub(pattern, replacement, masked)
+    return masked
+
+
+def sanitize_coding_payload(value, max_bytes=MAX_CODING_PAYLOAD_BYTES):
+    """Validate local paths and redact secrets before coding data is persisted or echoed."""
+    try:
+        encoded = json.dumps(value, ensure_ascii=False).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Coding payload must contain JSON-compatible values.") from exc
+    if len(encoded) > max_bytes:
+        raise ValueError(f"Coding payload exceeds the {max_bytes:,}-byte safety limit.")
+
+    def visit(item, key=None):
+        if isinstance(item, dict):
+            clean = {}
+            for raw_key, raw_value in item.items():
+                name = str(raw_key)
+                normalized_key = re.sub(r"[^a-z0-9]", "", name.lower())
+                if normalized_key in {re.sub(r"[^a-z0-9]", "", candidate) for candidate in _SECRET_KEYS}:
+                    clean[name] = "[REDACTED_SECRET]"
+                    continue
+                if name.lower() in _PATH_KEYS and isinstance(raw_value, str) and not _safe_relative_path(raw_value):
+                    raise ValueError(f"Unsafe relative path in '{name}'.")
+                clean[name] = visit(raw_value, name)
+            return clean
+        if isinstance(item, list):
+            if len(item) > 500:
+                raise ValueError("Coding payload contains too many list items.")
+            return [visit(child, key) for child in item]
+        if isinstance(item, str):
+            return _redact_coding_string(item)
+        return item
+
+    return visit(value)
+
+
 SECRET_PATTERNS = [
     ("secret-generic", "high", re.compile(r"""(?i)\b(api[_-]?key|secret|token|password)\b\s*[:=]\s*['"][^'"]{8,}""")),
     ("aws-access-key", "critical", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),

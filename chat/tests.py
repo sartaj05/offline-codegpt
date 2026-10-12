@@ -711,6 +711,20 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(listed.status_code, 200)
         self.assertEqual(listed.json()["artifacts"][0]["title"], "Auth change risk")
 
+    def test_coding_workflow_artifacts_redact_secrets_and_reject_unsafe_paths(self):
+        saved = self.client.post("/api/coding/workflows/", {
+            "kind": "result",
+            "payload": json.dumps({"filename": "src/auth.py", "content": "api_key=sk-1234567890123456"}),
+        })
+        self.assertEqual(saved.status_code, 201)
+        self.assertNotIn("sk-1234567890123456", json.dumps(saved.json()))
+        rejected = self.client.post("/api/coding/workflows/", {
+            "kind": "result",
+            "payload": json.dumps({"filename": "../../secrets.env", "content": "do not index"}),
+        })
+        self.assertEqual(rejected.status_code, 400)
+        self.assertIn("Unsafe relative path", rejected.json()["error"])
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",
