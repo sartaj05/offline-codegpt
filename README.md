@@ -97,6 +97,22 @@ chat JavaScript syntax, and the VS Code extension manifest. Add
 `-WithBrowser` only after Playwright and its browser are already installed
 locally; the script never downloads browser binaries automatically.
 
+## Windows packaging
+
+For local setup or repair, run:
+
+~~~powershell
+.\scripts\install-windows.ps1 -Offline
+~~~
+
+Offline mode expects dependency wheels in `vendor\wheels`; it never contacts a
+package index. The script runs migrations, Django checks, detects Python/RAM/GPU
+and Ollama/LM Studio/llama.cpp endpoints, and writes `runtime-health.json`.
+`installer\SyntaxLocalAI.iss` can be built with Inno Setup to produce a Windows
+installer. Uninstall preserves the source checkout; `-RemoveData -Confirmed`
+moves local database, environment, media, and model data to a timestamped
+backup before removal.
+
 Use `-SkipOllama` when preparing the Python environment on a machine that will receive Ollama separately.
 
 ### Windows PowerShell

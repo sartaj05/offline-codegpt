@@ -91,6 +91,14 @@ class ChatFeatureTests(TestCase):
             self.assertEqual(max(1, min(3, int("9"))), 3)
             self.assertEqual(max(1, min(3, int("0"))), 1)
 
+    def test_windows_packaging_contract_is_present(self):
+        project_root = Path(__file__).resolve().parents[1]
+        installer = (project_root / "installer" / "SyntaxLocalAI.iss").read_text(encoding="utf-8")
+        setup = (project_root / "scripts" / "install-windows.ps1").read_text(encoding="utf-8")
+        self.assertIn("DefaultDirName", installer)
+        self.assertIn("runtime-health.json", setup)
+        self.assertIn("[switch]$Offline", setup)
+
     def test_coding_security_middleware_audits_requests_and_limits_large_body(self):
         response = self.client.post("/api/coding/inline-completion/", {"filename": "app.py", "code": "x = 1", "prefix": "x"})
         self.assertEqual(response.status_code, 200)

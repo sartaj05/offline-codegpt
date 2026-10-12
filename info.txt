@@ -589,6 +589,13 @@ Next coding workspace features
   `LOCAL_RUNTIME_RETRIES` value (default `2`) before trying the configured
   fallback model. Streaming responses close their runtime connection when the
   client disconnects, and completion metrics record the number of attempts.
+- Windows packaging is defined in `installer\SyntaxLocalAI.iss`. The companion
+  `scripts\install-windows.ps1` performs local Python/venv setup, migrations,
+  repair, RAM/GPU detection, Ollama/LM Studio/llama.cpp health probes, and
+  writes `runtime-health.json`. Use `-Offline` only with preloaded wheels in
+  `vendor\wheels`; no runtime model download is automatic. Uninstall keeps the
+  checkout and, with `-RemoveData -Confirmed`, moves local data to a timestamped
+  backup first.
 - The root validation command is `.\scripts\test-all.ps1`. It runs Django
   checks, migration drift checks, all chat tests, browser JavaScript syntax,
   and VS Code extension manifest checks. Add `-WithBrowser` to run the
