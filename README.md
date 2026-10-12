@@ -459,6 +459,10 @@ POST     /api/mcp/                          MCP JSON-RPC tools
 - Remote Git and repository features are optional and can change external state; review actions and permissions before using them.
 - Generated Docker, Kubernetes, CI, backup, and rollback files must be reviewed before production use.
 
+Backup format v2 preserves local RAG chunks, document layout metadata, runtime
+and privacy settings, and model capability metadata. Model weights are not
+included in the archive; restore those through the local runtime's own manager.
+
 Scanned PDFs are indexed with the local vision runtime when native PDF text
 extraction returns no useful text. Set `LOCAL_OCR_ENABLED=0` to disable this
 fallback or lower `LOCAL_OCR_MAX_PAGES` for large documents. OCR remains local

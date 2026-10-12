@@ -104,6 +104,9 @@ Feature notes
 - Encrypted backups are available from the UI or
   /api/backup/?encrypted=1. The encryption key is derived from DJANGO_SECRET_KEY;
   keep that setting stable or older encrypted backups cannot be restored.
+  Backup format v2 also preserves RAG chunks, document sections, symbols,
+  relations, privacy settings, runtime settings, and model capability metadata.
+  Model weights are not copied; restore local runtime model files separately.
 - The model benchmark is available in Ollama settings. Enter comma-separated
   local model names; the recommendation optimizes measured speed, not quality.
 

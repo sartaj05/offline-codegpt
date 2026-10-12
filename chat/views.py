@@ -3183,16 +3183,31 @@ def project_backup(request):
                 "manifest.json",
                 json.dumps({
                     "format": "syntax-local-ai-backup",
-                    "version": 1,
+                    "version": 2,
                     "username": request.user.username,
                     "created_at": timezone.now().isoformat(),
+                    "scope": "chats, knowledge documents, indexes, settings, and model metadata",
                 }, indent=2),
             )
+            knowledge_index = []
             for document in KnowledgeDocument.objects.filter(
                 owner=request.user, is_active=True
             ).order_by("filename"):
                 filename = _safe_filename(document.filename or document.title)
                 bundle.writestr("project/" + filename, document.original_text)
+                knowledge_index.append({
+                    "filename": filename,
+                    "title": document.title,
+                    "source_type": document.source_type,
+                    "language": document.language,
+                    "file_extension": document.file_extension,
+                    "content_hash": document.content_hash,
+                    "sections": list(document.sections.values("section_type", "title", "content", "page_number", "order", "metadata")),
+                    "chunks": list(document.chunks.values("chunk_index", "content", "language", "summary", "keywords", "embedding")),
+                    "symbols": list(document.symbols.values("name", "kind", "line_start", "line_end", "signature")),
+                    "relations": list(document.relations.values("source_name", "target_name", "relation_type", "line_number", "metadata")),
+                })
+            bundle.writestr("indexes/knowledge.json", json.dumps(knowledge_index, default=str, indent=2))
             for session in ChatSession.objects.filter(
                 owner=request.user
             ).order_by("id"):
@@ -3212,6 +3227,7 @@ def project_backup(request):
             bundle.writestr(
                 "settings/ollama.json",
                 json.dumps({
+                    "runtime": settings.runtime,
                     "server_url": settings.server_url,
                     "default_model": settings.default_model,
                     "fallback_model": settings.fallback_model,
@@ -3220,6 +3236,16 @@ def project_backup(request):
                     "max_context_chars": settings.max_context_chars,
                 }, indent=2),
             )
+            preferences = PrivacyPreference.objects.filter(user=request.user).first()
+            bundle.writestr("settings/privacy.json", json.dumps({
+                "network_lock_enabled": preferences.network_lock_enabled if preferences else True,
+                "store_chat_history": preferences.store_chat_history if preferences else True,
+                "redact_secrets": preferences.redact_secrets if preferences else True,
+            }, indent=2))
+            bundle.writestr("models/catalog.json", json.dumps({
+                "local_models": list(LocalModelConfig.objects.filter(is_active=True).values("name", "display_name", "is_default", "temperature", "top_p", "max_context_chars")),
+                "capabilities": list(ModelCapability.objects.filter(owner=request.user).values("runtime", "model_name", "capabilities", "hardware", "source")),
+            }, default=str, indent=2))
         archive_bytes = archive.getvalue()
         encrypted = request.GET.get("encrypted", "").lower() in {"1", "true", "yes"}
         response = HttpResponse(encrypt_blob(archive_bytes) if encrypted else archive_bytes, content_type="application/octet-stream" if encrypted else "application/zip")
@@ -3250,10 +3276,60 @@ def project_backup(request):
                         _save_knowledge_document(filename, content, "manual", request.user)
                         project_count += 1
 
+            index_name = "indexes/knowledge.json"
+            if index_name in names:
+                records = json.loads(bundle.read(index_name).decode("utf-8"))
+                for record in records[:MAX_PROJECT_FILES]:
+                    filename = _safe_filename(record.get("filename", ""))
+                    document = KnowledgeDocument.objects.filter(owner=request.user, filename=filename).first()
+                    if not document:
+                        continue
+                    document.title = str(record.get("title", document.title))[:300]
+                    document.source_type = str(record.get("source_type", document.source_type))[:30]
+                    document.language = str(record.get("language", document.language))[:50]
+                    document.file_extension = str(record.get("file_extension", document.file_extension))[:30]
+                    document.content_hash = str(record.get("content_hash", document.content_hash))[:128]
+                    document.save(update_fields=["title", "source_type", "language", "file_extension", "content_hash"])
+                    document.sections.all().delete()
+                    DocumentSection.objects.bulk_create([DocumentSection(document=document, **{
+                        "section_type": str(section.get("section_type", "paragraph"))[:20],
+                        "title": str(section.get("title", ""))[:300],
+                        "content": str(section.get("content", "")),
+                        "page_number": section.get("page_number"),
+                        "order": int(section.get("order", 0)),
+                        "metadata": section.get("metadata") or {},
+                    }) for section in record.get("sections", [])[:5000]])
+                    document.chunks.all().delete()
+                    KnowledgeChunk.objects.bulk_create([KnowledgeChunk(document=document, **{
+                        "chunk_index": int(chunk.get("chunk_index", index)),
+                        "content": str(chunk.get("content", "")),
+                        "language": str(chunk.get("language", document.language))[:50],
+                        "summary": chunk.get("summary"),
+                        "keywords": chunk.get("keywords"),
+                        "embedding": chunk.get("embedding") or [],
+                    }) for index, chunk in enumerate(record.get("chunks", [])[:5000])])
+                    document.symbols.all().delete()
+                    CodeSymbol.objects.bulk_create([CodeSymbol(document=document, **{
+                        "name": str(symbol.get("name", ""))[:240],
+                        "kind": str(symbol.get("kind", ""))[:40],
+                        "line_start": int(symbol.get("line_start", 1)),
+                        "line_end": int(symbol.get("line_end", 1)),
+                        "signature": str(symbol.get("signature", "")),
+                    }) for symbol in record.get("symbols", [])[:5000] if symbol.get("name")])
+                    document.relations.all().delete()
+                    CodeRelation.objects.bulk_create([CodeRelation(document=document, **{
+                        "source_name": str(relation.get("source_name", ""))[:240],
+                        "target_name": str(relation.get("target_name", ""))[:240],
+                        "relation_type": str(relation.get("relation_type", "references"))[:30],
+                        "line_number": int(relation.get("line_number", 1)),
+                        "metadata": relation.get("metadata") or {},
+                    }) for relation in record.get("relations", [])[:5000] if relation.get("source_name") and relation.get("target_name")])
+
             settings_name = "settings/ollama.json"
             if settings_name in names:
                 payload = json.loads(bundle.read(settings_name).decode("utf-8"))
                 settings = _user_ollama_settings(request.user)
+                settings.runtime = str(payload.get("runtime", settings.runtime))[:20] if str(payload.get("runtime", settings.runtime))[:20] in RUNTIME_CHOICES else settings.runtime
                 server_url = _safe_ollama_url(payload.get("server_url", settings.server_url))
                 if server_url:
                     settings.server_url = server_url
@@ -3263,6 +3339,37 @@ def project_backup(request):
                 settings.top_p = min(max(float(payload.get("top_p", settings.top_p)), 0), 1)
                 settings.max_context_chars = min(max(int(payload.get("max_context_chars", settings.max_context_chars)), 4000), 100000)
                 settings.save()
+
+            privacy_name = "settings/privacy.json"
+            if privacy_name in names:
+                payload = json.loads(bundle.read(privacy_name).decode("utf-8"))
+                preferences, _ = PrivacyPreference.objects.get_or_create(user=request.user)
+                preferences.network_lock_enabled = bool(payload.get("network_lock_enabled", preferences.network_lock_enabled))
+                preferences.store_chat_history = bool(payload.get("store_chat_history", preferences.store_chat_history))
+                preferences.redact_secrets = bool(payload.get("redact_secrets", preferences.redact_secrets))
+                preferences.save()
+
+            catalog_name = "models/catalog.json"
+            if catalog_name in names:
+                catalog = json.loads(bundle.read(catalog_name).decode("utf-8"))
+                for model in catalog.get("local_models", [])[:100]:
+                    name = str(model.get("name", ""))[:100]
+                    if name:
+                        LocalModelConfig.objects.update_or_create(name=name, defaults={
+                            "display_name": str(model.get("display_name", ""))[:150],
+                            "is_default": bool(model.get("is_default", False)),
+                            "temperature": min(max(float(model.get("temperature", 0.2)), 0), 2),
+                            "top_p": min(max(float(model.get("top_p", 0.9)), 0), 1),
+                            "max_context_chars": min(max(int(model.get("max_context_chars", 24000)), 4000), 100000),
+                        })
+                for capability in catalog.get("capabilities", [])[:200]:
+                    model_name = str(capability.get("model_name", ""))[:160]
+                    if model_name:
+                        ModelCapability.objects.update_or_create(owner=request.user, runtime=str(capability.get("runtime", "ollama"))[:20], model_name=model_name, defaults={
+                            "capabilities": capability.get("capabilities") or {},
+                            "hardware": capability.get("hardware") or {},
+                            "source": str(capability.get("source", "backup"))[:30],
+                        })
 
             for name in names:
                 if not name.startswith("chats/") or not name.endswith(".json"):
