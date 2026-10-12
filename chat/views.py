@@ -126,6 +126,7 @@ from .cross_repository import analyze_cross_repository
 from .vault import decrypt_blob, decrypt_secret, encrypt_blob, encrypt_secret, mask_json, redact_sensitive_text
 from .security import sanitize_coding_payload
 from .security_audit import audit_project
+from .performance import benchmark_repository
 from .api_contract import analyze_api_contract
 from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
@@ -2465,6 +2466,17 @@ def project_workspaces(request):
         workspace.save(update_fields=["name", "updated_at"])
     workspace = _scan_project_workspace(workspace)
     return JsonResponse({"success": workspace.status != "error", "workspace": _project_workspace_payload(workspace)}, status=200 if workspace.status != "error" else 207)
+
+
+@login_required(login_url="/login/")
+@require_POST
+def project_workspace_benchmark(request, workspace_id):
+    workspace = get_object_or_404(ProjectWorkspace, id=workspace_id, owner=request.user)
+    try:
+        max_files = min(max(int(request.POST.get("max_files", 10000)), 1), 100000)
+    except (TypeError, ValueError):
+        max_files = 10000
+    return JsonResponse({"success": True, "workspace_id": workspace.id, "benchmark": benchmark_repository(workspace.root_path, max_files)})
 
 
 @login_required(login_url="/login/")

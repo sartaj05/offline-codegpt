@@ -102,6 +102,10 @@ the optional `SYNTAX_LOCAL_AI_STORAGE` Playwright storage-state file.
 Onboarding diagnostics show recovery commands for stopped runtimes and missing
 models. Model recovery only selects an installed local model; it never performs
 an automatic online download.
+Benchmark a large repository without changing its index with
+`python manage.py benchmark_workspace C:\path\to\repo --json` or the workspace
+benchmark API. The report includes throughput, skipped files, truncation, errors,
+and peak memory.
 
 ## Windows packaging
 

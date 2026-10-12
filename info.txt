@@ -361,6 +361,11 @@ Next workspace feature set
   The launcher creates .venv when needed, applies migrations, and starts the
   server on http://127.0.0.1:8000/. Install dependencies separately with
   `pip install -r requirements.txt` when setting up a new machine.
+- Large repository performance is measured read-only with
+  `python manage.py benchmark_workspace <folder> --json` or POST
+  `/api/project/workspaces/<id>/benchmark/`. Reports discovery count,
+  readable/hashed bytes, files and MB per second, truncation, errors, and peak
+  memory without changing the knowledge index.
 
 Runtime URL overrides
 ---------------------

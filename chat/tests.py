@@ -153,6 +153,19 @@ class ChatFeatureTests(TestCase):
         rejected = self.client.post("/api/setup/recovery/", {"model": "not-installed"})
         self.assertEqual(rejected.status_code, 400)
 
+    def test_large_repository_benchmark_is_read_only_and_reports_throughput(self):
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder, "one.py").write_text("print('one')", encoding="utf-8")
+            Path(folder, "two.md").write_text("# two", encoding="utf-8")
+            workspace = ProjectWorkspace.objects.create(owner=self.user, name="benchmark", root_path=folder)
+            response = self.client.post(f"/api/project/workspaces/{workspace.id}/benchmark/", {"max_files": 10})
+            self.assertEqual(response.status_code, 200)
+            report = response.json()["benchmark"]
+            self.assertEqual(report["files_seen"], 2)
+            self.assertGreaterEqual(report["files_per_second"], 0)
+            self.assertGreaterEqual(report["peak_memory_bytes"], 0)
+            self.assertEqual(workspace.indexed_count, 0)
+
     def test_windows_worker_autostart_contract_is_present(self):
         project_root = Path(__file__).resolve().parents[1]
         command = (project_root / "chat" / "management" / "commands" / "run_offline_workers.py").read_text(encoding="utf-8")
