@@ -1,5 +1,6 @@
 param(
-    [switch]$WithBrowser
+    [switch]$WithBrowser,
+    [switch]$WithInstaller
 )
 
 $ErrorActionPreference = "Stop"
@@ -29,6 +30,10 @@ if ($WithBrowser) {
     if (-not (Get-Command npx -ErrorAction SilentlyContinue)) { throw "npx is required for -WithBrowser." }
     if (-not (Get-Command playwright -ErrorAction SilentlyContinue)) { throw "Playwright is not installed locally; install it before using -WithBrowser." }
     Invoke-Step "Playwright responsive tests" { npx playwright test tests/responsive.spec.js }
+}
+
+if ($WithInstaller) {
+    Invoke-Step "Installer definition" { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\scripts\build-installer.ps1" -CheckOnly }
 }
 
 Write-Host "`nAll requested local checks passed." -ForegroundColor Green

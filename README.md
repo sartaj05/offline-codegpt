@@ -114,6 +114,9 @@ moves local database, environment, media, and model data to a timestamped
 backup before removal.
 The setup registers `run_offline_workers --loop` at user logon; pass
 `-SkipWorker` to opt out, or use `scripts\register-workers.ps1 -Unregister`.
+Validate the installer definition with
+`scripts\build-installer.ps1 -CheckOnly`, or omit `-CheckOnly` on a machine
+with Inno Setup installed to compile the actual installer.
 
 Use `-SkipOllama` when preparing the Python environment on a machine that will receive Ollama separately.
 

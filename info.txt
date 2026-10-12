@@ -625,6 +625,11 @@ Next coding workspace features
   `vendor\wheels`; no runtime model download is automatic. Uninstall keeps the
   checkout and, with `-RemoveData -Confirmed`, moves local data to a timestamped
   backup first.
+- Build and validate the installer with `scripts\build-installer.ps1
+  -CheckOnly` or compile it with Inno Setup using
+  `scripts\build-installer.ps1`. `scripts\test-all.ps1 -WithInstaller` runs
+  the definition check without requiring the compiler. The generated EXE is
+  not a source-controlled artifact.
 - The root validation command is `.\scripts\test-all.ps1`. It runs Django
   checks, migration drift checks, all chat tests, browser JavaScript syntax,
   and VS Code extension manifest checks. Add `-WithBrowser` to run the

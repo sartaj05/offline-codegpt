@@ -3,7 +3,7 @@
 #define MyAppPublisher "Syntax Local"
 
 [Setup]
-AppId={{D6D37B01-5D3D-4BBE-8A89-LOCALSYNTAXAI}}
+AppId={{D6D37B01-5D3D-4BBE-8A89-3F4A8C7E91B2}}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -16,7 +16,7 @@ SolidCompression=yes
 PrivilegesRequired=lowest
 
 [Files]
-Source: "..\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion; Excludes: ".git\*;venv\*;staticfiles\*;__pycache__\*;*.pyc;db.sqlite3;local_models\*"
+Source: "..\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion; Excludes: ".git\*;venv\*;staticfiles\*;__pycache__\*;*.pyc;db.sqlite3;local_models\*;installer\*.exe"
 
 [Icons]
 Name: "{group}\Syntax Local AI setup"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File \"{app}\scripts\install-windows.ps1\""; WorkingDir: "{app}"
