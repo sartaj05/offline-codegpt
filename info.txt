@@ -580,3 +580,8 @@ Next coding workspace features
   redaction, and `coding.api_request` audit events when a user workspace exists.
   Configure `LOCAL_CODING_RATE_LIMIT` to tune the per-minute limit. This does
   not replace tool-specific approval policies.
+- RAG search responses now include citation strings, citation verification,
+  duplicate groups, lexical/semantic/rerank signals, and retrieval explanations.
+  `/api/knowledge/evaluate/` reports precision-at-k and recall against a local
+  expected filename set. Knowledge collections support refresh and delete from
+  the project workspace controls.

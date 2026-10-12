@@ -74,6 +74,16 @@ class ChatFeatureTests(TestCase):
         self.assertContains(response, "guidedWorkflowSelect")
         self.assertContains(response, "runGuidedWorkflow")
 
+    def test_rag_results_include_citations_explanations_and_evaluation(self):
+        self.client.post("/api/project/save/", {"filename": "docs/guide.md", "content": "# Offline guide\nKeep data local.\n"})
+        search = self.client.get("/api/search/?q=offline+guide")
+        self.assertTrue(search.json()["explanation"]["citation_policy"])
+        self.assertTrue(search.json()["results"][0]["citation_verified"])
+        self.assertIn("duplicate_group", search.json()["results"][0])
+        evaluation = self.client.post("/api/knowledge/evaluate/", {"query": "offline guide", "expected_filenames": '["docs/guide.md"]'})
+        self.assertEqual(evaluation.status_code, 200)
+        self.assertEqual(evaluation.json()["metrics"]["hits"], ["docs/guide.md"])
+
     def test_coding_security_middleware_audits_requests_and_limits_large_body(self):
         response = self.client.post("/api/coding/inline-completion/", {"filename": "app.py", "code": "x = 1", "prefix": "x"})
         self.assertEqual(response.status_code, 200)

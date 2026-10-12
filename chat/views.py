@@ -1591,6 +1591,9 @@ def _search_knowledge(query, limit=8, owner=None, filenames=None, collection_id=
         seen_documents.add(chunk.document_id)
         content = chunk.document.original_text if full_document else chunk.content
         offset = chunk.document.original_text.find(chunk.content)
+        citation_verified = offset >= 0 and bool(chunk.document.filename)
+        line_start = chunk.document.original_text[:max(offset, 0)].count("\n") + 1
+        line_end = chunk.document.original_text[:max(offset, 0)].count("\n") + content.count("\n") + 1
         results.append({
             "filename": chunk.document.filename,
             "language": chunk.language,
@@ -1600,10 +1603,14 @@ def _search_knowledge(query, limit=8, owner=None, filenames=None, collection_id=
             "lexical_score": lexical_score,
             "semantic_score": round(semantic_score, 4),
             "retrieval": "full_document" if full_document else "hybrid",
-            "line_start": chunk.document.original_text[:max(offset, 0)].count("\n") + 1,
-            "line_end": chunk.document.original_text[:max(offset, 0)].count("\n") + content.count("\n") + 1,
+            "line_start": line_start,
+            "line_end": line_end,
             "page_start": _page_for_offset(chunk.document.original_text, offset),
             "page_end": _page_for_offset(chunk.document.original_text, offset + len(content)),
+            "citation": f"{chunk.document.filename}:{line_start}-{line_end}",
+            "citation_verified": citation_verified,
+            "duplicate_group": hashlib.sha256(chunk.content.strip().encode("utf-8")).hexdigest()[:16],
+            "why_selected": {"lexical": round(lexical_score, 4), "semantic": round(semantic_score, 4), "rerank": round(score, 4)},
         })
     return results
 
@@ -2132,11 +2139,28 @@ def knowledge_search(request):
     except (TypeError, ValueError):
         collection_id = None
     collection = KnowledgeCollection.objects.filter(id=collection_id, owner=request.user).first() if collection_id else None
+    results = _search_knowledge(query, owner=request.user, collection_id=collection.id if collection else None, full_document=bool(collection and collection.retrieval_mode == "full"))
     return JsonResponse({
         "success": True,
         "query": query,
-        "results": _search_knowledge(query, owner=request.user, collection_id=collection.id if collection else None, full_document=bool(collection and collection.retrieval_mode == "full")),
+        "results": results,
+        "explanation": {"weights": dict(zip(("lexical", "semantic", "rerank"), _hybrid_retrieval_weights())), "candidate_count": len(results), "citation_policy": "Every result includes filename and line/page evidence; citation_verified is false when the chunk offset cannot be resolved."},
     })
+
+
+@login_required(login_url="/login/")
+@require_POST
+def knowledge_evaluate(request):
+    query = request.POST.get("query", "").strip()[:1000]
+    try:
+        expected = {str(item).strip().lower() for item in json.loads(request.POST.get("expected_filenames", "[]")) if str(item).strip()}
+        limit = max(1, min(50, int(request.POST.get("limit", "8"))))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "expected_filenames must be a JSON array and limit must be numeric."}, status=400)
+    results = _search_knowledge(query, owner=request.user, limit=limit)
+    returned = {str(item.get("filename", "")).lower() for item in results}
+    hits = returned & expected
+    return JsonResponse({"success": True, "query": query, "results": results, "metrics": {"precision_at_k": round(len(hits) / max(1, len(returned)), 4), "recall": round(len(hits) / max(1, len(expected)), 4), "hits": sorted(hits), "expected": sorted(expected)}})
 
 
 def _local_model_inventory():
@@ -2214,6 +2238,21 @@ def _collection_payload(collection):
 @require_http_methods(["GET", "POST"])
 def knowledge_collections(request):
     if request.method == "POST":
+        action = request.POST.get("action", "create").strip().lower()
+        if action in {"refresh", "delete"}:
+            try:
+                collection_id = int(request.POST.get("collection_id", "0"))
+            except (TypeError, ValueError):
+                return JsonResponse({"success": False, "error": "A valid collection_id is required."}, status=400)
+            collection = get_object_or_404(KnowledgeCollection, id=collection_id, owner=request.user)
+            if action == "delete":
+                collection.delete()
+                return JsonResponse({"success": True, "deleted": True, "collection_id": collection_id})
+            documents = list(collection.documents.filter(is_active=True))
+            for document in documents:
+                _index_knowledge_document(document, request.user)
+            collection.save(update_fields=["updated_at"])
+            return JsonResponse({"success": True, "refreshed": len(documents), "collection": _collection_payload(collection)})
         name = request.POST.get("name", "").strip()[:160]
         if not name:
             return JsonResponse({"success": False, "error": "Collection name is required."}, status=400)

@@ -4287,6 +4287,26 @@ async function addSelectedToKnowledgeCollection() {
     } catch (error) { alert("Collection files error: " + error); }
 }
 
+async function refreshKnowledgeCollection() {
+    const collectionId = knowledgeCollectionSelect ? knowledgeCollectionSelect.value : "";
+    if (!collectionId) { alert("Choose a collection first."); return; }
+    const response = await fetch("/api/knowledge/collections/", { method: "POST", headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ action: "refresh", collection_id: collectionId }) });
+    const data = await response.json();
+    if (!response.ok) { alert(data.error || "Unable to refresh collection."); return; }
+    await loadKnowledgeCollections();
+    knowledgeCollectionSelect.value = collectionId;
+    if (projectStats) projectStats.innerText = `Refreshed ${data.refreshed} collection file(s).`;
+}
+
+async function deleteKnowledgeCollection() {
+    const collectionId = knowledgeCollectionSelect ? knowledgeCollectionSelect.value : "";
+    if (!collectionId || !window.confirm("Delete this local knowledge collection?")) return;
+    const response = await fetch("/api/knowledge/collections/", { method: "POST", headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ action: "delete", collection_id: collectionId }) });
+    const data = await response.json();
+    if (!response.ok) { alert(data.error || "Unable to delete collection."); return; }
+    await loadKnowledgeCollections();
+}
+
 async function openPatchReview(updated, language) {
     openAdvancedComposer();
     if (!patchPanel) {

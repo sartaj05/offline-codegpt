@@ -30,6 +30,7 @@ urlpatterns = [
     path("api/session/<int:session_id>/manage/", views.manage_session, name="manage_session"),
     path("api/search/", views.knowledge_search, name="knowledge_search"),
     path("api/knowledge/collections/", views.knowledge_collections, name="knowledge_collections"),
+    path("api/knowledge/evaluate/", views.knowledge_evaluate, name="knowledge_evaluate"),
     path("api/knowledge/collections/<int:collection_id>/documents/", views.knowledge_collection_documents, name="knowledge_collection_documents"),
     path("api/project/", views.project_documents, name="project_documents"),
     path("api/project/workspaces/", views.project_workspaces, name="project_workspaces"),
