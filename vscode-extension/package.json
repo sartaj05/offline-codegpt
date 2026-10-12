@@ -14,6 +14,8 @@
     ,"onCommand:syntaxLocalAI.explainSelection"
     ,"onCommand:syntaxLocalAI.generateTests"
     ,"onCommand:syntaxLocalAI.askProject"
+    ,"onCommand:syntaxLocalAI.applyLastSuggestion"
+    ,"onCommand:syntaxLocalAI.runProjectTests"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -37,6 +39,14 @@
       {
         "command": "syntaxLocalAI.askProject",
         "title": "Syntax Local AI: Ask Project"
+      },
+      {
+        "command": "syntaxLocalAI.applyLastSuggestion",
+        "title": "Syntax Local AI: Apply Last Suggested Code"
+      },
+      {
+        "command": "syntaxLocalAI.runProjectTests",
+        "title": "Syntax Local AI: Run Approved Project Tests"
       }
     ],
     "configuration": {
@@ -46,6 +56,11 @@
           "type": "string",
           "default": "http://127.0.0.1:8000",
           "description": "Local Syntax Local AI server URL."
+        },
+        "syntaxLocalAI.testCommand": {
+          "type": "string",
+          "default": "python manage.py test",
+          "description": "Local test command. It runs only after explicit confirmation."
         }
       }
     }

@@ -519,3 +519,7 @@ Next coding workspace features
   snapshots. The agent workspace displays live status, step progress, and the
   latest local checkpoint. Event streaming remains localhost-only and retries
   automatically after a disconnected browser session.
+- The VS Code extension now provides inline completion, line-aware review
+  diagnostics, confirmed apply/reject editing, and confirmed local test runs.
+  Configure `syntaxLocalAI.testCommand`; no extension action sends code outside
+  the configured localhost server.
