@@ -174,6 +174,7 @@ urlpatterns = [
     path("api/coding/offline-dependencies/", views.coding_offline_dependencies, name="coding_offline_dependencies"),
     path("api/coding/dev-environment/", views.coding_dev_environment, name="coding_dev_environment"),
     path("api/coding/git-archaeology/", views.coding_git_archaeology, name="coding_git_archaeology"),
+    path("api/coding/workflows/", views.coding_workflow_artifacts, name="coding_workflow_artifacts"),
     path("api/session/<int:session_id>/", views.session_messages, name="session_messages"),
     path("api/session/<int:session_id>/summary/", views.session_summary, name="session_summary"),
     path("api/session/<int:session_id>/revisions/", views.session_revisions, name="session_revisions"),

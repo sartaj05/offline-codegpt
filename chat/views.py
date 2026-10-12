@@ -101,6 +101,7 @@ from .models import (
     EvaluationScore,
     EvaluationRegressionSuite,
     EvaluationReplay,
+    CodingWorkflowArtifact,
     SecretVaultItem,
     ExtensionPackage,
     ExtensionInstall,
@@ -1173,6 +1174,32 @@ def coding_git_archaeology(request):
     except (TypeError, ValueError, json.JSONDecodeError):
         return JsonResponse({"success": False, "error": "commits, blame, and changed_files must be valid JSON arrays."}, status=400)
     return JsonResponse({"success": True, **analyze_git_archaeology(commits, blame, changed_files)})
+
+
+def _coding_artifact_payload(artifact):
+    return {"id": artifact.id, "kind": artifact.kind, "title": artifact.title, "payload": artifact.payload, "fingerprint": artifact.fingerprint, "status": artifact.status, "created_at": artifact.created_at.isoformat(), "updated_at": artifact.updated_at.isoformat()}
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def coding_workflow_artifacts(request):
+    if request.method == "GET":
+        artifacts = CodingWorkflowArtifact.objects.filter(owner=request.user)[:100]
+        return JsonResponse({"success": True, "artifacts": [_coding_artifact_payload(item) for item in artifacts]})
+    try:
+        payload = json.loads(request.POST.get("payload", "{}"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "payload must be a valid JSON object."}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({"success": False, "error": "payload must be a JSON object."}, status=400)
+    kind = request.POST.get("kind", "result").strip().lower()
+    valid_kinds = {choice[0] for choice in CodingWorkflowArtifact.KIND_CHOICES}
+    if kind not in valid_kinds:
+        return JsonResponse({"success": False, "error": "Unsupported workflow artifact kind."}, status=400)
+    title = request.POST.get("title", "Saved coding workflow").strip()[:200] or "Saved coding workflow"
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    artifact = CodingWorkflowArtifact.objects.create(owner=request.user, kind=kind, title=title, payload=payload, fingerprint=hashlib.sha256(serialized.encode("utf-8")).hexdigest())
+    return JsonResponse({"success": True, "artifact": _coding_artifact_payload(artifact)}, status=201)
 
 
 def _user_ollama_settings(user):

@@ -167,10 +167,12 @@
                 <label>Feature<select id="codingFeatureSelect" onchange="loadCodingFeatureExample()"></select></label>
                 <button type="button" onclick="loadCodingFeatureExample()">Load example</button>
                 <button type="button" class="coding-feature-run" onclick="runCodingFeature()">Run locally</button>
+                <button type="button" onclick="saveCodingWorkflow()">Save result</button>
             </div>
             <textarea id="codingFeaturePayload" class="coding-feature-payload" spellcheck="false" placeholder='Enter JSON payload for the selected coding feature...'></textarea>
             <div id="codingFeatureStatus" class="coding-feature-status">Select a feature to begin.</div>
             <pre id="codingFeatureOutput" class="coding-feature-output">Results will appear here.</pre>
+            <div id="codingWorkflowSaved" class="coding-feature-status">Saved workflow artifacts will appear here.</div>
         </section>
         <section id="codingCenterPanel" class="coding-center-panel" hidden>
             <div class="settings-heading">

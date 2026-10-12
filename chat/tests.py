@@ -682,6 +682,19 @@ class ChatFeatureTests(TestCase):
         self.assertIn("event: progress", first_chunk)
         self.assertIn("Progress task", first_chunk)
 
+    def test_coding_workflow_artifacts_persist_and_list_local_results(self):
+        saved = self.client.post("/api/coding/workflows/", {
+            "kind": "risk",
+            "title": "Auth change risk",
+            "payload": json.dumps({"score": 80, "approval_required": True}),
+        })
+        self.assertEqual(saved.status_code, 201)
+        self.assertEqual(saved.json()["artifact"]["kind"], "risk")
+        self.assertEqual(len(saved.json()["artifact"]["fingerprint"]), 64)
+        listed = self.client.get("/api/coding/workflows/")
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.json()["artifacts"][0]["title"], "Auth change risk")
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

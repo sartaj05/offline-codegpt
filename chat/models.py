@@ -882,6 +882,33 @@ class EvaluationRegressionSuite(models.Model):
         return self.name
 
 
+class CodingWorkflowArtifact(models.Model):
+    KIND_CHOICES = (
+        ("plan", "Plan"),
+        ("replay", "Replay"),
+        ("risk", "Risk report"),
+        ("dependency", "Dependency report"),
+        ("environment", "Environment report"),
+        ("git", "Git archaeology"),
+        ("result", "Feature result"),
+    )
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="coding_workflow_artifacts")
+    kind = models.CharField(max_length=30, choices=KIND_CHOICES, default="result")
+    title = models.CharField(max_length=200)
+    payload = models.JSONField(default=dict)
+    fingerprint = models.CharField(max_length=64, db_index=True)
+    status = models.CharField(max_length=30, default="saved")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+
+    def __str__(self):
+        return self.title
+
+
 class EvaluationReplay(models.Model):
     STATUS_CHOICES = (("running", "Running"), ("completed", "Completed"), ("failed", "Failed"))
 

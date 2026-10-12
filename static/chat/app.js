@@ -417,6 +417,22 @@ async function runCodingFeature() {
     }
 }
 
+async function saveCodingWorkflow() {
+    const select = document.getElementById("codingFeatureSelect");
+    const output = document.getElementById("codingFeatureOutput");
+    const status = document.getElementById("codingWorkflowSaved");
+    if (!select || !output || !status) return;
+    let payload;
+    try { payload = JSON.parse(output.textContent || "{}"); } catch (error) { status.textContent = "Run a feature before saving its result."; return; }
+    const title = window.prompt("Name this coding workflow", codingFeatureDefinitions.find((item) => item.id === select.value)?.label || "Coding workflow");
+    if (!title) return;
+    try {
+        const response = await fetch("/api/coding/workflows/", { method: "POST", headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ kind: "result", title, payload: JSON.stringify(payload) }) });
+        const data = await response.json();
+        status.textContent = response.ok ? `Saved locally as #${data.artifact.id}.` : (data.error || "Unable to save workflow.");
+    } catch (error) { status.textContent = "Save error: " + error.message; }
+}
+
 function openAdvancedComposer() {
     if (!advancedComposer) return;
     advancedComposer.hidden = false;
