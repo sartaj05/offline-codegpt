@@ -674,6 +674,14 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(payload["changed_file_explanations"][0]["likely_reason"], "Add parser tests")
         self.assertFalse(payload["remote_provider_used"])
 
+    def test_agent_event_stream_emits_task_progress(self):
+        AgentTask.objects.create(owner=self.user, title="Progress task", goal="Run local checks", plan=[{"title": "Check", "completed": False}])
+        response = self.client.get("/api/agent/events/")
+        self.assertEqual(response.status_code, 200)
+        first_chunk = next(iter(response.streaming_content)).decode("utf-8")
+        self.assertIn("event: progress", first_chunk)
+        self.assertIn("Progress task", first_chunk)
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

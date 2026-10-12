@@ -104,6 +104,7 @@ const observabilityStats = document.getElementById("observabilityStats");
 const observabilityOutput = document.getElementById("observabilityOutput");
 let observabilityTimer = null;
 let agentEventSource = null;
+let agentEventRetryTimer = null;
 const sandboxTimeout = document.getElementById("sandboxTimeout");
 const sandboxMemory = document.getElementById("sandboxMemory");
 const sandboxOutputChars = document.getElementById("sandboxOutputChars");
@@ -1266,10 +1267,30 @@ function startAgentEventStream() {
             // Ignore malformed event payloads and keep the periodic metrics refresh alive.
         }
     });
+    agentEventSource.addEventListener("progress", event => {
+        try { renderAgentProgress(JSON.parse(event.data)); } catch (error) { /* Ignore malformed progress events. */ }
+    });
     agentEventSource.onerror = () => {
         if (agentEventSource) agentEventSource.close();
         agentEventSource = null;
+        if (document.getElementById("agentProgressPanel")) {
+            window.clearTimeout(agentEventRetryTimer);
+            agentEventRetryTimer = window.setTimeout(startAgentEventStream, 2500);
+        }
     };
+}
+
+function renderAgentProgress(data) {
+    const label = document.getElementById("agentProgressLabel");
+    const bar = document.getElementById("agentProgressBar");
+    const output = document.getElementById("agentProgressOutput");
+    if (!label || !bar || !output) return;
+    const active = (data.tasks || []).find((task) => ["running", "paused", "planned"].includes(task.status)) || (data.tasks || [])[0];
+    const activeJob = (data.jobs || []).find((job) => ["running", "paused", "queued"].includes(job.status));
+    const progress = active ? Math.round((active.progress / Math.max(active.total_steps, 1)) * 100) : 0;
+    bar.style.width = `${Math.max(0, Math.min(progress, 100))}%`;
+    label.textContent = active ? `${active.title} · ${active.status} · ${progress}%` : activeJob ? `${activeJob.title} · ${activeJob.status}` : "No active local task.";
+    output.textContent = JSON.stringify({ task: active || null, job: activeJob || null }, null, 2);
 }
 
 async function loadObservability() {
@@ -4541,4 +4562,5 @@ if (ollamaSettingsPanel) loadOllamaSettings();
 if (setupPanel) maybeShowSetup();
 if (chatHistory) loadChatHistory();
 if (sandboxPolicyStatus) loadSandboxPolicy();
+if (document.getElementById("agentProgressPanel")) startAgentEventStream();
 restoreDraft();

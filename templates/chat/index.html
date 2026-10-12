@@ -976,6 +976,11 @@
                         <textarea id="agentSteps" class="agent-goal" placeholder="Optional custom checkpoints, one per line. Write/edit/test/Git steps become approval-gated."></textarea>
                         <button type="button" class="agent-plan-button" onclick="createAgentPlan()">Create approved plan</button>
                         <div id="agentStatus" class="agent-status">No agent task yet.</div>
+                        <div id="agentProgressPanel" class="agent-progress-panel">
+                            <div class="agent-progress-heading"><strong>Live task progress</strong><span id="agentProgressLabel">Waiting for a local task.</span></div>
+                            <div class="agent-progress-track"><span id="agentProgressBar"></span></div>
+                            <pre id="agentProgressOutput" class="agent-progress-output">Progress events will appear here.</pre>
+                        </div>
                         <div id="agentPlan" class="agent-plan"></div>
                         <pre id="agentLogs" class="agent-logs">Agent logs will appear here.</pre>
                         <div id="agentJobStatus" class="agent-status">No background job queued.</div>

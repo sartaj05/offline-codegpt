@@ -469,6 +469,13 @@ select { padding: 0 10px; }
 .agent-plan-button { width: 100%; margin-top: 7px; border-color: #697ee5; background: #34448d; color: #f0f3ff; }
 .agent-goal { width: 100%; min-height: 58px; margin-top: 9px; resize: vertical; padding: 9px; border: 1px solid var(--border); border-radius: 8px; outline: 0; background: #11141b; color: var(--text); font-size: 11px; line-height: 1.45; }
 .agent-status { min-height: 16px; margin-top: 8px; color: #b5c2ff; font-size: 10px; }
+.agent-progress-panel { margin-top: 9px; padding: 9px; border: 1px solid rgba(99,230,190,.24); border-radius: 8px; background: rgba(17,20,27,.55); }
+.agent-progress-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.agent-progress-heading strong { color: var(--text); font-size: 10px; }
+.agent-progress-heading span { color: var(--muted); font-size: 9px; }
+.agent-progress-track { height: 6px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: #0d1016; }
+.agent-progress-track span { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent-strong), var(--blue)); transition: width .25s ease; }
+.agent-progress-output { max-height: 120px; overflow: auto; margin: 8px 0 0; padding: 7px; color: #aebbd0; font-family: Consolas, monospace; font-size: 9px; white-space: pre-wrap; }
 .agent-plan { display: grid; gap: 6px; }
 .agent-step { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 7px; background: rgba(17,20,27,.55); }
 .agent-step.completed { border-color: rgba(99,230,190,.35); background: rgba(27,49,48,.3); }

@@ -3718,6 +3718,7 @@ def ai_observability(request):
 def agent_event_stream(request):
     def stream():
         latest_id = 0
+        last_progress_signature = ""
         for _ in range(20):
             events = list(
                 AiEvent.objects.filter(owner=request.user, id__gt=latest_id)
@@ -3735,6 +3736,17 @@ def agent_event_stream(request):
                     "created_at": event.created_at.isoformat(),
                 }
                 yield f"event: ai\ndata: {json.dumps(payload)}\n\n"
+            tasks = list(AgentTask.objects.filter(owner=request.user).order_by("-updated_at")[:20])
+            jobs = list(AgentJob.objects.filter(owner=request.user).select_related("task").order_by("-updated_at")[:20])
+            progress = {
+                "tasks": [{"id": task.id, "title": task.title, "status": task.status, "progress": sum(1 for step in (task.plan or []) if step.get("completed")), "total_steps": len(task.plan or []), "current_step": task.current_step} for task in tasks],
+                "jobs": [{"id": job.id, "task_id": job.task_id, "title": job.task.title, "status": job.status, "attempts": job.attempts, "checkpoint": job.checkpoint} for job in jobs],
+                "created_at": timezone.now().isoformat(),
+            }
+            progress_signature = json.dumps(progress, sort_keys=True)
+            if progress_signature != last_progress_signature:
+                last_progress_signature = progress_signature
+                yield f"event: progress\ndata: {json.dumps(progress)}\n\n"
             yield f": heartbeat {timezone.now().isoformat()}\n\n"
             time.sleep(1)
 

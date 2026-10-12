@@ -515,3 +515,7 @@ Next coding workspace features
   Submit local commits, blame rows, and changed files to get hotspots, owners,
   recent change reasons, and file-history explanations. The endpoint does not
   call GitHub or another remote provider.
+- Agent progress is now streamed through `/api/agent/events/` with task and job
+  snapshots. The agent workspace displays live status, step progress, and the
+  latest local checkpoint. Event streaming remains localhost-only and retries
+  automatically after a disconnected browser session.
