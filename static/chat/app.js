@@ -378,6 +378,77 @@ function toggleCodingFeaturePanel() {
     }
 }
 
+function toggleGuidedCodingPanel() {
+    const panel = document.getElementById("guidedCodingPanel");
+    if (!panel) return;
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) loadGuidedWorkflowExample();
+}
+
+function guidedJson(value, fallback) {
+    try { return JSON.parse(value || JSON.stringify(fallback)); } catch (error) { throw new Error("Use valid JSON in every structured field."); }
+}
+
+function loadGuidedWorkflowExample() {
+    const workflow = document.getElementById("guidedWorkflowSelect")?.value || "change-risk";
+    const files = document.getElementById("guidedFiles");
+    const changed = document.getElementById("guidedChangedOrTask");
+    const secondary = document.getElementById("guidedSecondary");
+    const tertiary = document.getElementById("guidedTertiary");
+    if (!files || !changed || !secondary || !tertiary) return;
+    const examples = {
+        "change-risk": { files: [{ filename: "src/auth.py", content: "" }], changed: ["src/auth.py"], secondary: { "src/auth.py": ["api/routes.py"] }, tertiary: ["tests/test_auth.py"] },
+        "offline-dependencies": { files: [{ filename: "requirements.txt", content: "Django==5.2.15\nrequests==2.34.2" }], changed: "", secondary: { Django: { version: "5.2.15", license: "BSD" } }, tertiary: {} },
+        "task-replay": { files: [], changed: "", secondary: {}, tertiary: { prompt: "Fix the parser", model: "local-default", runtime: "local", files: [] } },
+        "custom-agents": { files: [{ filename: "AGENTS.md", content: "Run local tests." }], changed: "Review the backend", secondary: [{ name: "reviewer", role: "review" }], tertiary: {} },
+        "dev-environment": { files: [{ filename: "requirements.txt", content: "Django==5.2.15" }], changed: "", secondary: { ram_gb: 16 }, tertiary: [] },
+    };
+    const example = examples[workflow];
+    files.value = JSON.stringify(example.files, null, 2);
+    changed.value = typeof example.changed === "string" ? example.changed : JSON.stringify(example.changed, null, 2);
+    secondary.value = JSON.stringify(example.secondary, null, 2);
+    tertiary.value = JSON.stringify(example.tertiary, null, 2);
+    const status = document.getElementById("guidedCodingStatus");
+    if (status) status.textContent = `${workflow} · structured local analysis · no automatic writes`;
+}
+
+function renderGuidedWorkflowSummary(workflow, data) {
+    const summary = document.getElementById("guidedCodingSummary");
+    if (!summary) return;
+    const lines = [];
+    if (workflow === "change-risk") lines.push(`Risk score: ${data.risk_score ?? "n/a"}`, `Severity: ${data.severity || "unknown"}`, `Approval required: ${data.approval_required ? "yes" : "no"}`);
+    else if (workflow === "offline-dependencies") lines.push(`Available: ${(data.available || []).length}`, `Missing: ${(data.missing_from_catalog || []).length}`, `Advisories: ${(data.advisories || []).length}`, `Network used: ${data.network_used ? "yes" : "no"}`);
+    else if (workflow === "task-replay") lines.push(`Replayable: ${data.replayable ? "yes" : "no"}`, `Mismatches: ${(data.mismatches || []).length}`);
+    else if (workflow === "custom-agents") lines.push(`Profiles: ${(data.profiles || []).length}`, `Skills: ${(data.skills || []).length}`, `Selected: ${data.selected_profile?.name || "none"}`);
+    else lines.push(`Ecosystems: ${(data.ecosystems || []).join(", ") || "none detected"}`, `Setup commands: ${(data.commands || []).length}`);
+    summary.innerText = lines.join(" · ");
+}
+
+async function runGuidedWorkflow() {
+    const workflow = document.getElementById("guidedWorkflowSelect")?.value || "change-risk";
+    const status = document.getElementById("guidedCodingStatus");
+    const output = document.getElementById("guidedCodingOutput");
+    try {
+        const files = guidedJson(document.getElementById("guidedFiles")?.value, []);
+        const changed = document.getElementById("guidedChangedOrTask")?.value || "";
+        const secondary = guidedJson(document.getElementById("guidedSecondary")?.value, {});
+        const tertiary = guidedJson(document.getElementById("guidedTertiary")?.value, {});
+        const body = new URLSearchParams();
+        if (workflow === "change-risk") { body.set("files", JSON.stringify(files)); body.set("changed_files", JSON.stringify(guidedJson(changed, []))); body.set("relations", JSON.stringify(secondary)); body.set("tests", JSON.stringify(tertiary)); body.set("security_paths", "[]"); }
+        if (workflow === "offline-dependencies") { body.set("files", JSON.stringify(files)); body.set("catalog", JSON.stringify(secondary)); }
+        if (workflow === "task-replay") { body.set("record", JSON.stringify(tertiary)); body.set("current", JSON.stringify(secondary)); }
+        if (workflow === "custom-agents") { body.set("files", JSON.stringify(files)); body.set("task", changed); body.set("agents", JSON.stringify(secondary)); }
+        if (workflow === "dev-environment") { body.set("files", JSON.stringify(files)); body.set("hardware", JSON.stringify(secondary)); body.set("commands", JSON.stringify(tertiary)); }
+        if (status) status.innerText = "Running structured workflow locally...";
+        const response = await fetch(`/api/coding/${workflow}/`, { method: "POST", headers: { "X-CSRFToken": csrfToken }, body });
+        const data = await response.json();
+        if (output) output.innerText = JSON.stringify(data, null, 2);
+        if (!response.ok) throw new Error(data.error || "Structured workflow failed.");
+        renderGuidedWorkflowSummary(workflow, data);
+        if (status) status.innerText = "Completed locally. Review findings before any write action.";
+    } catch (error) { if (status) status.innerText = error.message; }
+}
+
 function loadCodingFeatureExample() {
     const select = document.getElementById("codingFeatureSelect");
     const payload = document.getElementById("codingFeaturePayload");

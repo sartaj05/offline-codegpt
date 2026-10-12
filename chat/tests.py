@@ -67,6 +67,12 @@ class ChatFeatureTests(TestCase):
             self.assertEqual(second.json()["workspace"]["skipped_count"], 1)
             self.assertEqual(ProjectWorkspace.objects.filter(owner=self.user).count(), 1)
 
+    def test_guided_coding_workflow_form_contract_is_present(self):
+        response = self.client.get("/")
+        self.assertContains(response, "guidedCodingPanel")
+        self.assertContains(response, "guidedWorkflowSelect")
+        self.assertContains(response, "runGuidedWorkflow")
+
     def test_lsp_adapter_catalog_reports_local_fallback_and_servers(self):
         response = self.client.get("/api/coding/lsp/adapters/")
         self.assertEqual(response.status_code, 200)

@@ -160,7 +160,7 @@
             <div class="settings-heading">
                 <div>
                     <strong>Latest coding features</strong>
-                    <span>Run local coding workflows through the same approval-gated API used by the workspace.</span>
+                    <span>Advanced JSON runner for local coding workflows. Use Guided workflows for common tasks.</span>
                 </div>
                 <button type="button" onclick="toggleCodingFeaturePanel()">Close</button>
             </div>
@@ -174,6 +174,29 @@
             <div id="codingFeatureStatus" class="coding-feature-status">Select a feature to begin.</div>
             <pre id="codingFeatureOutput" class="coding-feature-output">Results will appear here.</pre>
             <div id="codingWorkflowSaved" class="coding-feature-status">Saved workflow artifacts will appear here.</div>
+        </section>
+        <section id="guidedCodingPanel" class="coding-feature-panel guided-coding-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Guided coding workflows</strong>
+                    <span>Run risk, dependency, replay, agent, and environment checks with structured forms.</span>
+                </div>
+                <button type="button" onclick="toggleGuidedCodingPanel()">Close</button>
+            </div>
+            <div class="coding-feature-toolbar">
+                <label>Workflow<select id="guidedWorkflowSelect" onchange="loadGuidedWorkflowExample()"><option value="change-risk">Change risk</option><option value="offline-dependencies">Dependency check</option><option value="task-replay">Task replay</option><option value="custom-agents">Custom agents</option><option value="dev-environment">Dev environment</option></select></label>
+                <button type="button" onclick="loadGuidedWorkflowExample()">Load example</button>
+                <button type="button" class="coding-feature-run" onclick="runGuidedWorkflow()">Analyze locally</button>
+            </div>
+            <div class="guided-coding-grid">
+                <label>Files JSON<textarea id="guidedFiles" spellcheck="false"></textarea></label>
+                <label>Changed files / task<textarea id="guidedChangedOrTask" spellcheck="false"></textarea></label>
+                <label>Catalog / hardware / agents JSON<textarea id="guidedSecondary" spellcheck="false"></textarea></label>
+                <label>Replay record / relations JSON<textarea id="guidedTertiary" spellcheck="false"></textarea></label>
+            </div>
+            <div id="guidedCodingStatus" class="coding-feature-status" role="status" aria-live="polite">Choose a workflow to begin.</div>
+            <div id="guidedCodingSummary" class="guided-coding-summary">Findings and approval guidance will appear here.</div>
+            <pre id="guidedCodingOutput" class="coding-feature-output">Structured workflow results will appear here.</pre>
         </section>
         <section id="codingCenterPanel" class="coding-center-panel" hidden>
             <div class="settings-heading">

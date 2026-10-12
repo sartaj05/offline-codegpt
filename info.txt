@@ -556,3 +556,8 @@ Next coding workspace features
   the response reports indexed, skipped, and failed files. The existing
   `python manage.py watch_project <folder> --username <user>` command can keep
   polling a folder for incremental changes.
+- Guided coding forms are available in the authenticated workspace for change
+  risk, offline dependency checks, task replay, custom agents, and development
+  environment analysis. They build the existing API payloads and summarize key
+  findings before showing the full JSON result; the advanced JSON runner remains
+  available for custom workflows.
