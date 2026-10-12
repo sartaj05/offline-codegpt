@@ -527,3 +527,7 @@ Next coding workspace features
   diagnostics, confirmed apply/reject editing, and confirmed local test runs.
   Configure `syntaxLocalAI.testCommand`; no extension action sends code outside
   the configured localhost server.
+- Provenance verification uses separate handlers for SLSA-style JSON documents
+  and the existing signed coding attestations. This prevents endpoint name
+  collisions and keeps both verification formats working.
+  Test with `python manage.py test chat.tests.ChatFeatureTests.test_provenance_generator_and_verifier --keepdb`.
