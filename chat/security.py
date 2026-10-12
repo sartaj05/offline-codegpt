@@ -60,6 +60,19 @@ def sanitize_coding_payload(value, max_bytes=MAX_CODING_PAYLOAD_BYTES):
     return visit(value)
 
 
+def redact_coding_response(text):
+    """Always mask common credentials in coding API responses and audit text."""
+    masked = str(text)
+    for pattern, replacement in (
+        (r"(?i)(authorization\s*:\s*bearer\s+)[A-Za-z0-9._~+/=-]+", r"\1[REDACTED_TOKEN]"),
+        (r"(?i)\b(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_-]{16,})\b", "[REDACTED_API_KEY]"),
+        (r"-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+ PRIVATE KEY-----", "[REDACTED_PRIVATE_KEY]"),
+        (r"(?i)(\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*)([^\s,;]+)", r"\1[REDACTED_SECRET]"),
+    ):
+        masked = re.sub(pattern, replacement, masked)
+    return masked
+
+
 SECRET_PATTERNS = [
     ("secret-generic", "high", re.compile(r"""(?i)\b(api[_-]?key|secret|token|password)\b\s*[:=]\s*['"][^'"]{8,}""")),
     ("aws-access-key", "critical", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),

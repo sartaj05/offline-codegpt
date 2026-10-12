@@ -74,6 +74,15 @@ class ChatFeatureTests(TestCase):
         self.assertContains(response, "guidedWorkflowSelect")
         self.assertContains(response, "runGuidedWorkflow")
 
+    def test_coding_security_middleware_audits_requests_and_limits_large_body(self):
+        response = self.client.post("/api/coding/inline-completion/", {"filename": "app.py", "code": "x = 1", "prefix": "x"})
+        self.assertEqual(response.status_code, 200)
+        workspace = Workspace.objects.filter(owner=self.user).first()
+        self.assertIsNotNone(workspace)
+        self.assertTrue(AuditEvent.objects.filter(workspace=workspace, event_type="coding.api_request").exists())
+        oversized = self.client.post("/api/coding/inline-completion/", {"code": "x" * 2_600_000})
+        self.assertEqual(oversized.status_code, 413)
+
     def test_lsp_adapter_catalog_reports_local_fallback_and_servers(self):
         response = self.client.get("/api/coding/lsp/adapters/")
         self.assertEqual(response.status_code, 200)

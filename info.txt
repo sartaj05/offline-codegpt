@@ -575,3 +575,8 @@ Next coding workspace features
   preview of the latest suggestion, diagnostic quick actions, and captured
   local test results in the extension output channel. Suggested edits remain
   confirmation-gated.
+- All `/api/coding/` requests now pass through a common local security layer:
+  2.5 MB body limits, per-endpoint rate limiting, JSON response credential
+  redaction, and `coding.api_request` audit events when a user workspace exists.
+  Configure `LOCAL_CODING_RATE_LIMIT` to tune the per-minute limit. This does
+  not replace tool-specific approval policies.
