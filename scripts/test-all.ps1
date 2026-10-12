@@ -21,6 +21,7 @@ Invoke-Step "Django tests" { & $python manage.py test chat --keepdb }
 if (Get-Command node -ErrorAction SilentlyContinue) {
     Invoke-Step "Chat JavaScript syntax" { node --check static/chat/app.js }
     Invoke-Step "VS Code extension syntax" { node --check vscode-extension/extension.js }
+    Invoke-Step "VS Code extension contract" { node tests/extension-contract.js }
     Invoke-Step "VS Code package manifest" { node -e "JSON.parse(require('fs').readFileSync('vscode-extension/package.json','utf8')); console.log('package.json valid')" }
 } else {
     Write-Warning "Node.js is not installed; JavaScript checks were skipped."

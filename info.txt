@@ -632,6 +632,10 @@ Next coding workspace features
   not a source-controlled artifact.
 - The root validation command is `.\scripts\test-all.ps1`. It runs Django
   checks, migration drift checks, all chat tests, browser JavaScript syntax,
-  and VS Code extension manifest checks. Add `-WithBrowser` to run the
+  VS Code extension integration contracts, and extension manifest checks. Add `-WithBrowser` to run the
   Playwright responsive suite only when Playwright is already installed; no
   package or browser download is triggered in offline mode.
+- Browser E2E includes login-form validation and an optional authenticated
+  workspace/runtime smoke test using `SYNTAX_LOCAL_AI_STORAGE`. The VS Code
+  contract test checks local API auth, inline completion, diff preview, and
+  confirmation-gated test execution.

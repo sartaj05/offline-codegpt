@@ -96,6 +96,9 @@ This checks Django configuration, migration drift, the full Django test suite,
 chat JavaScript syntax, and the VS Code extension manifest. Add
 `-WithBrowser` only after Playwright and its browser are already installed
 locally; the script never downloads browser binaries automatically.
+The extension contract check covers local API auth, inline completion, diff
+preview, and confirmed test execution. Authenticated browser smoke tests use
+the optional `SYNTAX_LOCAL_AI_STORAGE` Playwright storage-state file.
 
 ## Windows packaging
 

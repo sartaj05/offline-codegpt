@@ -136,6 +136,14 @@ class ChatFeatureTests(TestCase):
         self.assertIn("ISCC.exe", build)
         self.assertIn("AppId={{D6D37B01-5D3D-4BBE-8A89-3F4A8C7E91B2}}", definition)
 
+    def test_browser_and_vscode_integration_contracts_are_present(self):
+        project_root = Path(__file__).resolve().parents[1]
+        browser = (project_root / "tests" / "workspace.spec.js").read_text(encoding="utf-8")
+        extension = (project_root / "tests" / "extension-contract.js").read_text(encoding="utf-8")
+        self.assertIn("SYNTAX_LOCAL_AI_STORAGE", browser)
+        self.assertIn("/api/setup/diagnostics/", browser)
+        self.assertIn("registerInlineCompletionItemProvider", extension)
+
     def test_windows_worker_autostart_contract_is_present(self):
         project_root = Path(__file__).resolve().parents[1]
         command = (project_root / "chat" / "management" / "commands" / "run_offline_workers.py").read_text(encoding="utf-8")

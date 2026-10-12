@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "test:js": "node --check static/chat/app.js",
-    "test:extension": "node --check vscode-extension/extension.js",
-    "test:browser": "npx playwright test tests/responsive.spec.js"
+    "test:extension": "node --check vscode-extension/extension.js && node tests/extension-contract.js",
+    "test:browser": "npx playwright test tests/responsive.spec.js tests/workspace.spec.js"
   }
 }
