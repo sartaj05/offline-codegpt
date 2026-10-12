@@ -125,6 +125,7 @@ from .architecture import analyze_architecture
 from .cross_repository import analyze_cross_repository
 from .vault import decrypt_blob, decrypt_secret, encrypt_blob, encrypt_secret, mask_json, redact_sensitive_text
 from .security import sanitize_coding_payload
+from .security_audit import audit_project
 from .api_contract import analyze_api_contract
 from .provenance import generate_provenance, verify_provenance
 from .review import review_gate
@@ -5881,6 +5882,12 @@ def security_scan(request):
     if not files or sum(len(item["content"]) for item in files) > MAX_TEST_CHARS:
         return JsonResponse({"success": False, "error": "Provide code or a project smaller than 20,000 characters."}, status=400)
     return JsonResponse({"success": True, **scan_files(files)})
+
+
+@login_required(login_url="/login/")
+@require_GET
+def security_audit(request):
+    return JsonResponse(audit_project(Path(settings.BASE_DIR)))
 
 
 @login_required(login_url="/login/")

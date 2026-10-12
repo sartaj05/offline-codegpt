@@ -146,6 +146,14 @@ class ChatFeatureTests(TestCase):
         oversized = self.client.post("/api/coding/inline-completion/", {"code": "x" * 2_600_000})
         self.assertEqual(oversized.status_code, 413)
 
+    def test_security_audit_reports_required_local_boundaries(self):
+        response = self.client.get("/api/security/audit/")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("scanned_files", payload)
+        self.assertEqual(payload["scope"], "read-only static audit; review all findings before production use")
+        self.assertTrue(payload["success"])
+
     def test_lsp_adapter_catalog_reports_local_fallback_and_servers(self):
         response = self.client.get("/api/coding/lsp/adapters/")
         self.assertEqual(response.status_code, 200)

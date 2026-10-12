@@ -109,6 +109,7 @@ urlpatterns = [
     path("api/mcp/", views.mcp_rpc, name="mcp_rpc"),
     path("api/analyze/", views.quality_analyze, name="quality_analyze"),
     path("api/security/scan/", views.security_scan, name="security_scan"),
+    path("api/security/audit/", views.security_audit, name="security_audit"),
     path("api/tests/generate/", views.generate_tests, name="generate_tests"),
     path("api/tests/run/", views.run_tests, name="run_tests"),
     path("api/tests/discover/", views.discover_project_tests, name="discover_project_tests"),

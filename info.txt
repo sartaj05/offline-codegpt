@@ -605,6 +605,10 @@ Next coding workspace features
   redaction, and `coding.api_request` audit events when a user workspace exists.
   Configure `LOCAL_CODING_RATE_LIMIT` to tune the per-minute limit. This does
   not replace tool-specific approval policies.
+- `/api/security/audit/` and `python manage.py security_audit --json` run a
+  read-only static audit for shell execution, dynamic code execution, required
+  sandbox/payload/tool boundaries, and syntax errors. Use `--fail-on-high` in
+  local release checks; findings still require human review.
 - RAG search responses now include citation strings, citation verification,
   duplicate groups, lexical/semantic/rerank signals, and retrieval explanations.
   `/api/knowledge/evaluate/` reports precision-at-k and recall against a local

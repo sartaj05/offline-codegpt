@@ -459,6 +459,11 @@ POST     /api/mcp/                          MCP JSON-RPC tools
 - Remote Git and repository features are optional and can change external state; review actions and permissions before using them.
 - Generated Docker, Kubernetes, CI, backup, and rollback files must be reviewed before production use.
 
+Run `python manage.py security_audit --json --fail-on-high` or open
+`/api/security/audit/` to review local shell, dynamic-code, sandbox, and tool
+permission boundaries. The audit is read-only and does not replace human code
+review.
+
 Backup format v2 preserves local RAG chunks, document layout metadata, runtime
 and privacy settings, and model capability metadata. Model weights are not
 included in the archive; restore those through the local runtime's own manager.
