@@ -2053,6 +2053,23 @@ def setup_diagnostics(request):
                 "latency_ms": round((time.perf_counter() - started) * 1000),
                 "error": str(exc)[:300],
             }
+    configured = runtimes.get(user_settings.runtime, {})
+    configured_models = configured.get("models", [])
+    recovery_actions = []
+    if configured.get("status") != "ready":
+        recovery_actions.append({
+            "id": "start-runtime",
+            "title": f"Start {RUNTIME_CHOICES.get(user_settings.runtime, user_settings.runtime)}",
+            "command": {"ollama": "ollama serve", "lmstudio": "Open LM Studio and start the local server", "llamacpp": "Start llama-server with the configured model"}.get(user_settings.runtime, "Start the configured local runtime"),
+            "safe": True,
+        })
+    elif not configured_models:
+        recovery_actions.append({"id": "install-model", "title": "Import a local model", "command": "Use the runtime's local model manager, then run diagnostics again.", "safe": True})
+    else:
+        if user_settings.default_model not in configured_models:
+            recovery_actions.append({"id": "use-recommended", "title": "Use the first installed model", "model": configured_models[0], "safe": True})
+        if user_settings.fallback_model and user_settings.fallback_model not in configured_models:
+            recovery_actions.append({"id": "configure-fallback", "title": "Choose an installed fallback", "model": configured_models[0], "safe": True})
     return JsonResponse({
         "success": True,
         "app": {
@@ -2066,8 +2083,31 @@ def setup_diagnostics(request):
         "configured_runtime": user_settings.runtime,
         "runtimes": runtimes,
         "local_models": _local_model_inventory(),
+        "recovery": {"ready": configured.get("status") == "ready" and bool(configured_models), "actions": recovery_actions, "offline_policy": "Recovery never downloads models or contacts a hosted provider."},
         "recommended_next_step": "Start the configured local runtime, choose a model, then use Test connection.",
     })
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def runtime_recovery(request):
+    user_settings = _user_ollama_settings(request.user)
+    if request.method == "GET":
+        return JsonResponse({"success": True, "default_model": user_settings.default_model, "fallback_model": user_settings.fallback_model, "message": "Run setup diagnostics to receive local recovery actions."})
+    model = request.POST.get("model", "").strip()[:100]
+    if not model:
+        return JsonResponse({"success": False, "error": "Choose an installed local model."}, status=400)
+    try:
+        installed = [item.get("name") for item in get_runtime_adapter(user_settings.runtime, user_settings.server_url).models() if item.get("name")]
+    except (requests.RequestException, ValueError, TypeError, AttributeError) as exc:
+        return JsonResponse({"success": False, "error": "The local runtime is unavailable: " + str(exc)[:240]}, status=503)
+    if model not in installed:
+        return JsonResponse({"success": False, "error": "That model is not installed in the configured local runtime."}, status=400)
+    user_settings.default_model = model
+    if not user_settings.fallback_model or user_settings.fallback_model not in installed:
+        user_settings.fallback_model = next((name for name in installed if name != model), "")
+    user_settings.save(update_fields=["default_model", "fallback_model", "updated_at"])
+    return JsonResponse({"success": True, "default_model": user_settings.default_model, "fallback_model": user_settings.fallback_model, "message": "Local model selection repaired."})
 
 
 @login_required(login_url="/login/")

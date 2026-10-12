@@ -349,6 +349,10 @@ Next workspace feature set
   re-indexing, model warm-up, project tests, and backup reminders.
 - Native onboarding diagnostics probe all three local runtime URLs and report
   Python, platform, virtual environment, model, and dependency readiness.
+  They also return recovery actions for stopped runtimes, missing models, and
+  invalid default/fallback selections. POST `/api/setup/recovery/` selects only
+  an installed local model; it never downloads models or contacts a hosted
+  service.
   Run the Windows launcher with:
 
    Set-ExecutionPolicy -Scope Process Bypass

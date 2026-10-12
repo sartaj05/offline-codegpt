@@ -144,6 +144,15 @@ class ChatFeatureTests(TestCase):
         self.assertIn("/api/setup/diagnostics/", browser)
         self.assertIn("registerInlineCompletionItemProvider", extension)
 
+    def test_runtime_recovery_selects_only_an_installed_local_model(self):
+        with patch("chat.views.get_runtime_adapter") as get_adapter:
+            get_adapter.return_value.models.return_value = [{"name": "local-coder"}]
+            repaired = self.client.post("/api/setup/recovery/", {"model": "local-coder"})
+        self.assertEqual(repaired.status_code, 200)
+        self.assertEqual(repaired.json()["default_model"], "local-coder")
+        rejected = self.client.post("/api/setup/recovery/", {"model": "not-installed"})
+        self.assertEqual(rejected.status_code, 400)
+
     def test_windows_worker_autostart_contract_is_present(self):
         project_root = Path(__file__).resolve().parents[1]
         command = (project_root / "chat" / "management" / "commands" / "run_offline_workers.py").read_text(encoding="utf-8")

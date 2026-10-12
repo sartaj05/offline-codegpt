@@ -99,6 +99,9 @@ locally; the script never downloads browser binaries automatically.
 The extension contract check covers local API auth, inline completion, diff
 preview, and confirmed test execution. Authenticated browser smoke tests use
 the optional `SYNTAX_LOCAL_AI_STORAGE` Playwright storage-state file.
+Onboarding diagnostics show recovery commands for stopped runtimes and missing
+models. Model recovery only selects an installed local model; it never performs
+an automatic online download.
 
 ## Windows packaging
 

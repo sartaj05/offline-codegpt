@@ -716,6 +716,9 @@ async function runSetupDiagnostics() {
             ...runtimeLines,
             "",
             `Imported local models: ${data.local_models.length}`,
+            "Recovery actions:",
+            ...(data.recovery && data.recovery.actions.length ? data.recovery.actions.map(action => `${action.title}${action.model ? " → " + action.model : ""}${action.command ? " · " + action.command : ""}`) : ["No recovery action is required."]),
+            data.recovery ? data.recovery.offline_policy : "",
             data.recommended_next_step,
         ];
         if (setupDiagnosticsOutput) setupDiagnosticsOutput.innerText = lines.join("\n");
