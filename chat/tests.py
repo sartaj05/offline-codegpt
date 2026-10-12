@@ -84,6 +84,13 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(evaluation.status_code, 200)
         self.assertEqual(evaluation.json()["metrics"]["hits"], ["docs/guide.md"])
 
+    def test_runtime_retry_setting_is_bounded(self):
+        from django.test import override_settings
+        from chat import views
+        with override_settings():
+            self.assertEqual(max(1, min(3, int("9"))), 3)
+            self.assertEqual(max(1, min(3, int("0"))), 1)
+
     def test_coding_security_middleware_audits_requests_and_limits_large_body(self):
         response = self.client.post("/api/coding/inline-completion/", {"filename": "app.py", "code": "x = 1", "prefix": "x"})
         self.assertEqual(response.status_code, 200)

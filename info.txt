@@ -585,3 +585,7 @@ Next coding workspace features
   `/api/knowledge/evaluate/` reports precision-at-k and recall against a local
   expected filename set. Knowledge collections support refresh and delete from
   the project workspace controls.
+- Local generation now retries transient runtime failures up to the bounded
+  `LOCAL_RUNTIME_RETRIES` value (default `2`) before trying the configured
+  fallback model. Streaming responses close their runtime connection when the
+  client disconnects, and completion metrics record the number of attempts.

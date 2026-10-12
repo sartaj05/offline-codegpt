@@ -6276,45 +6276,48 @@ Instructions:
         response = None
         response_protocol = runtime
         last_error = None
+        attempts = 0
+        try:
+            max_attempts = max(1, min(3, int(os.environ.get("LOCAL_RUNTIME_RETRIES", "2"))))
+        except (TypeError, ValueError):
+            max_attempts = 2
         for candidate_model in candidate_models:
-            try:
-                candidate_response, candidate_protocol = runtime_adapter.generate(
-                    candidate_model,
-                    full_prompt,
-                    images=image_data,
-                    options={
-                        "temperature": user_settings.temperature if user_settings else 0.2,
-                        "top_p": user_settings.top_p if user_settings else 0.9,
-                        "num_ctx": max(512, (user_settings.max_context_chars if user_settings else 24000) // 4),
-                    },
-                )
-                _record_network_event(
-                    owner,
-                    runtime,
-                    "POST",
-                    runtime_endpoint,
-                    "local chat generation",
-                    allowed=True,
-                    response_status=getattr(candidate_response, "status_code", 0),
-                    request_chars=len(full_prompt),
-                    metadata={"model": candidate_model, "protocol": candidate_protocol},
-                )
-            except requests.RequestException as exc:
-                _record_network_event(
-                    owner,
-                    runtime,
-                    "POST",
-                    runtime_endpoint,
-                    "local chat generation",
-                    allowed=True,
-                    metadata={"error": str(exc)[:300], "model": candidate_model},
-                )
-                last_error = exc
-                continue
-            response = candidate_response
-            response_protocol = candidate_protocol
-            if response.status_code == 200:
-                model_name = candidate_model
+            for attempt in range(1, max_attempts + 1):
+                attempts += 1
+                try:
+                    candidate_response, candidate_protocol = runtime_adapter.generate(
+                        candidate_model,
+                        full_prompt,
+                        images=image_data,
+                        options={
+                            "temperature": user_settings.temperature if user_settings else 0.2,
+                            "top_p": user_settings.top_p if user_settings else 0.9,
+                            "num_ctx": max(512, (user_settings.max_context_chars if user_settings else 24000) // 4),
+                        },
+                    )
+                    _record_network_event(owner, runtime, "POST", runtime_endpoint, "local chat generation", allowed=True, response_status=getattr(candidate_response, "status_code", 0), request_chars=len(full_prompt), metadata={"model": candidate_model, "protocol": candidate_protocol, "attempt": attempt})
+                except requests.RequestException as exc:
+                    _record_network_event(owner, runtime, "POST", runtime_endpoint, "local chat generation", allowed=True, metadata={"error": str(exc)[:300], "model": candidate_model, "attempt": attempt})
+                    last_error = exc
+                    if attempt < max_attempts:
+                        time.sleep(min(0.25 * attempt, 0.5))
+                        continue
+                    break
+                response = candidate_response
+                response_protocol = candidate_protocol
+                if response.status_code == 200:
+                    model_name = candidate_model
+                    break
+                last_error = requests.RequestException(f"{runtime} returned HTTP {response.status_code}")
+                if response.status_code >= 500 and attempt < max_attempts:
+                    try:
+                        response.close()
+                    except AttributeError:
+                        pass
+                    time.sleep(min(0.25 * attempt, 0.5))
+                    continue
+                break
+            if response is not None and response.status_code == 200:
                 break
 
         if response is None:
@@ -6378,6 +6381,7 @@ Instructions:
                     "first_token_ms": first_token_ms or 0,
                     "output_format": output_format,
                     "routing_reason": routing_reason,
+                    "runtime_attempts": attempts,
                 }
                 ai_event.save(update_fields=["duration_ms", "output_chars", "metadata"])
                 session.save(update_fields=["updated_at"])
@@ -6409,6 +6413,11 @@ Instructions:
                     ai_event.metadata = {"error": str(ex)[:500]}
                     ai_event.save(update_fields=["success", "duration_ms", "metadata"])
                 yield _event({"type": "error", "error": str(ex)})
+            finally:
+                try:
+                    response.close()
+                except AttributeError:
+                    pass
 
         streaming_response = StreamingHttpResponse(
             stream_answer(),
