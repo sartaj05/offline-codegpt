@@ -112,6 +112,8 @@ and Ollama/LM Studio/llama.cpp endpoints, and writes `runtime-health.json`.
 installer. Uninstall preserves the source checkout; `-RemoveData -Confirmed`
 moves local database, environment, media, and model data to a timestamped
 backup before removal.
+The setup registers `run_offline_workers --loop` at user logon; pass
+`-SkipWorker` to opt out, or use `scripts\register-workers.ps1 -Unregister`.
 
 Use `-SkipOllama` when preparing the Python environment on a machine that will receive Ollama separately.
 

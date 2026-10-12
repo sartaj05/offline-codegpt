@@ -66,6 +66,17 @@ Useful options:
 The watcher incrementally indexes supported files and updates semantic
 embeddings when the local files change.
 
+Windows worker auto-start
+-------------------------
+The unified local worker runs queued agent jobs and due scheduled tasks:
+
+   python manage.py run_offline_workers --loop
+
+`scripts\install-windows.ps1` registers this worker at user logon by default.
+Use `-SkipWorker` during setup to avoid registration, or run
+`scripts\register-workers.ps1 -Unregister` to remove the scheduled task.
+The worker is local-only and runs with the current Windows user's permissions.
+
 Feature notes
 -------------
 - Semantic RAG uses the Ollama embedding endpoint and the model in

@@ -3,6 +3,7 @@ param(
     [string]$VisionModel = "llava:latest",
     [switch]$Offline,
     [switch]$SkipOllama,
+    [switch]$SkipWorker,
     [switch]$Repair,
     [switch]$Uninstall,
     [switch]$RemoveData,
@@ -72,6 +73,9 @@ $diagnostics | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath ".\runtime-hea
 if (-not $SkipOllama -and (Get-Command ollama -ErrorAction SilentlyContinue)) {
     if ((Test-LocalRuntime "http://127.0.0.1:11434/api/tags").reachable) { Write-Host "Ollama detected. No model is downloaded by this installer." -ForegroundColor Green }
     else { Write-Warning "Ollama is installed but not reachable. Start it, then rerun the health check." }
+}
+if (-not $SkipWorker) {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $projectRoot "scripts\register-workers.ps1")
 }
 Write-Host "Syntax Local AI Windows setup is ready." -ForegroundColor Green
 Write-Host "Hardware/runtime report: .\runtime-health.json"

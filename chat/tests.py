@@ -99,6 +99,15 @@ class ChatFeatureTests(TestCase):
         self.assertIn("runtime-health.json", setup)
         self.assertIn("[switch]$Offline", setup)
 
+    def test_windows_worker_autostart_contract_is_present(self):
+        project_root = Path(__file__).resolve().parents[1]
+        command = (project_root / "chat" / "management" / "commands" / "run_offline_workers.py").read_text(encoding="utf-8")
+        registration = (project_root / "scripts" / "register-workers.ps1").read_text(encoding="utf-8")
+        setup = (project_root / "scripts" / "install-windows.ps1").read_text(encoding="utf-8")
+        self.assertIn("process_queued_jobs", command)
+        self.assertIn("Register-ScheduledTask", registration)
+        self.assertIn("$SkipWorker", setup)
+
     def test_coding_security_middleware_audits_requests_and_limits_large_body(self):
         response = self.client.post("/api/coding/inline-completion/", {"filename": "app.py", "code": "x = 1", "prefix": "x"})
         self.assertEqual(response.status_code, 200)
