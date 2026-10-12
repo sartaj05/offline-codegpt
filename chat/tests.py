@@ -11,7 +11,7 @@ from django.core.management import call_command
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import AgentJob, AgentTask, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, ExtensionInstall, ExtensionPackage, KnowledgeChunk, KnowledgeDocument, ProjectWorkspace, SandboxPolicy, SecretVaultItem, Workspace, WorkspaceMembership, WorkspacePolicy
+from .models import AgentJob, AgentTask, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, ExtensionInstall, ExtensionPackage, KnowledgeChunk, KnowledgeDocument, PatchRevision, ProjectWorkspace, SandboxPolicy, SecretVaultItem, Workspace, WorkspaceMembership, WorkspacePolicy
 from .views import _search_knowledge
 
 
@@ -1537,6 +1537,9 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(payload["changed"])
         self.assertIn("--- editor.py (current)", payload["diff"])
         self.assertIn("+print('new')", payload["diff"])
+        self.assertTrue(PatchRevision.objects.filter(id=payload["patch_id"], status="preview").exists())
+        rejected = self.client.post("/api/patch/control/", {"patch_id": payload["patch_id"], "action": "reject"})
+        self.assertEqual(rejected.json()["status"], "rejected")
 
     @patch("chat.views.subprocess.run")
     def test_git_workspace_reports_stages_and_commits_changes(self, mock_run):

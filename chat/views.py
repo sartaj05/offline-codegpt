@@ -102,6 +102,7 @@ from .models import (
     EvaluationRegressionSuite,
     EvaluationReplay,
     CodingWorkflowArtifact,
+    PatchRevision,
     ProjectWorkspace,
     SecretVaultItem,
     ExtensionPackage,
@@ -5831,11 +5832,38 @@ def preview_patch(request):
         tofile=filename + " (proposed)",
         n=3,
     ))
+    document = None
+    document_id = request.POST.get("document_id", "").strip()
+    if document_id:
+        document = get_object_or_404(KnowledgeDocument, id=document_id, owner=request.user)
+    revision = PatchRevision.objects.create(owner=request.user, document=document, filename=filename[:300], original=original, updated=updated, diff=diff)
     return JsonResponse({
         "success": True,
+        "patch_id": revision.id,
         "changed": original != updated,
         "diff": diff or "No changes detected.",
     })
+
+
+def _approved_patch_test(request):
+    if request.POST.get("run_tests") != "true":
+        return {"status": "not_requested"}
+    if request.POST.get("test_approved") != "true":
+        return {"status": "approval_required", "message": "Approve the detected test command before running it."}
+    candidate = {item["id"]: item for item in _project_test_candidates()}.get(request.POST.get("test_candidate", ""))
+    if not candidate:
+        return {"status": "unavailable", "message": "Choose a detected local test command."}
+    profile = _active_permission_profile(request.user)
+    if profile.mode == "read_only":
+        return {"status": "blocked", "message": "Read-only permission profile blocks test execution."}
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    try:
+        completed = subprocess.run(candidate["argv"], cwd=project_root, capture_output=True, text=True, timeout=60, check=False, env={**os.environ, "CI": "1"})
+        return {"status": "passed" if completed.returncode == 0 else "failed", "candidate": candidate, "returncode": completed.returncode, "stdout": completed.stdout[-MAX_TEST_CHARS:], "stderr": completed.stderr[-MAX_TEST_CHARS:]}
+    except subprocess.TimeoutExpired:
+        return {"status": "timeout", "candidate": candidate, "message": "Approved project tests timed out after 60 seconds."}
+    except OSError as exc:
+        return {"status": "unavailable", "candidate": candidate, "message": str(exc)[:300]}
 
 
 @login_required(login_url="/login/")
@@ -5844,12 +5872,24 @@ def apply_patch(request):
     original = request.POST.get("original", "")
     updated = request.POST.get("updated", "")
     document_id = request.POST.get("document_id", "").strip()
+    revision = None
+    patch_id = request.POST.get("patch_id", "").strip()
+    if patch_id:
+        revision = get_object_or_404(PatchRevision, id=patch_id, owner=request.user)
+        original = revision.original
+        updated = revision.updated
+        document_id = str(revision.document_id or document_id)
     if len(updated.encode("utf-8")) > MAX_FILE_BYTES:
         return JsonResponse({"success": False, "error": "Patched files are limited to 1 MB."}, status=400)
     if original == updated:
         return JsonResponse({"success": True, "changed": False, "persisted": False, "message": "No changes to apply."})
     if not document_id:
-        return JsonResponse({"success": True, "changed": True, "persisted": False, "message": "Patch applied to the scratch buffer."})
+        test_result = _approved_patch_test(request)
+        if revision:
+            revision.status = "applied"
+            revision.test_result = test_result
+            revision.save(update_fields=["status", "test_result", "updated_at"])
+        return JsonResponse({"success": True, "changed": True, "persisted": False, "patch_id": revision.id if revision else None, "test_result": test_result, "message": "Patch applied to the scratch buffer."})
     document = get_object_or_404(KnowledgeDocument, id=document_id, owner=request.user)
     if document.original_text != original:
         return JsonResponse({"success": False, "error": "The file changed since this patch was previewed. Reload it before applying."}, status=409)
@@ -5858,14 +5898,47 @@ def apply_patch(request):
     document.content_hash = hashlib.sha256(updated.encode("utf-8")).hexdigest()
     document.save(update_fields=["original_text", "file_size_bytes", "content_hash"])
     _index_knowledge_document(document, request.user)
+    test_result = _approved_patch_test(request)
+    if revision:
+        revision.status = "applied"
+        revision.test_result = test_result
+        revision.save(update_fields=["status", "test_result", "updated_at"])
     return JsonResponse({
         "success": True,
         "changed": True,
         "persisted": True,
         "document_id": document.id,
         "chunks": document.chunks.count(),
+        "patch_id": revision.id if revision else None,
+        "test_result": test_result,
         "message": "Patch applied and the project index was refreshed.",
     })
+
+
+@login_required(login_url="/login/")
+@require_POST
+def patch_control(request):
+    revision = get_object_or_404(PatchRevision, id=request.POST.get("patch_id"), owner=request.user)
+    action = request.POST.get("action", "").strip().lower()
+    if action == "reject":
+        revision.status = "rejected"
+        revision.save(update_fields=["status", "updated_at"])
+        return JsonResponse({"success": True, "status": revision.status, "message": "Patch rejected; no file was changed."})
+    if action == "revert":
+        if revision.status != "applied" or not revision.document_id:
+            return JsonResponse({"success": False, "error": "Only an applied persisted patch can be reverted."}, status=400)
+        document = get_object_or_404(KnowledgeDocument, id=revision.document_id, owner=request.user)
+        if document.original_text != revision.updated:
+            return JsonResponse({"success": False, "error": "The file changed after this patch; reload it before reverting."}, status=409)
+        document.original_text = revision.original
+        document.file_size_bytes = len(revision.original.encode("utf-8"))
+        document.content_hash = hashlib.sha256(revision.original.encode("utf-8")).hexdigest()
+        document.save(update_fields=["original_text", "file_size_bytes", "content_hash"])
+        _index_knowledge_document(document, request.user)
+        revision.status = "reverted"
+        revision.save(update_fields=["status", "updated_at"])
+        return JsonResponse({"success": True, "status": revision.status, "message": "Patch reverted and the local index was refreshed."})
+    return JsonResponse({"success": False, "error": "Use reject or revert."}, status=400)
 
 
 @require_POST

@@ -114,6 +114,7 @@ urlpatterns = [
     path("api/tests/run-project/", views.run_project_tests, name="run_project_tests"),
     path("api/patch/preview/", views.preview_patch, name="preview_patch"),
     path("api/patch/apply/", views.apply_patch, name="apply_patch"),
+    path("api/patch/control/", views.patch_control, name="patch_control"),
     path("api/git/status/", views.git_status, name="git_status"),
     path("api/git/diff/", views.git_diff, name="git_diff"),
     path("api/git/stage/", views.git_stage, name="git_stage"),

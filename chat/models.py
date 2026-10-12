@@ -933,6 +933,24 @@ class CodingWorkflowArtifact(models.Model):
         return self.title
 
 
+class PatchRevision(models.Model):
+    STATUS_CHOICES = (("preview", "Preview"), ("applied", "Applied"), ("rejected", "Rejected"), ("reverted", "Reverted"))
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="patch_revisions")
+    document = models.ForeignKey(KnowledgeDocument, on_delete=models.SET_NULL, null=True, blank=True, related_name="patch_revisions")
+    filename = models.CharField(max_length=300, default="editor-buffer")
+    original = models.TextField()
+    updated = models.TextField()
+    diff = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="preview")
+    test_result = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+
+
 class EvaluationReplay(models.Model):
     STATUS_CHOICES = (("running", "Running"), ("completed", "Completed"), ("failed", "Failed"))
 

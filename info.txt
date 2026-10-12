@@ -566,3 +566,7 @@ Next coding workspace features
   runs guarded checks/tests, writes checkpoints and logs, and preserves pause,
   retry, cancel, failure, and restart recovery state. Use `--limit N` for a
   bounded one-shot worker run.
+- Patch previews now create persistent `PatchRevision` records. Apply responses
+  include a revision ID and test status, while `/api/patch/control/` supports
+  approval-safe reject and revert actions. Approved test execution only uses a
+  detected local test command and remains blocked for read-only profiles.
