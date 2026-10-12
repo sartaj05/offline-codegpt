@@ -111,6 +111,15 @@ class ChatFeatureTests(TestCase):
             self.assertEqual(max(1, min(3, int("9"))), 3)
             self.assertEqual(max(1, min(3, int("0"))), 1)
 
+    @patch("chat.views.get_runtime_adapter")
+    def test_model_capability_registry_syncs_local_inventory(self, get_adapter):
+        get_adapter.return_value.models.return_value = [{"name": "qwen2.5-coder:7b", "size": 1000, "details": {"parameter_size": "7B", "quantization_level": "Q4_K_M", "family": "qwen2"}}, {"name": "llava:latest", "details": {"family": "llava"}}]
+        response = self.client.get("/api/models/capabilities/")
+        self.assertEqual(response.status_code, 200)
+        models = {item["model_name"]: item["capabilities"] for item in response.json()["models"]}
+        self.assertTrue(models["qwen2.5-coder:7b"]["tool_calling"])
+        self.assertTrue(models["llava:latest"]["vision"])
+
     def test_windows_packaging_contract_is_present(self):
         project_root = Path(__file__).resolve().parents[1]
         installer = (project_root / "installer" / "SyntaxLocalAI.iss").read_text(encoding="utf-8")

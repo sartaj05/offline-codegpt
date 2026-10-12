@@ -240,6 +240,9 @@ Use `--once` for a single incremental scan. The watcher reads supported local fi
 ### Ollama
 
 Change the local server URL, default model, temperature, top-p, and context length. The model manager can list, pull, activate, and delete local Ollama models.
+Model capabilities are synchronized from the local runtime inventory. If a
+configured model is missing, chat selects the configured fallback or another
+installed compatible model; it never downloads a replacement automatically.
 
 ### Remote
 

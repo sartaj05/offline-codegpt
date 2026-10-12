@@ -388,6 +388,11 @@ Latest 10-feature extension set
   `/api/models/capabilities/`. Probe a model with POST `model=...`; the result
   includes inferred vision, embedding, tool, JSON-schema, reasoning, context,
   quantization, and hardware hints.
+- GET `/api/models/capabilities/` now synchronizes the local runtime inventory
+  before filtering by task. Chat selection checks installed models and chooses
+  the configured fallback or another compatible local model when the requested
+  model is unavailable. Runtime outages remain visible instead of triggering
+  an online download.
 - Durable MCP tasks support asynchronous task handles from `tools/call` and
   the JSON-RPC methods `tasks/get`, `tasks/update`, and `tasks/cancel`. Direct
   management is available at `/api/mcp/tasks/`.

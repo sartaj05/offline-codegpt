@@ -1288,6 +1288,54 @@ def _infer_model_capabilities(model_name, runtime, details=None):
     }
 
 
+def _sync_model_capabilities(owner, runtime_settings):
+    details = _ollama_model_details(runtime_settings.server_url, runtime_settings.runtime)
+    for item in details:
+        model_name = item.get("name")
+        if not model_name:
+            continue
+        capabilities = _infer_model_capabilities(model_name, runtime_settings.runtime, item)
+        ModelCapability.objects.update_or_create(
+            owner=owner,
+            runtime=runtime_settings.runtime,
+            model_name=model_name,
+            defaults={
+                "capabilities": capabilities,
+                "hardware": {
+                    "size_bytes": item.get("size_bytes", 0),
+                    "parameter_size": item.get("parameter_size", ""),
+                    "quantization": item.get("quantization", ""),
+                },
+                "source": "runtime-inventory",
+            },
+        )
+    return details
+
+
+def _resolve_runtime_model(model_name, user_settings, require_vision=False):
+    """Prefer an installed compatible model while keeping offline fallback behavior."""
+    try:
+        inventory = get_runtime_adapter(user_settings.runtime, user_settings.server_url).models()
+    except (requests.RequestException, ValueError, TypeError, AttributeError):
+        return model_name, "runtime inventory unavailable; using configured model"
+    if not inventory:
+        return model_name, "runtime inventory unavailable; using configured model"
+    names = [item.get("name") for item in inventory if item.get("name")]
+    if model_name in names and not require_vision:
+        return model_name, "configured model is installed"
+    if model_name in names and require_vision and _infer_model_capabilities(model_name, user_settings.runtime).get("vision"):
+        return model_name, "configured vision model is installed"
+    candidates = [user_settings.fallback_model, user_settings.default_model, *names]
+    for candidate in candidates:
+        if candidate not in names:
+            continue
+        capability = _infer_model_capabilities(candidate, user_settings.runtime)
+        if require_vision and not capability.get("vision"):
+            continue
+        return candidate, f"selected installed fallback for unavailable model {model_name}"
+    return model_name, "no installed compatible model found"
+
+
 def _model_capability_payload(item):
     return {
         "id": item.id,
@@ -1305,6 +1353,7 @@ def _model_capability_payload(item):
 def model_capabilities(request):
     settings = _user_ollama_settings(request.user)
     if request.method == "GET":
+        _sync_model_capabilities(request.user, settings)
         task = request.GET.get("task", "").strip().lower()
         capabilities = list(ModelCapability.objects.filter(owner=request.user, runtime=settings.runtime))
         if task:
@@ -1333,7 +1382,7 @@ def model_capabilities(request):
         owner=request.user,
         runtime=settings.runtime,
         model_name=model_name,
-        defaults={"capabilities": capabilities, "hardware": hardware, "source": "name-and-runtime-inference"},
+        defaults={"capabilities": capabilities, "hardware": hardware, "source": "runtime-inference"},
     )
     return JsonResponse({"success": True, "model": _model_capability_payload(item)})
 
@@ -6099,6 +6148,14 @@ def ask_code(request):
             title=title,
             model_name=model_name,
         )
+
+    if user_settings:
+        resolved_model, resolution_reason = _resolve_runtime_model(model_name, user_settings, require_vision=bool(image_data))
+        if resolved_model != model_name:
+            model_name = resolved_model
+            session.model_name = model_name
+            session.save(update_fields=["model_name", "updated_at"])
+        routing_reason = f"{routing_reason}; {resolution_reason}"
 
     if edit_message_id:
         if not session_id:
