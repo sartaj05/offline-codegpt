@@ -295,6 +295,68 @@ function toggleAdvancedComposer() {
     }
 }
 
+const codingFeatureDefinitions = [
+    { id: "custom-agents", label: "Custom agents and skills", sample: { task: "Review the backend", files: [{ filename: "AGENTS.md", content: "Use local tests." }], agents: [{ name: "reviewer", role: "review" }] } },
+    { id: "ide-integration", label: "IDE integration", sample: { editor: "vscode", runtime: "local", files: [{ filename: "app.py", content: "" }] } },
+    { id: "inline-completion", label: "Inline completion", sample: { filename: "app.py", code: "def calculate_total(value):\\n    return value", prefix: "calculate_" } },
+    { id: "background-tasks", label: "Background tasks", sample: { max_workers: 1, tasks: [{ id: "tests", title: "Run tests", steps: ["discover", "run", "report"] }] } },
+    { id: "agent-orchestration", label: "Agent orchestration", sample: { goal: "Implement and verify a feature", agents: [{ name: "coder", role: "implementation" }, { name: "tester", role: "testing" }], tasks: [{ id: "code", title: "Implement", agent: "coder" }, { id: "test", title: "Test", agent: "tester", depends_on: ["code"] }] } },
+    { id: "task-replay", label: "Task replay", sample: { record: { prompt: "Fix the parser", model: "local-default", runtime: "local", files: [] }, current: {} } },
+    { id: "change-risk", label: "Change risk", sample: { files: [{ filename: "app.py", content: "" }], changed_files: ["app.py"], relations: {}, tests: ["tests/test_app.py"] } },
+    { id: "offline-dependencies", label: "Offline dependencies", sample: { files: [{ filename: "requirements.txt", content: "Django==5.0" }], catalog: { Django: { version: "5.0", license: "BSD" } } } },
+    { id: "dev-environment", label: "Dev environment", sample: { files: [{ filename: "requirements.txt", content: "" }, { filename: "pyproject.toml", content: "" }], hardware: { ram_gb: 16 } } },
+    { id: "git-archaeology", label: "Git archaeology", sample: { commits: [{ author: "local", message: "Fix parser edge case", files: ["parser.py"] }], blame: [], changed_files: ["parser.py"] } },
+];
+
+function toggleCodingFeaturePanel() {
+    const panel = document.getElementById("codingFeaturePanel");
+    if (!panel) return;
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) {
+        const select = document.getElementById("codingFeatureSelect");
+        if (select && !select.options.length) {
+            codingFeatureDefinitions.forEach((feature) => select.add(new Option(feature.label, feature.id)));
+        }
+        loadCodingFeatureExample();
+    }
+}
+
+function loadCodingFeatureExample() {
+    const select = document.getElementById("codingFeatureSelect");
+    const payload = document.getElementById("codingFeaturePayload");
+    if (!select || !payload) return;
+    const feature = codingFeatureDefinitions.find((item) => item.id === select.value) || codingFeatureDefinitions[0];
+    if (!select.value) select.value = feature.id;
+    payload.value = JSON.stringify(feature.sample, null, 2);
+    const status = document.getElementById("codingFeatureStatus");
+    if (status) status.textContent = `${feature.label} · localhost only · approval-gated where required`;
+}
+
+async function runCodingFeature() {
+    const select = document.getElementById("codingFeatureSelect");
+    const payload = document.getElementById("codingFeaturePayload");
+    const output = document.getElementById("codingFeatureOutput");
+    const status = document.getElementById("codingFeatureStatus");
+    if (!select || !payload || !output) return;
+    let data;
+    try { data = JSON.parse(payload.value || "{}"); } catch (error) {
+        if (status) status.textContent = "Invalid JSON payload.";
+        return;
+    }
+    const body = new URLSearchParams();
+    Object.entries(data).forEach(([key, value]) => body.append(key, typeof value === "object" ? JSON.stringify(value) : String(value)));
+    if (status) status.textContent = "Running local coding feature...";
+    try {
+        const response = await fetch(`/api/coding/${select.value}/`, { method: "POST", headers: { "X-CSRFToken": csrfToken }, body });
+        const result = await response.json();
+        output.textContent = JSON.stringify(result, null, 2);
+        if (status) status.textContent = response.ok ? "Completed locally." : (result.error || "The local feature returned an error.");
+    } catch (error) {
+        output.textContent = String(error);
+        if (status) status.textContent = "Local request failed.";
+    }
+}
+
 function openAdvancedComposer() {
     if (!advancedComposer) return;
     advancedComposer.hidden = false;

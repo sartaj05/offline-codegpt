@@ -119,6 +119,7 @@
                             <button type="button" onclick="toggleExtensionsPanel()">Extensions</button>
                             <button type="button" onclick="toggleObservability()">Metrics</button>
                             <button type="button" onclick="toggleEvaluationLab()">Eval Lab</button>
+                            <button type="button" onclick="toggleCodingFeaturePanel()">Coding APIs</button>
                             <button type="button" onclick="toggleWorkspace()">Team</button>
                             <button type="button" onclick="toggleDevops()">DevOps</button>
                             <button type="button" onclick="toggleDeployment()">Deploy</button>
@@ -153,6 +154,23 @@
         </header>
 
         {% if request.user.is_authenticated %}
+        <section id="codingFeaturePanel" class="coding-feature-panel" hidden>
+            <div class="settings-heading">
+                <div>
+                    <strong>Latest coding features</strong>
+                    <span>Run local coding workflows through the same approval-gated API used by the workspace.</span>
+                </div>
+                <button type="button" onclick="toggleCodingFeaturePanel()">Close</button>
+            </div>
+            <div class="coding-feature-toolbar">
+                <label>Feature<select id="codingFeatureSelect" onchange="loadCodingFeatureExample()"></select></label>
+                <button type="button" onclick="loadCodingFeatureExample()">Load example</button>
+                <button type="button" class="coding-feature-run" onclick="runCodingFeature()">Run locally</button>
+            </div>
+            <textarea id="codingFeaturePayload" class="coding-feature-payload" spellcheck="false" placeholder='Enter JSON payload for the selected coding feature...'></textarea>
+            <div id="codingFeatureStatus" class="coding-feature-status">Select a feature to begin.</div>
+            <pre id="codingFeatureOutput" class="coding-feature-output">Results will appear here.</pre>
+        </section>
         <section id="ollamaSettingsPanel" class="ollama-settings-panel" hidden>
             <div class="settings-heading">
                 <div>
