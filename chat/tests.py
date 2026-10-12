@@ -1,4 +1,5 @@
 import json
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
@@ -9,7 +10,7 @@ from django.test import TestCase
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import AgentJob, AgentTask, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, ExtensionInstall, ExtensionPackage, KnowledgeChunk, KnowledgeDocument, SandboxPolicy, SecretVaultItem, Workspace, WorkspaceMembership, WorkspacePolicy
+from .models import AgentJob, AgentTask, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, ExtensionInstall, ExtensionPackage, KnowledgeChunk, KnowledgeDocument, ProjectWorkspace, SandboxPolicy, SecretVaultItem, Workspace, WorkspaceMembership, WorkspacePolicy
 from .views import _search_knowledge
 
 
@@ -54,6 +55,17 @@ class ChatFeatureTests(TestCase):
         signup = self.client.get("/signup/")
         self.assertContains(login, 'aria-label="Sign in form"')
         self.assertContains(signup, 'aria-label="Create account form"')
+
+    def test_local_workspace_scan_indexes_then_skips_unchanged_files(self):
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder, "app.py").write_text("def hello():\n    return True\n", encoding="utf-8")
+            first = self.client.post("/api/project/workspaces/", {"root_path": folder})
+            self.assertEqual(first.status_code, 200)
+            self.assertEqual(first.json()["workspace"]["indexed_count"], 1)
+            second = self.client.post("/api/project/workspaces/", {"root_path": folder})
+            self.assertEqual(second.status_code, 200)
+            self.assertEqual(second.json()["workspace"]["skipped_count"], 1)
+            self.assertEqual(ProjectWorkspace.objects.filter(owner=self.user).count(), 1)
 
     def test_lsp_adapter_catalog_reports_local_fallback_and_servers(self):
         response = self.client.get("/api/coding/lsp/adapters/")

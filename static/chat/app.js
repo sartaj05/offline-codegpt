@@ -251,6 +251,8 @@ const searchInput = document.getElementById("searchInput");
 const searchResults = document.getElementById("searchResults");
 const projectStats = document.getElementById("projectStats");
 const projectFiles = document.getElementById("projectFiles");
+const projectRootPath = document.getElementById("projectRootPath");
+const projectScanStatus = document.getElementById("projectScanStatus");
 const knowledgeCollectionName = document.getElementById("knowledgeCollectionName");
 const knowledgeCollectionMode = document.getElementById("knowledgeCollectionMode");
 const knowledgeCollectionSelect = document.getElementById("knowledgeCollectionSelect");
@@ -4380,6 +4382,20 @@ async function loadProjectWorkspace() {
     } catch (error) {
         projectFiles.innerText = "Project workspace unavailable.";
     }
+}
+
+async function scanLocalWorkspace() {
+    const rootPath = projectRootPath ? projectRootPath.value.trim() : "";
+    if (!rootPath) { if (projectScanStatus) projectScanStatus.innerText = "Enter an absolute local folder path."; return; }
+    if (projectScanStatus) projectScanStatus.innerText = "Scanning and incrementally indexing local files...";
+    try {
+        const response = await fetch("/api/project/workspaces/", { method: "POST", headers: { "X-CSRFToken": csrfToken }, body: new URLSearchParams({ root_path: rootPath }) });
+        const data = await response.json();
+        if (!data.workspace) throw new Error(data.error || "Workspace scan failed.");
+        const item = data.workspace;
+        if (projectScanStatus) projectScanStatus.innerText = `${item.status}: ${item.indexed_count} indexed, ${item.skipped_count} unchanged, ${item.error_count} error(s).`;
+        await loadProjectWorkspace();
+    } catch (error) { if (projectScanStatus) projectScanStatus.innerText = "Workspace scan error: " + error.message; }
 }
 
 function renderGitFiles(files) {

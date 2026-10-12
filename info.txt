@@ -550,3 +550,9 @@ Next coding workspace features
   Login/signup forms have named labels and alert semantics. Global focus-visible
   styles, disabled-state feedback, and `prefers-reduced-motion` support are
   included for keyboard and assistive-technology users.
+- Local workspace indexing is available at `/api/project/workspaces/` and from
+  the Project workspace sidebar. Submit an absolute local folder path to scan
+  supported source/document files. Content hashes skip unchanged files, and
+  the response reports indexed, skipped, and failed files. The existing
+  `python manage.py watch_project <folder> --username <user>` command can keep
+  polling a folder for incremental changes.

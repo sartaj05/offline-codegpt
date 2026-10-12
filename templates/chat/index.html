@@ -55,6 +55,7 @@
                 <button type="button" onclick="loadProjectWorkspace()">Refresh</button>
             </div>
             <div id="projectStats" class="project-stats">No indexed files yet.</div>
+                {% if request.user.is_authenticated %}<div class="project-scan-row"><input id="projectRootPath" placeholder="Absolute local folder path" aria-label="Local project folder path"><button type="button" onclick="scanLocalWorkspace()">Scan folder</button></div><div id="projectScanStatus" class="project-stats" role="status" aria-live="polite">No local folder scan started.</div>{% endif %}
             <div id="projectFiles" class="project-files"></div>
             <div class="knowledge-collection-tools">
                 <input id="knowledgeCollectionName" placeholder="Knowledge collection name">

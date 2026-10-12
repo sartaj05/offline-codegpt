@@ -32,6 +32,7 @@ urlpatterns = [
     path("api/knowledge/collections/", views.knowledge_collections, name="knowledge_collections"),
     path("api/knowledge/collections/<int:collection_id>/documents/", views.knowledge_collection_documents, name="knowledge_collection_documents"),
     path("api/project/", views.project_documents, name="project_documents"),
+    path("api/project/workspaces/", views.project_workspaces, name="project_workspaces"),
     path("api/project/symbols/", views.project_symbols, name="project_symbols"),
     path("api/project/symbol-impact/", views.symbol_impact, name="symbol_impact"),
     path("api/project/graph/", views.code_graph, name="code_graph"),

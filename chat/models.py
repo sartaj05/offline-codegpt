@@ -579,6 +579,30 @@ class KnowledgeDocument(models.Model):
         return self.filename or self.title
 
 
+class ProjectWorkspace(models.Model):
+    STATUS_CHOICES = (("idle", "Idle"), ("scanning", "Scanning"), ("ready", "Ready"), ("error", "Error"))
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="project_workspaces")
+    name = models.CharField(max_length=160)
+    root_path = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="idle")
+    files_seen = models.PositiveIntegerField(default=0)
+    indexed_count = models.PositiveIntegerField(default=0)
+    skipped_count = models.PositiveIntegerField(default=0)
+    error_count = models.PositiveIntegerField(default=0)
+    errors = models.JSONField(default=list, blank=True)
+    last_scan_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["owner", "root_path"], name="unique_owner_project_root")]
+        ordering = ["-updated_at", "-id"]
+
+    def __str__(self):
+        return self.name
+
+
 class DocumentSection(models.Model):
     SECTION_TYPES = (
         ("page", "Page"),

@@ -16,7 +16,7 @@ import uuid
 import zipfile
 import tempfile
 from datetime import timedelta
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from urllib.parse import quote, urlencode, urlparse
 
 import requests
@@ -102,6 +102,7 @@ from .models import (
     EvaluationRegressionSuite,
     EvaluationReplay,
     CodingWorkflowArtifact,
+    ProjectWorkspace,
     SecretVaultItem,
     ExtensionPackage,
     ExtensionInstall,
@@ -2281,6 +2282,88 @@ def project_documents(request):
             for document in documents
         ],
     })
+
+
+WATCHABLE_WORKSPACE_EXTENSIONS = {".py", ".js", ".ts", ".tsx", ".jsx", ".java", ".cs", ".php", ".sql", ".html", ".css", ".json", ".md", ".txt", ".pdf", ".docx", ".yaml", ".yml", ".toml", ".ini", ".sh", ".ps1"}
+IGNORED_WORKSPACE_DIRECTORIES = {".git", ".venv", "venv", "node_modules", "__pycache__", "staticfiles", ".pytest_cache"}
+
+
+def _project_workspace_payload(workspace):
+    return {
+        "id": workspace.id,
+        "name": workspace.name,
+        "root_path": workspace.root_path,
+        "status": workspace.status,
+        "files_seen": workspace.files_seen,
+        "indexed_count": workspace.indexed_count,
+        "skipped_count": workspace.skipped_count,
+        "error_count": workspace.error_count,
+        "errors": workspace.errors[-20:],
+        "last_scan_at": workspace.last_scan_at.isoformat() if workspace.last_scan_at else None,
+    }
+
+
+def _scan_project_workspace(workspace):
+    root = Path(workspace.root_path).resolve()
+    workspace.status = "scanning"
+    workspace.save(update_fields=["status", "updated_at"])
+    files_seen = indexed_count = skipped_count = 0
+    errors = []
+    try:
+        candidates = []
+        for current_root, directories, filenames in os.walk(root):
+            directories[:] = [name for name in directories if name not in IGNORED_WORKSPACE_DIRECTORIES]
+            for filename in filenames:
+                path = Path(current_root) / filename
+                if path.suffix.lower() in WATCHABLE_WORKSPACE_EXTENSIONS:
+                    candidates.append(path)
+        for path in sorted(candidates)[:MAX_PROJECT_FILES]:
+            files_seen += 1
+            try:
+                if path.stat().st_size > MAX_FILE_BYTES:
+                    skipped_count += 1
+                    continue
+                relative_name = _safe_filename(path.relative_to(root).as_posix())
+                text = _extract_document_text(relative_name, path.read_bytes())
+                existing = KnowledgeDocument.objects.filter(owner=workspace.owner, filename=relative_name).first()
+                digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+                if existing and existing.content_hash == digest and existing.is_active:
+                    skipped_count += 1
+                    continue
+                _save_knowledge_document(relative_name, text, "project", workspace.owner)
+                indexed_count += 1
+            except (OSError, ValueError, UnicodeError) as exc:
+                errors.append(f"{path.name}: {str(exc)[:240]}")
+        workspace.status = "ready" if not errors else "error"
+    except OSError as exc:
+        errors.append(str(exc)[:240])
+        workspace.status = "error"
+    workspace.files_seen = files_seen
+    workspace.indexed_count = indexed_count
+    workspace.skipped_count = skipped_count
+    workspace.error_count = len(errors)
+    workspace.errors = errors[-50:]
+    workspace.last_scan_at = timezone.now()
+    workspace.save(update_fields=["status", "files_seen", "indexed_count", "skipped_count", "error_count", "errors", "last_scan_at", "updated_at"])
+    return workspace
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def project_workspaces(request):
+    if request.method == "GET":
+        return JsonResponse({"success": True, "workspaces": [_project_workspace_payload(item) for item in ProjectWorkspace.objects.filter(owner=request.user)]})
+    raw_path = request.POST.get("root_path", "").strip()
+    root = Path(raw_path).expanduser()
+    if not root.is_absolute() or not root.is_dir():
+        return JsonResponse({"success": False, "error": "Choose an existing absolute local folder path."}, status=400)
+    root = root.resolve()
+    workspace, _ = ProjectWorkspace.objects.get_or_create(owner=request.user, root_path=str(root), defaults={"name": root.name or str(root)})
+    if request.POST.get("name", "").strip():
+        workspace.name = request.POST["name"].strip()[:160]
+        workspace.save(update_fields=["name", "updated_at"])
+    workspace = _scan_project_workspace(workspace)
+    return JsonResponse({"success": workspace.status != "error", "workspace": _project_workspace_payload(workspace)}, status=200 if workspace.status != "error" else 207)
 
 
 @login_required(login_url="/login/")
