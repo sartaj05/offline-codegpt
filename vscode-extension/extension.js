@@ -1,10 +1,11 @@
 const vscode = require("vscode");
+const cp = require("child_process");
 
-async function askServer(serverUrl, prompt, code) {
+async function askServer(serverUrl, prompt, code, accessToken = "") {
     const body = new URLSearchParams({ prompt, code, language: "auto" });
     const response = await fetch(serverUrl.replace(/\/$/, "") + "/api/cli/ask/", {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        headers: { "Content-Type": "application/x-www-form-urlencoded", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
         body,
     });
     const text = await response.text();
@@ -43,12 +44,13 @@ function activate(context) {
     const diagnostics = vscode.languages.createDiagnosticCollection("syntax-local-ai");
     let lastSuggestion = "";
     const serverUrl = () => vscode.workspace.getConfiguration("syntaxLocalAI").get("serverUrl");
+    const accessToken = () => vscode.workspace.getConfiguration("syntaxLocalAI").get("accessToken") || process.env.SYNTAX_LOCAL_AI_TOKEN || "";
 
     const runPrompt = async (prompt, code, label) => {
         output.show(true);
         output.appendLine("\n--- " + label + " ---");
         try {
-            const answer = await askServer(serverUrl(), prompt, code);
+            const answer = await askServer(serverUrl(), prompt, code, accessToken());
             lastSuggestion = answer;
             output.appendLine(answer);
             return answer;
@@ -107,13 +109,31 @@ function activate(context) {
         output.appendLine("Applied the reviewed suggestion. Undo remains available in VS Code.");
     }));
 
+    context.subscriptions.push(vscode.commands.registerCommand("syntaxLocalAI.previewLastSuggestion", async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || !lastSuggestion) {
+            vscode.window.showInformationMessage("Run a local coding request first.");
+            return;
+        }
+        const proposed = firstCodeBlock(lastSuggestion);
+        const current = editor.document.getText(editor.selection) || editor.document.getText();
+        const currentDoc = await vscode.workspace.openTextDocument({ language: editor.document.languageId, content: current });
+        const proposedDoc = await vscode.workspace.openTextDocument({ language: editor.document.languageId, content: proposed });
+        await vscode.commands.executeCommand("vscode.diff", currentDoc.uri, proposedDoc.uri, "Syntax Local AI: proposed patch");
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand("syntaxLocalAI.clearDiagnostics", () => diagnostics.clear()));
+
     context.subscriptions.push(vscode.commands.registerCommand("syntaxLocalAI.runProjectTests", async () => {
         const command = vscode.workspace.getConfiguration("syntaxLocalAI").get("testCommand");
         const approved = await vscode.window.showInformationMessage(`Run local tests: ${command}`, { modal: true }, "Run tests");
         if (approved !== "Run tests") return;
-        const terminal = vscode.window.createTerminal("Syntax Local AI tests");
-        terminal.show(true);
-        terminal.sendText(command);
+        const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!folder) { vscode.window.showErrorMessage("Open a workspace before running tests."); return; }
+        const result = await new Promise((resolve) => cp.exec(command, { cwd: folder, timeout: 120000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => resolve({ error, stdout, stderr })));
+        output.appendLine(`\n--- Project tests ---\n${result.stdout || result.stderr || "No test output."}`);
+        vscode.window.showInformationMessage(result.error ? "Local tests failed. See Syntax Local AI output." : "Local tests passed.");
+        if (result.error) output.appendLine(`Exit error: ${result.error.message}`);
     }));
 
     context.subscriptions.push(vscode.languages.registerInlineCompletionItemProvider({ scheme: "file" }, {
@@ -123,13 +143,26 @@ function activate(context) {
             if (linePrefix.trim().length < 3) return { items: [] };
             const lineSuffix = document.lineAt(position.line).text.slice(position.character);
             try {
-                const answer = await askServer(serverUrl(), "Complete the code after PREFIX. Return only the missing code, with no markdown.\nPREFIX:\n" + linePrefix + "\nSUFFIX:\n" + lineSuffix, document.getText());
+                const answer = await askServer(serverUrl(), "Complete the code after PREFIX. Return only the missing code, with no markdown.\nPREFIX:\n" + linePrefix + "\nSUFFIX:\n" + lineSuffix, document.getText(), accessToken());
                 const completion = answer.replace(/^```[A-Za-z0-9_+#.-]*\s*|```$/g, "").trim();
                 if (!completion || token.isCancellationRequested) return { items: [] };
                 return { items: [new vscode.InlineCompletionItem(completion, new vscode.Range(position, position))] };
             } catch (error) {
                 return { items: [] };
             }
+        }
+    }));
+    context.subscriptions.push(vscode.languages.registerCodeActionsProvider({ scheme: "file" }, {
+        provideCodeActions(document, range) {
+            const actions = [];
+            for (const diagnostic of diagnostics.get(document.uri) || []) {
+                if (diagnostic.range.intersection(range)) {
+                    const action = new vscode.CodeAction("Ask Syntax Local AI about this finding", vscode.CodeActionKind.QuickFix);
+                    action.command = { command: "syntaxLocalAI.askSelection", title: "Ask Syntax Local AI" };
+                    actions.push(action);
+                }
+            }
+            return actions;
         }
     }));
     context.subscriptions.push(diagnostics);

@@ -16,6 +16,8 @@
     ,"onCommand:syntaxLocalAI.askProject"
     ,"onCommand:syntaxLocalAI.applyLastSuggestion"
     ,"onCommand:syntaxLocalAI.runProjectTests"
+    ,"onCommand:syntaxLocalAI.previewLastSuggestion"
+    ,"onCommand:syntaxLocalAI.clearDiagnostics"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -47,6 +49,14 @@
       {
         "command": "syntaxLocalAI.runProjectTests",
         "title": "Syntax Local AI: Run Approved Project Tests"
+      },
+      {
+        "command": "syntaxLocalAI.previewLastSuggestion",
+        "title": "Syntax Local AI: Preview Last Suggested Patch"
+      },
+      {
+        "command": "syntaxLocalAI.clearDiagnostics",
+        "title": "Syntax Local AI: Clear Diagnostics"
       }
     ],
     "configuration": {
@@ -61,6 +71,11 @@
           "type": "string",
           "default": "python manage.py test",
           "description": "Local test command. It runs only after explicit confirmation."
+        },
+        "syntaxLocalAI.accessToken": {
+          "type": "string",
+          "default": "",
+          "description": "Optional local workspace bearer token. Do not commit this value."
         }
       }
     }

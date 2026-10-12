@@ -570,3 +570,8 @@ Next coding workspace features
   include a revision ID and test status, while `/api/patch/control/` supports
   approval-safe reject and revert actions. Approved test execution only uses a
   detected local test command and remains blocked for read-only profiles.
+- The VS Code extension now supports an optional local bearer token via
+  `syntaxLocalAI.accessToken` or `SYNTAX_LOCAL_AI_TOKEN`, native side-by-side
+  preview of the latest suggestion, diagnostic quick actions, and captured
+  local test results in the extension output channel. Suggested edits remain
+  confirmation-gated.
