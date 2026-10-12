@@ -1897,6 +1897,63 @@ def ollama_health(request):
             "error": settings.runtime + " health check failed: " + str(exc),
         }, status=503)
 
+
+@login_required(login_url="/login/")
+@require_GET
+def ollama_reliability(request):
+    """Return a bounded local-runtime readiness report without changing settings."""
+    user_settings = _user_ollama_settings(request.user)
+    started = time.perf_counter()
+    models = []
+    details = []
+    error = ""
+    try:
+        inventory = get_runtime_adapter(user_settings.runtime, user_settings.server_url).models()
+        models = [item.get("name") for item in inventory if item.get("name")]
+        for item in inventory:
+            name = item.get("name")
+            if not name:
+                continue
+            size_bytes = int(item.get("size") or 0)
+            details.append({
+                "name": name,
+                "size_bytes": size_bytes,
+                "estimated_ram_gb": round(max(0.5, (size_bytes / (1024 ** 3)) * 1.25 + 0.5), 2) if size_bytes else None,
+                "parameter_size": (item.get("details") or {}).get("parameter_size", ""),
+                "quantization": (item.get("details") or {}).get("quantization_level", ""),
+            })
+        status = "ready"
+    except (requests.RequestException, ValueError, TypeError, AttributeError) as exc:
+        status = "offline"
+        error = str(exc)[:300]
+    default_available = user_settings.default_model in models
+    fallback_available = bool(user_settings.fallback_model and user_settings.fallback_model in models)
+    recommended_model = (
+        user_settings.default_model if default_available else
+        user_settings.fallback_model if fallback_available else
+        (models[0] if models else "")
+    )
+    return JsonResponse({
+        "success": status == "ready",
+        "status": status,
+        "runtime": user_settings.runtime,
+        "server_url": user_settings.server_url,
+        "latency_ms": round((time.perf_counter() - started) * 1000),
+        "error": error,
+        "models": models,
+        "model_requirements": details,
+        "default_model": user_settings.default_model,
+        "default_available": default_available,
+        "fallback_model": user_settings.fallback_model,
+        "fallback_available": fallback_available,
+        "recommended_model": recommended_model,
+        "fallback_policy": "Try the default model, then the configured fallback model, before returning the local error.",
+        "timeouts_seconds": {"health": 3, "connect": 10, "generation": 300},
+        "cancellation": "The browser can abort a streaming request; runtime calls remain bounded by the timeout policy.",
+        "offline_limitations": ["Model quality and actual VRAM use depend on the runtime and quantization.", "A stopped local runtime cannot be repaired automatically."],
+    })
+
+
 @login_required(login_url="/login/")
 @require_GET
 def setup_diagnostics(request):

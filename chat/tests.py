@@ -725,6 +725,22 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(rejected.status_code, 400)
         self.assertIn("Unsafe relative path", rejected.json()["error"])
 
+    @patch("chat.views.get_runtime_adapter")
+    def test_runtime_reliability_reports_fallback_timeouts_and_requirements(self, get_adapter):
+        get_adapter.return_value.models.return_value = [{
+            "name": "phi3:mini",
+            "size": 2 * 1024 * 1024 * 1024,
+            "details": {"parameter_size": "3B", "quantization_level": "Q4_K_M"},
+        }]
+        response = self.client.get("/api/ollama/reliability/")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "ready")
+        self.assertTrue(payload["fallback_available"])
+        self.assertEqual(payload["recommended_model"], "phi3:mini")
+        self.assertEqual(payload["timeouts_seconds"]["generation"], 300)
+        self.assertEqual(payload["model_requirements"][0]["quantization"], "Q4_K_M")
+
     def test_multi_agent_team_creates_roles_and_advances_checkpoints(self):
         created = self.client.post("/api/agent/teams/", {
             "goal": "Prepare a safe release",

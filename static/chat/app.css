@@ -823,5 +823,6 @@ select { padding: 0 10px; }
 .coding-center-card-actions { display: flex; flex: 0 0 auto; gap: 5px; }
 .coding-center-card-actions button { min-width: 32px; padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); font-size: 10px; }
 .coding-center-empty { padding: 18px; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); text-align: center; font-size: 11px; }
+.runtime-reliability-output { max-height: 220px; overflow: auto; margin: 10px 0 0; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: #0d1016; color: #c9d3e4; font-family: Consolas, monospace; font-size: 10px; line-height: 1.5; white-space: pre-wrap; }
 @media (max-width: 840px) { .coding-center-panel { margin: 9px 16px 0; } .coding-center-cards { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .coding-center-panel { margin: 9px 12px 0; padding: 12px; } .coding-center-toolbar { display: grid; grid-template-columns: 1fr 1fr; } .coding-center-toolbar input { grid-column: 1 / -1; width: 100%; } .coding-center-toolbar > * { width: 100%; } .coding-center-card { align-items: flex-start; flex-direction: column; } .coding-center-card-actions { width: 100%; } .coding-center-card-actions button { flex: 1; min-height: 34px; } }

@@ -540,3 +540,8 @@ Next coding workspace features
   and parent-directory paths, and redact API keys, bearer tokens, passwords,
   and private keys before local persistence or response. Rejected payloads
   return HTTP 400 and are not written to the database.
+- Runtime reliability diagnostics are available at `/api/ollama/reliability/`
+  and in the Local runtime settings panel. The report shows default/fallback
+  availability, an automatic recommendation, bounded health/connect/generation
+  timeouts, cancellation behavior, and local model RAM estimates. It never
+  downloads or installs a model automatically.

@@ -221,9 +221,11 @@
             </div>
             <div class="ollama-health-row">
                 <button type="button" onclick="checkOllamaHealth()">Test connection</button>
+                <button type="button" onclick="checkRuntimeReliability()">Reliability report</button>
                 <span id="ollamaHealthStatus">Connection not checked.</span>
             </div>
             <div id="ollamaPullProgress" class="ollama-pull-progress">Model download progress will appear here.</div>
+            <pre id="ollamaReliabilityOutput" class="runtime-reliability-output">Runtime fallback, timeout, and model requirements will appear here.</pre>
             <div id="modelInventory" class="model-inventory">Model size and hardware guidance will appear after the local server is checked.</div>
             <div id="ollamaSettingsStatus" class="settings-status"></div>
             <button type="button" class="settings-save-button" onclick="saveOllamaSettings()">Save settings</button>

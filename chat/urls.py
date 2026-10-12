@@ -18,6 +18,7 @@ urlpatterns = [
     path("api/models/capabilities/", views.model_capabilities, name="model_capabilities"),
     path("api/ollama/settings/", views.ollama_settings, name="ollama_settings"),
     path("api/ollama/health/", views.ollama_health, name="ollama_health"),
+    path("api/ollama/reliability/", views.ollama_reliability, name="ollama_reliability"),
     path("api/setup/diagnostics/", views.setup_diagnostics, name="setup_diagnostics"),
     path("api/ollama/models/action/", views.ollama_model_action, name="ollama_model_action"),
     path("api/ocr/", views.local_ocr, name="local_ocr"),

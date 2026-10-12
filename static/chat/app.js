@@ -32,6 +32,7 @@ const ollamaSettingsStatus = document.getElementById("ollamaSettingsStatus");
 const ollamaFallbackModel = document.getElementById("ollamaFallbackModel");
 const ollamaHealthStatus = document.getElementById("ollamaHealthStatus");
 const ollamaPullProgress = document.getElementById("ollamaPullProgress");
+const ollamaReliabilityOutput = document.getElementById("ollamaReliabilityOutput");
 const modelInventory = document.getElementById("modelInventory");
 const benchmarkModels = document.getElementById("benchmarkModels");
 const benchmarkPrompt = document.getElementById("benchmarkPrompt");
@@ -912,6 +913,32 @@ async function checkOllamaHealth() {
         renderOllamaModels(data.models, data.default_model, data.fallback_model, data.model_details);
     } catch (error) {
         if (ollamaHealthStatus) ollamaHealthStatus.innerText = "Offline: " + error.message;
+    }
+}
+
+async function checkRuntimeReliability() {
+    if (ollamaReliabilityOutput) ollamaReliabilityOutput.innerText = "Checking local runtime reliability...";
+    try {
+        const response = await fetch("/api/ollama/reliability/");
+        const data = await response.json();
+        const requirementLines = (data.model_requirements || []).slice(0, 12).map(item =>
+            `${item.name}: ${item.estimated_ram_gb ? "~" + item.estimated_ram_gb + " GB RAM" : "size unavailable"}${item.quantization ? " · " + item.quantization : ""}`
+        );
+        const lines = [
+            `Status: ${data.status} · ${data.runtime} · ${data.latency_ms} ms`,
+            `Default: ${data.default_model} (${data.default_available ? "available" : "missing"})`,
+            `Fallback: ${data.fallback_model || "not configured"} (${data.fallback_available ? "available" : "missing"})`,
+            `Recommended: ${data.recommended_model || "start the local runtime and install a model"}`,
+            `Timeouts: health ${data.timeouts_seconds.health}s · connect ${data.timeouts_seconds.connect}s · generation ${data.timeouts_seconds.generation}s`,
+            data.cancellation,
+            "",
+            "Model requirements:",
+            ...(requirementLines.length ? requirementLines : ["No runtime model inventory available."]),
+            data.error ? "\nError: " + data.error : "",
+        ];
+        if (ollamaReliabilityOutput) ollamaReliabilityOutput.innerText = lines.filter(Boolean).join("\n");
+    } catch (error) {
+        if (ollamaReliabilityOutput) ollamaReliabilityOutput.innerText = "Reliability check error: " + error.message;
     }
 }
 
