@@ -87,7 +87,9 @@ user keeps Ollama and a project folder locally.
    python scripts/local_connector.py --server-url https://YOUR-SERVICE.onrender.com --token SAVED_TOKEN --workspace C:\path\to\project
 
 The connector uses outbound HTTPS polling and supports Ollama health and
-generation, workspace listing, file reads, and Git status. Direct chat
+generation, workspace listing, bounded workspace snapshots, file reads, and
+Git status. Snapshots sync supported text/code files into the owner's RAG
+index. Direct chat
 generation comes from the signed-in user's explicit chat action; other
 Connector panel commands wait for approval. Pairing codes expire after ten
 minutes; never commit the token.

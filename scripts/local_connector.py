@@ -66,6 +66,19 @@ def execute_command(command, workspace, ollama_url):
             if len(files) >= 500:
                 break
         return {"root": str(root), "files": files, "truncated": len(files) >= 500}
+    if operation == "workspace.snapshot":
+        root = workspace
+        files = []
+        ignored = {".git", ".venv", "venv", "node_modules", "__pycache__", "staticfiles", ".pytest_cache"}
+        extensions = {".py", ".js", ".ts", ".tsx", ".jsx", ".java", ".cs", ".php", ".sql", ".html", ".css", ".json", ".md", ".txt", ".yaml", ".yml", ".toml", ".ini", ".sh", ".ps1"}
+        for item in root.rglob("*"):
+            if len(files) >= 100 or not item.is_file() or item.suffix.lower() not in extensions or any(part in ignored for part in item.parts):
+                continue
+            if item.stat().st_size > 200_000:
+                continue
+            files.append({"path": item.relative_to(root).as_posix(), "content": item.read_text(encoding="utf-8", errors="replace")})
+        git = subprocess.run(["git", "status", "--short"], cwd=str(root), capture_output=True, text=True, timeout=20, check=False)
+        return {"root": str(root), "files": files, "git_status": git.stdout[:20_000], "truncated": len(files) >= 100}
     if operation == "file.read":
         path = safe_path(workspace, payload.get("path", ""))
         if not path.is_file():

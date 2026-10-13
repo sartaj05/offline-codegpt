@@ -1899,7 +1899,7 @@ def deployment_mode_api(request):
     return JsonResponse({"success": True, "mode": mode_payload()})
 
 
-CONNECTOR_OPERATIONS = {"ollama.health", "ollama.generate", "workspace.list", "file.read", "git.status"}
+CONNECTOR_OPERATIONS = {"ollama.health", "ollama.generate", "workspace.list", "workspace.snapshot", "file.read", "git.status"}
 
 
 def _hybrid_mode_error():
@@ -2077,6 +2077,18 @@ def local_connector_result(request, command_id):
     command.status = status
     command.result = result if isinstance(result, dict) else {"value": str(result)[:10000]}
     command.error = str(payload.get("error", ""))[:2000]
+    if command.operation == "workspace.snapshot" and status == "completed":
+        synced = 0
+        for item in command.result.get("files", []) if isinstance(command.result, dict) else []:
+            if not isinstance(item, dict) or not item.get("path"):
+                continue
+            try:
+                _save_knowledge_document(str(item["path"])[:500], str(item.get("content", ""))[:200_000], "connector-sync", connector.owner)
+                synced += 1
+            except (OSError, ValueError, TypeError):
+                continue
+        if isinstance(command.result, dict):
+            command.result["synced_documents"] = synced
     command.save(update_fields=["status", "result", "error", "updated_at"])
     connector.last_seen_at = timezone.now()
     connector.save(update_fields=["last_seen_at", "updated_at"])

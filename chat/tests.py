@@ -1,4 +1,5 @@
 import json
+import hashlib
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -105,6 +106,31 @@ class ChatFeatureTests(TestCase):
         body = b"".join(response.streaming_content).decode("utf-8")
         self.assertIn('"type": "token"', body)
         self.assertIn("Local answer", body)
+
+    @override_settings(DEPLOYMENT_MODE="hybrid")
+    def test_connector_snapshot_ingests_files_into_knowledge_index(self):
+        token = "snapshot-token"
+        connector = LocalConnector.objects.create(
+            owner=self.user,
+            name="Sync connector",
+            status="connected",
+            token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(),
+        )
+        command = self.client.post(
+            f"/api/connector/{connector.id}/command/",
+            {"operation": "workspace.snapshot", "payload": "{}"},
+        )
+        command_id = command.json()["command"]["id"]
+        self.client.post(f"/api/connector/command/{command_id}/approval/", {"action": "approve"})
+        result = self.client.post(
+            f"/api/connector/result/{command_id}/",
+            data=json.dumps({"status": "completed", "result": {"files": [{"path": "src/app.py", "content": "print('ok')"}]}}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()["status"], "completed")
+        self.assertTrue(KnowledgeDocument.objects.filter(owner=self.user, filename="src/app.py").exists())
 
     def test_responsive_ui_contract_covers_required_viewports(self):
         project_root = Path(__file__).resolve().parents[1]

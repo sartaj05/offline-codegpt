@@ -280,8 +280,9 @@ future runs:
 python scripts/local_connector.py --server-url https://YOUR-SERVICE.onrender.com --token SAVED_TOKEN --workspace C:\path\to\project
 ~~~
 
-The connector supports Ollama health/generation, workspace listing, file
-reads, and Git status. Direct chat generation is queued from the signed-in
+The connector supports Ollama health/generation, workspace listing, bounded
+workspace snapshots, file reads, and Git status. A snapshot syncs text/code
+files and Git status into the owner's knowledge index. Direct chat generation is queued from the signed-in
 user's explicit chat action; Connector-panel tool commands are queued as
 `awaiting_approval`. Approve or reject those commands before the local process
 can poll and run them.
