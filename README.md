@@ -213,6 +213,8 @@ SQLite/offline development.
      `https://syntax-local-ai.onrender.com`.
 4. Keep `DJANGO_DEBUG=false`. Render generates `DJANGO_SECRET_KEY` from the
    Blueprint configuration.
+   The Blueprint sets `DEPLOYMENT_MODE=hosted`, which requires sign-in and
+   disables local Ollama, filesystem, Git, shell, and local-agent endpoints.
 5. Create the service. Its build command automatically installs dependencies,
    runs migrations, and collects static files. Its start command runs:
 

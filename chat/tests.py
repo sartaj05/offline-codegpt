@@ -6,7 +6,7 @@ from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.core.management import call_command
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
@@ -40,6 +40,18 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(mode["capabilities"]["local_runtime"])
         self.assertTrue(mode["capabilities"]["local_files"])
         self.assertFalse(mode["capabilities"]["network_required"])
+
+    @override_settings(DEPLOYMENT_MODE="hosted")
+    def test_hosted_mode_requires_authentication_and_blocks_local_capabilities(self):
+        self.client.logout()
+        unauthenticated = self.client.post("/api/ask-code/", {"prompt": "hello"})
+        self.assertEqual(unauthenticated.status_code, 401)
+        self.client.login(username="tester", password="safe-password-123")
+        workspace = self.client.get("/api/project/workspaces/")
+        self.assertEqual(workspace.status_code, 403)
+        self.assertEqual(workspace.json()["deployment_mode"], "hosted")
+        mode = self.client.get("/api/deployment/mode/").json()["mode"]
+        self.assertFalse(mode["capabilities"]["local_tools"])
 
     def test_responsive_ui_contract_covers_required_viewports(self):
         project_root = Path(__file__).resolve().parents[1]

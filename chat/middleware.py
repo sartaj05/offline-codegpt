@@ -6,6 +6,65 @@ from django.http import JsonResponse
 
 from .models import AuditEvent, Workspace
 from .security import redact_coding_response
+from .deployment_mode import current_mode
+
+
+class DeploymentModeMiddleware:
+    """Enforce hosted-mode authentication and local capability boundaries."""
+
+    capability_prefixes = {
+        "local_runtime": (
+            "/api/ask-code/",
+            "/api/ollama/",
+            "/api/models/",
+            "/api/ocr/",
+            "/api/speech/",
+            "/api/screen/",
+        ),
+        "local_files": (
+            "/api/project/",
+            "/api/agent/worktrees/",
+        ),
+        "local_git": ("/api/git/",),
+        "local_tools": (
+            "/api/execute/",
+            "/api/mcp/",
+            "/api/tests/run",
+            "/api/agent/job/",
+            "/api/agent/task/",
+            "/api/agent/team/",
+            "/api/scheduler/",
+        ),
+    }
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        mode = current_mode()
+        path = request.path
+
+        if mode == "hosted" and path.startswith("/api/") and path not in {
+            "/api/deployment/mode/",
+            "/api/privacy/",
+        } and not getattr(request.user, "is_authenticated", False):
+            return JsonResponse({
+                "success": False,
+                "error": "Hosted Mode requires sign-in before using workspace APIs.",
+                "authentication_required": True,
+            }, status=401)
+
+        if mode == "hosted":
+            for capability, prefixes in self.capability_prefixes.items():
+                if any(path.startswith(prefix) for prefix in prefixes):
+                    return JsonResponse({
+                        "success": False,
+                        "error": f"{capability.replace('_', ' ').title()} are disabled in Hosted Mode.",
+                        "deployment_mode": mode,
+                        "capability": capability,
+                    }, status=403)
+
+        return self.get_response(request)
 
 
 class CodingSecurityMiddleware:

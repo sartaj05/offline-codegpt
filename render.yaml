@@ -12,6 +12,8 @@ services:
         value: 3.11.11
       - key: DJANGO_DEBUG
         value: "false"
+      - key: DEPLOYMENT_MODE
+        value: hosted
       - key: DJANGO_SECRET_KEY
         generateValue: true
       - key: DATABASE_URL

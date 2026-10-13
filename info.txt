@@ -56,7 +56,9 @@ PostgreSQL. This is a hosted demo mode, not a fully offline deployment.
      syntax-local-ai.onrender.com.
    - CSRF_TRUSTED_ORIGINS: the HTTPS origin, such as
      https://syntax-local-ai.onrender.com.
-6. Keep DJANGO_DEBUG=false. Render generates DJANGO_SECRET_KEY.
+6. Keep DJANGO_DEBUG=false. Render generates DJANGO_SECRET_KEY. The Blueprint
+   sets DEPLOYMENT_MODE=hosted, requiring sign-in and disabling local Ollama,
+   filesystem, Git, shell, and local-agent endpoints.
 7. The Blueprint installs requirements, runs migrations, collects static
    files, and starts Gunicorn. Check https://YOUR-SERVICE.onrender.com/health/.
 
