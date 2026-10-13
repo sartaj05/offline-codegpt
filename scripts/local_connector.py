@@ -116,17 +116,87 @@ def register(session, server_url, pairing_code, name):
 
 
 def report_progress(session, server_url, command_id, progress, checkpoint=None):
-    response = session.post(
-        api_url(server_url, f"/api/connector/progress/{command_id}/"),
-        json={"progress": progress, "checkpoint": checkpoint or {}},
-        timeout=20,
-    )
-    response.raise_for_status()
+    try:
+        response = session.post(
+            api_url(server_url, f"/api/connector/progress/{command_id}/"),
+            json={"progress": progress, "checkpoint": checkpoint or {}},
+            timeout=20,
+        )
+        response.raise_for_status()
+        return True
+    except requests.RequestException:
+        return False
+
+
+def load_queue(queue_file):
+    if not queue_file or not queue_file.exists():
+        return []
+    try:
+        value = json.loads(queue_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError):
+        return []
+    return value if isinstance(value, list) else []
+
+
+def save_queue(queue_file, entries):
+    queue_file.parent.mkdir(parents=True, exist_ok=True)
+    temporary = queue_file.with_suffix(queue_file.suffix + ".tmp")
+    temporary.write_text(json.dumps(entries[-500:], indent=2), encoding="utf-8")
+    temporary.replace(queue_file)
+
+
+def queue_result(queue_file, command_id, body):
+    entries = load_queue(queue_file)
+    entry = {"command_id": str(command_id), "body": body}
+    entries = [item for item in entries if item.get("command_id") != str(command_id)]
+    entries.append(entry)
+    save_queue(queue_file, entries)
+
+
+def flush_queue(session, server_url, queue_file):
+    entries = load_queue(queue_file)
+    remaining = []
+    for entry in entries:
+        try:
+            response = session.post(
+                api_url(server_url, f"/api/connector/result/{entry['command_id']}/"),
+                json=entry.get("body", {}),
+                timeout=30,
+            )
+            response.raise_for_status()
+        except (KeyError, requests.RequestException):
+            remaining.append(entry)
+            if isinstance(entry, dict) and entry.get("command_id"):
+                remaining.extend(item for item in entries[entries.index(entry) + 1:] if item not in remaining)
+            break
+    if remaining:
+        save_queue(queue_file, remaining)
+    elif queue_file.exists():
+        queue_file.unlink()
+    return len(entries) - len(remaining)
+
+
+def post_result_or_queue(session, server_url, queue_file, command_id, body):
+    try:
+        response = session.post(
+            api_url(server_url, f"/api/connector/result/{command_id}/"),
+            json=body,
+            timeout=30,
+        )
+        response.raise_for_status()
+        return True
+    except requests.ConnectionError:
+        queue_result(queue_file, command_id, body)
+        return False
+    except requests.Timeout:
+        queue_result(queue_file, command_id, body)
+        return False
 
 
 def run(args):
     server_url = args.server_url.rstrip("/")
     workspace = safe_workspace(args.workspace)
+    queue_file = Path(args.queue_file).expanduser().resolve()
     session = requests.Session()
     token = args.token
     if not token:
@@ -136,8 +206,16 @@ def run(args):
         print("Save the token locally and use --token for future runs.")
     session.headers.update({"Authorization": "Bearer " + token})
     while True:
-        response = session.get(api_url(server_url, "/api/connector/poll/"), timeout=30)
-        response.raise_for_status()
+        flush_queue(session, server_url, queue_file)
+        try:
+            response = session.get(api_url(server_url, "/api/connector/poll/"), timeout=30)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            if args.once:
+                print(f"Connector offline; queued results remain in {queue_file}: {exc}")
+                return
+            time.sleep(max(2, args.interval))
+            continue
         commands = response.json().get("commands", [])
         for command in commands:
             try:
@@ -147,7 +225,7 @@ def run(args):
                 body = {"status": "completed", "result": result}
             except Exception as exc:  # The error is returned to the approving user.
                 body = {"status": "failed", "error": str(exc)[:2_000], "result": {}}
-            session.post(api_url(server_url, f"/api/connector/result/{command['id']}/"), json=body, timeout=30).raise_for_status()
+            post_result_or_queue(session, server_url, queue_file, command["id"], body)
         if args.once:
             return
         time.sleep(max(2, args.interval))
@@ -161,6 +239,7 @@ def main():
     parser.add_argument("--name", default="My local connector")
     parser.add_argument("--workspace", help="Allowed local project folder")
     parser.add_argument("--ollama-url", default="http://127.0.0.1:11434")
+    parser.add_argument("--queue-file", default=".syntax-local-connector-queue.json", help="Local durable result queue file")
     parser.add_argument("--interval", type=int, default=5)
     parser.add_argument("--once", action="store_true", help="Poll once and exit")
     args = parser.parse_args()

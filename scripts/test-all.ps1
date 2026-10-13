@@ -17,6 +17,7 @@ $python = if (Test-Path ".\venv\Scripts\python.exe") { ".\venv\Scripts\python.ex
 Invoke-Step "Django system check" { & $python manage.py check }
 Invoke-Step "Migration check" { & $python manage.py makemigrations --check --dry-run }
 Invoke-Step "Django tests" { & $python manage.py test chat --keepdb }
+Invoke-Step "Connector offline queue tests" { & $python -m unittest tests.test_local_connector_queue }
 
 if (Get-Command node -ErrorAction SilentlyContinue) {
     Invoke-Step "Chat JavaScript syntax" { node --check static/chat/app.js }

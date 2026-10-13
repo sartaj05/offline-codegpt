@@ -110,6 +110,19 @@ work units or any future write-capable operation. This queue does not make the
 hosted service able to execute local commands by itself: the paired connector
 must be online and explicitly approved work is still required.
 
+Connector offline result queue
+------------------------------
+If the hosted service is unreachable after a local command completes, the
+connector keeps the result in `.syntax-local-connector-queue.json` and retries
+it on the next successful polling cycle. Use a private custom location when
+needed:
+   python scripts/local_connector.py --server-url https://YOUR-SERVICE.onrender.com --token SAVED_TOKEN --workspace C:\path\to\project --queue-file C:\Users\you\connector-queue.json
+
+The queue is local, bounded to 500 entries, deduplicated by task ID, and should
+be protected like a local log because results can contain project information.
+It only queues connection timeouts/errors; server authorization errors are not
+silently treated as successful delivery.
+
 Desktop connector controller
 ----------------------------
 Run the dependency-free Tkinter controller:

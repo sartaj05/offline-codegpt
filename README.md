@@ -303,6 +303,15 @@ the server records 100% only after a completed result is accepted. A running
 connector must check cancellation between work units before applying any
 future write-capable task.
 
+If the hosted service is temporarily offline, completed command results are
+stored in `.syntax-local-connector-queue.json` and retried on the next polling
+cycle. Keep this file private because it can contain local command results, or
+choose another path with `--queue-file`:
+
+~~~powershell
+python scripts/local_connector.py --server-url https://YOUR-SERVICE.onrender.com --token SAVED_TOKEN --workspace C:\path\to\project --queue-file C:\Users\you\connector-queue.json
+~~~
+
 ### Desktop controller and auto-start
 
 Windows users can keep the connector process manageable from a small Tkinter
