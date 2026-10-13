@@ -1015,6 +1015,25 @@ class LocalConnectorPolicy(models.Model):
         ordering = ["-updated_at", "-id"]
 
 
+class LocalConnectorAccess(models.Model):
+    ROLE_CHOICES = (
+        ("developer", "Developer"),
+        ("reviewer", "Reviewer"),
+        ("viewer", "Viewer"),
+    )
+
+    connector = models.ForeignKey(LocalConnector, on_delete=models.CASCADE, related_name="access_grants")
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="connector_access_grants")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="connector_access_grants")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="viewer")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["connector", "user"], name="unique_connector_access_user")]
+        ordering = ["user__username", "id"]
+
+
 class LocalConnectorCommand(models.Model):
     STATUS_CHOICES = (
         ("awaiting_approval", "Awaiting approval"),

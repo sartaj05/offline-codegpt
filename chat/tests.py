@@ -234,6 +234,29 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(metrics["ollama_average_latency_ms"], 42)
         self.assertEqual(metrics["connectors"][0]["runtime"]["models"], ["coder"])
 
+    @override_settings(DEPLOYMENT_MODE="hybrid")
+    def test_connector_workspace_access_grants_queue_but_not_approval_to_developer(self):
+        teammate = User.objects.create_user(username="teammate", password="safe-password-123")
+        workspace = Workspace.objects.create(owner=self.user, name="Shared coding workspace")
+        WorkspaceMembership.objects.create(workspace=workspace, user=self.user, role="admin")
+        WorkspaceMembership.objects.create(workspace=workspace, user=teammate, role="developer")
+        connector = LocalConnector.objects.create(owner=self.user, name="Shared connector", status="connected")
+        grant = self.client.post(
+            f"/api/connector/{connector.id}/access/",
+            data=json.dumps({"workspace_id": workspace.id, "username": teammate.username, "role": "developer"}),
+            content_type="application/json",
+        )
+        self.assertEqual(grant.status_code, 200)
+        self.client.logout()
+        self.client.login(username="teammate", password="safe-password-123")
+        listing = self.client.get("/api/connector/")
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(listing.json()["connectors"][0]["access_role"], "developer")
+        queued = self.client.post(f"/api/connector/{connector.id}/command/", {"operation": "git.status", "payload": "{}"})
+        self.assertEqual(queued.status_code, 200)
+        denied = self.client.post(f"/api/connector/command/{queued.json()['command']['id']}/approval/", {"action": "approve"})
+        self.assertEqual(denied.status_code, 403)
+
     def test_responsive_ui_contract_covers_required_viewports(self):
         project_root = Path(__file__).resolve().parents[1]
         stylesheet = (project_root / "static" / "chat" / "app.css").read_text(encoding="utf-8")

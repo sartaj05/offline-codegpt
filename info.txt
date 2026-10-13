@@ -184,6 +184,18 @@ health/generation operations measure latency before returning results; the
 server stores those metrics per connector and never treats missing heartbeats
 as proof that the local machine is online.
 
+Multi-user workspace connector permissions
+-------------------------------------------
+Connector owners manage explicit workspace grants with:
+   GET    /api/connector/<connector-id>/access/
+   POST   /api/connector/<connector-id>/access/
+   DELETE /api/connector/<connector-id>/access/
+
+Roles are developer (view and queue), reviewer (view and approve/reject), and
+viewer (view only). A workspace admin must grant access to an existing member.
+Owners retain policy/revoke/access-management rights, and connector tokens are
+never shared with workspace members through these APIs.
+
 Desktop connector controller
 ----------------------------
 Run the dependency-free Tkinter controller:

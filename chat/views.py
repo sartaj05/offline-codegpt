@@ -106,6 +106,7 @@ from .models import (
     PatchRevision,
     LocalConnector,
     LocalConnectorPolicy,
+    LocalConnectorAccess,
     LocalConnectorCommand,
     ProjectWorkspace,
     SecretVaultItem,
@@ -2018,6 +2019,28 @@ def _connector_policy_payload(policy):
     }
 
 
+CONNECTOR_ACCESS_PERMISSIONS = {
+    "owner": {"view": True, "queue": True, "approve": True, "manage": True},
+    "developer": {"view": True, "queue": True, "approve": False, "manage": False},
+    "reviewer": {"view": True, "queue": False, "approve": True, "manage": False},
+    "viewer": {"view": True, "queue": False, "approve": False, "manage": False},
+}
+
+
+def _connector_access(connector, user):
+    if connector.owner_id == user.id:
+        return {"role": "owner", **CONNECTOR_ACCESS_PERMISSIONS["owner"]}
+    grant = LocalConnectorAccess.objects.filter(connector=connector, user=user).first()
+    if not grant:
+        return None
+    return {"role": grant.role, **CONNECTOR_ACCESS_PERMISSIONS.get(grant.role, CONNECTOR_ACCESS_PERMISSIONS["viewer"]), "grant_id": grant.id, "workspace_id": grant.workspace_id}
+
+
+def _connector_can(connector, user, action):
+    access = _connector_access(connector, user)
+    return bool(access and access.get(action))
+
+
 def _connector_operation_allowed(connector, operation):
     policy = _connector_policy(connector)
     allowed = policy.allowed_operations
@@ -2086,11 +2109,12 @@ def local_connector_api(request):
             "pairing_expires_at": connector.pairing_expires_at.isoformat(),
             "message": "Use this one-time code with scripts/local_connector.py. It is shown only once.",
         })
-    connectors = LocalConnector.objects.filter(owner=request.user)
+    connectors = LocalConnector.objects.filter(Q(owner=request.user) | Q(access_grants__user=request.user)).distinct()
     return JsonResponse({
         "success": True,
         "connectors": [{
             **_connector_payload(item),
+            "access_role": (_connector_access(item, request.user) or {}).get("role"),
             "commands": [{
                 **_connector_task_payload(command),
             } for command in item.commands.all()[:20]],
@@ -2232,7 +2256,9 @@ def local_connector_command(request, connector_id):
     mode_error = _hybrid_mode_error()
     if mode_error:
         return mode_error
-    connector = get_object_or_404(LocalConnector, id=connector_id, owner=request.user, status="connected")
+    connector = get_object_or_404(LocalConnector, id=connector_id, status="connected")
+    if not _connector_can(connector, request.user, "queue"):
+        return JsonResponse({"success": False, "error": "You do not have connector queue permission."}, status=403)
     operation = request.POST.get("operation", "").strip().lower()
     if operation not in CONNECTOR_OPERATIONS:
         return JsonResponse({"success": False, "error": "Unsupported connector operation."}, status=400)
@@ -2267,7 +2293,9 @@ def local_connector_command_approval(request, command_id):
     mode_error = _hybrid_mode_error()
     if mode_error:
         return mode_error
-    command = get_object_or_404(LocalConnectorCommand, id=command_id, connector__owner=request.user)
+    command = get_object_or_404(LocalConnectorCommand, id=command_id)
+    if not _connector_can(command.connector, request.user, "approve"):
+        return JsonResponse({"success": False, "error": "You do not have connector approval permission."}, status=403)
     action = request.POST.get("action", "").strip().lower()
     if command.status != "awaiting_approval":
         return JsonResponse({"success": False, "error": "Only pending commands can be approved or rejected."}, status=409)
@@ -2288,13 +2316,15 @@ def local_connector_tasks(request, connector_id=None):
     if mode_error:
         return mode_error
     if request.method == "GET":
-        tasks = LocalConnectorCommand.objects.filter(connector__owner=request.user)
+        tasks = LocalConnectorCommand.objects.filter(Q(connector__owner=request.user) | Q(connector__access_grants__user=request.user)).distinct()
         if connector_id is not None:
             tasks = tasks.filter(connector_id=connector_id)
         return JsonResponse({"success": True, "tasks": [_connector_task_payload(task) for task in tasks[:100]]})
     if connector_id is None:
         return JsonResponse({"success": False, "error": "A connector is required to create a task."}, status=400)
-    connector = get_object_or_404(LocalConnector, id=connector_id, owner=request.user, status="connected")
+    connector = get_object_or_404(LocalConnector, id=connector_id, status="connected")
+    if not _connector_can(connector, request.user, "queue"):
+        return JsonResponse({"success": False, "error": "You do not have connector queue permission."}, status=403)
     payload = _connector_json(request)
     operation = str(payload.get("operation", "")).strip().lower()
     if operation not in CONNECTOR_OPERATIONS:
@@ -2361,7 +2391,7 @@ def local_connector_metrics(request):
     total_failures = 0
     queue_durations = []
     generation_latencies = []
-    for connector in LocalConnector.objects.filter(owner=request.user):
+    for connector in LocalConnector.objects.filter(Q(owner=request.user) | Q(access_grants__user=request.user)).distinct():
         commands = list(connector.commands.all())
         counts = {status: sum(1 for command in commands if command.status == status) for status, _ in LocalConnectorCommand.STATUS_CHOICES}
         completed = [command for command in commands if command.status in {"completed", "failed", "rejected"}]
@@ -2411,8 +2441,17 @@ def local_connector_task_control(request, command_id):
     mode_error = _hybrid_mode_error()
     if mode_error:
         return mode_error
-    task = get_object_or_404(LocalConnectorCommand, id=command_id, connector__owner=request.user)
+    task = get_object_or_404(LocalConnectorCommand, id=command_id)
+    access = _connector_access(task.connector, request.user)
+    if not access:
+        return JsonResponse({"success": False, "error": "You do not have access to this connector task."}, status=403)
     action = request.POST.get("action", "").strip().lower()
+    if action in {"approve", "reject"} and not access.get("approve"):
+        return JsonResponse({"success": False, "error": "You do not have connector approval permission."}, status=403)
+    if action == "retry" and not access.get("queue"):
+        return JsonResponse({"success": False, "error": "You do not have connector queue permission."}, status=403)
+    if action == "cancel" and not (access.get("queue") or access.get("approve")):
+        return JsonResponse({"success": False, "error": "You do not have connector task-control permission."}, status=403)
     if action == "approve" and task.status == "awaiting_approval":
         task.status = "queued"
         task.cancel_requested = False
@@ -2474,6 +2513,52 @@ def local_connector_revoke(request, connector_id):
     connector.pairing_expires_at = None
     connector.save(update_fields=["status", "token_hash", "pairing_code_hash", "pairing_expires_at", "updated_at"])
     return JsonResponse({"success": True, "connector": _connector_payload(connector)})
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST", "DELETE"])
+def local_connector_access(request, connector_id):
+    mode_error = _hybrid_mode_error()
+    if mode_error:
+        return mode_error
+    connector = get_object_or_404(LocalConnector, id=connector_id, owner=request.user)
+    if request.method == "GET":
+        grants = connector.access_grants.select_related("workspace", "user")
+        return JsonResponse({"success": True, "access": [{
+            "id": grant.id,
+            "workspace_id": grant.workspace_id,
+            "workspace": grant.workspace.name,
+            "username": grant.user.username,
+            "role": grant.role,
+            "created_at": grant.created_at.isoformat(),
+        } for grant in grants]})
+    payload = _connector_json(request)
+    if request.method == "DELETE":
+        grant_id = payload.get("grant_id") or request.GET.get("grant_id")
+        grant = get_object_or_404(LocalConnectorAccess, id=grant_id, connector=connector)
+        grant.delete()
+        return JsonResponse({"success": True, "removed_id": int(grant_id)})
+    role = str(payload.get("role", "viewer")).strip().lower()
+    if role not in dict(LocalConnectorAccess.ROLE_CHOICES):
+        return JsonResponse({"success": False, "error": "Role must be developer, reviewer, or viewer."}, status=400)
+    try:
+        workspace = get_object_or_404(Workspace, id=int(payload.get("workspace_id")))
+    except (TypeError, ValueError):
+        return JsonResponse({"success": False, "error": "A workspace_id is required."}, status=400)
+    requester_membership = _workspace_membership(request.user, workspace)
+    if not requester_membership or requester_membership.role != "admin":
+        return JsonResponse({"success": False, "error": "You must be a workspace admin to grant connector access."}, status=403)
+    username = str(payload.get("username", "")).strip()
+    target = get_object_or_404(User, username=username)
+    if not _workspace_membership(target, workspace):
+        return JsonResponse({"success": False, "error": "The target user is not a member of this workspace."}, status=400)
+    grant, _ = LocalConnectorAccess.objects.update_or_create(
+        connector=connector,
+        user=target,
+        defaults={"workspace": workspace, "role": role},
+    )
+    AuditEvent.objects.create(actor=request.user, workspace=workspace, event_type="connector.access_changed", details={"connector_id": connector.id, "username": target.username, "role": role})
+    return JsonResponse({"success": True, "access": {"id": grant.id, "workspace_id": workspace.id, "username": target.username, "role": grant.role}})
 
 
 def _hybrid_ask_code(request, prompt, code, requested_model):

@@ -383,6 +383,15 @@ Ollama latency, model inventory, task counts, failures, and queue timing.
 Health and generation results carry local latency measurements; the hosted
 dashboard stores only the metrics needed for the signed-in owner's view.
 
+### Multi-user connector access
+
+Connector owners can grant a connector to a workspace member with
+`GET/POST/DELETE /api/connector/<id>/access/`. Roles are `developer` (view and
+queue), `reviewer` (view and approve/reject), and `viewer` (view only). The
+connector owner retains management, policy, revoke, and full task-control
+rights. Grants require a workspace-admin requester and never expose the local
+connector token.
+
 ## Configure Ollama
 
 Start Ollama before using the AI features:
