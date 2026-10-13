@@ -3818,10 +3818,10 @@ def project_backup(request):
                 "manifest.json",
                 json.dumps({
                     "format": "syntax-local-ai-backup",
-                    "version": 2,
+                    "version": 3,
                     "username": request.user.username,
                     "created_at": timezone.now().isoformat(),
-                    "scope": "chats, knowledge documents, indexes, settings, and model metadata",
+                    "scope": "chats, knowledge documents, indexes, settings, model metadata, and hybrid connector history",
                 }, indent=2),
             )
             knowledge_index = []
@@ -3881,6 +3881,34 @@ def project_backup(request):
                 "local_models": list(LocalModelConfig.objects.filter(is_active=True).values("name", "display_name", "is_default", "temperature", "top_p", "max_context_chars")),
                 "capabilities": list(ModelCapability.objects.filter(owner=request.user).values("runtime", "model_name", "capabilities", "hardware", "source")),
             }, default=str, indent=2))
+            connector_records = []
+            connector_tasks = []
+            for connector in LocalConnector.objects.filter(owner=request.user).order_by("id"):
+                policy = _connector_policy(connector)
+                connector_records.append({
+                    "name": connector.name,
+                    "status": connector.status,
+                    "capabilities": connector.capabilities,
+                    "policy": _connector_policy_payload(policy),
+                })
+                for task in connector.commands.all():
+                    connector_tasks.append({
+                        "connector_name": connector.name,
+                        "operation": task.operation,
+                        "task_name": task.task_name,
+                        "payload": task.payload,
+                        "status": task.status,
+                        "progress": task.progress,
+                        "checkpoint": task.checkpoint,
+                        "retry_count": task.retry_count,
+                        "cancel_requested": task.cancel_requested,
+                        "result": task.result,
+                        "error": task.error,
+                        "created_at": task.created_at,
+                        "updated_at": task.updated_at,
+                    })
+            bundle.writestr("connectors/metadata.json", json.dumps(connector_records, default=str, indent=2))
+            bundle.writestr("connectors/tasks.json", json.dumps(connector_tasks[:5000], default=str, indent=2))
         archive_bytes = archive.getvalue()
         encrypted = request.GET.get("encrypted", "").lower() in {"1", "true", "yes"}
         response = HttpResponse(encrypt_blob(archive_bytes) if encrypted else archive_bytes, content_type="application/octet-stream" if encrypted else "application/zip")
@@ -3903,6 +3931,8 @@ def project_backup(request):
 
             project_count = 0
             chat_count = 0
+            connector_count = 0
+            task_count = 0
             for name in names:
                 if name.startswith("project/") and not name.endswith("/"):
                     filename = _safe_filename(name[len("project/"):])
@@ -4006,6 +4036,63 @@ def project_backup(request):
                             "source": str(capability.get("source", "backup"))[:30],
                         })
 
+            connector_map = {}
+            connector_name = "connectors/metadata.json"
+            if connector_name in names:
+                records = json.loads(bundle.read(connector_name).decode("utf-8"))
+                for record in records[:100]:
+                    name = str(record.get("name", "Restored connector"))[:120] or "Restored connector"
+                    connector, _ = LocalConnector.objects.update_or_create(
+                        owner=request.user,
+                        name=name,
+                        defaults={
+                            "status": "pending",
+                            "token_hash": "",
+                            "pairing_code_hash": "",
+                            "pairing_expires_at": None,
+                            "capabilities": record.get("capabilities") if isinstance(record.get("capabilities"), list) else [],
+                        },
+                    )
+                    connector_map[name] = connector
+                    policy_data = record.get("policy") if isinstance(record.get("policy"), dict) else {}
+                    policy, _ = LocalConnectorPolicy.objects.get_or_create(connector=connector)
+                    allowed = policy_data.get("allowed_operations", sorted(CONNECTOR_OPERATIONS))
+                    policy.allowed_operations = sorted({str(item) for item in allowed if str(item) in CONNECTOR_OPERATIONS})
+                    for field in ("require_approval", "allow_file_read", "allow_file_write", "allow_git", "allow_ollama", "allow_workspace_sync", "allow_tests", "allow_shell"):
+                        if field in policy_data:
+                            setattr(policy, field, bool(policy_data[field]))
+                    try:
+                        policy.max_file_bytes = max(1_024, min(10_000_000, int(policy_data.get("max_file_bytes", policy.max_file_bytes))))
+                    except (TypeError, ValueError):
+                        pass
+                    policy.save()
+                    connector_count += 1
+
+            tasks_name = "connectors/tasks.json"
+            if tasks_name in names:
+                records = json.loads(bundle.read(tasks_name).decode("utf-8"))
+                for record in records[:5000]:
+                    connector = connector_map.get(str(record.get("connector_name", "")))
+                    operation = str(record.get("operation", ""))
+                    if connector is None or operation not in CONNECTOR_OPERATIONS:
+                        continue
+                    original_status = str(record.get("status", "rejected"))
+                    safe_status = original_status if original_status in {"completed", "failed", "rejected"} else "rejected"
+                    LocalConnectorCommand.objects.create(
+                        connector=connector,
+                        operation=operation,
+                        task_name=str(record.get("task_name", ""))[:160],
+                        payload=record.get("payload") if isinstance(record.get("payload"), dict) else {},
+                        status=safe_status,
+                        progress=max(0, min(100, int(record.get("progress", 0)))),
+                        checkpoint=record.get("checkpoint") if isinstance(record.get("checkpoint"), dict) else {},
+                        retry_count=max(0, int(record.get("retry_count", 0))),
+                        cancel_requested=bool(record.get("cancel_requested", False)),
+                        result=record.get("result") if isinstance(record.get("result"), dict) else {},
+                        error=(str(record.get("error", ""))[:2000] or ("Restored historical task; reapprove before running." if safe_status == "rejected" and original_status in {"queued", "running", "awaiting_approval"} else "")),
+                    )
+                    task_count += 1
+
             for name in names:
                 if not name.startswith("chats/") or not name.endswith(".json"):
                     continue
@@ -4035,6 +4122,8 @@ def project_backup(request):
                 "success": True,
                 "project_files": project_count,
                 "chats": chat_count,
+                "connectors": connector_count,
+                "connector_tasks": task_count,
             })
     except (zipfile.BadZipFile, UnicodeDecodeError, ValueError, TypeError, OverflowError) as exc:
         return JsonResponse({"success": False, "error": "Unable to restore backup: " + str(exc)}, status=400)

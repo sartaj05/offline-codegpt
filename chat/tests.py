@@ -2160,12 +2160,15 @@ class ChatFeatureTests(TestCase):
         session = ChatSession.objects.create(owner=self.user, title="Backup chat")
         ChatMessage.objects.create(session=session, role="user", content="Generate hello")
         ChatMessage.objects.create(session=session, role="assistant", content="print('hello')")
+        connector = LocalConnector.objects.create(owner=self.user, name="Backup connector", status="connected")
+        LocalConnectorCommand.objects.create(connector=connector, operation="git.status", task_name="Backup task", status="completed", result={"returncode": 0})
         backup = self.client.get("/api/backup/")
         self.assertEqual(backup.status_code, 200)
         self.assertEqual(backup["Content-Type"], "application/zip")
 
         KnowledgeDocument.objects.filter(owner=self.user).delete()
         ChatSession.objects.filter(owner=self.user).delete()
+        LocalConnector.objects.filter(owner=self.user).delete()
         restored = self.client.post(
             "/api/backup/",
             {"backup": SimpleUploadedFile("backup.zip", backup.content, content_type="application/zip")},
@@ -2173,5 +2176,8 @@ class ChatFeatureTests(TestCase):
         self.assertTrue(restored.json()["success"])
         self.assertEqual(restored.json()["project_files"], 1)
         self.assertEqual(restored.json()["chats"], 1)
+        self.assertEqual(restored.json()["connectors"], 1)
+        self.assertEqual(restored.json()["connector_tasks"], 1)
+        self.assertEqual(LocalConnector.objects.get(owner=self.user).status, "pending")
         self.assertEqual(KnowledgeDocument.objects.get(owner=self.user).original_text, "print('hello')")
         self.assertEqual(ChatSession.objects.get(owner=self.user).title, "Backup chat")

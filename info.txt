@@ -165,6 +165,15 @@ limited to 1 MB. Apply refuses stale previews; its result includes the prior
 content so the user can queue an explicit undo. The default connector policy
 allows preview only and keeps file writes disabled.
 
+Hosted workspace backup and restore
+-----------------------------------
+Backup format v3 also stores connector metadata, capability policy, and up to
+5,000 task-history records. Connector tokens and pairing codes are never
+exported. On restore, connectors are recreated as `pending` and must be paired
+again. Historical queued/running/awaiting tasks become rejected history so a
+backup cannot execute local work automatically. The restore response includes
+`connectors` and `connector_tasks` counts.
+
 Desktop connector controller
 ----------------------------
 Run the dependency-free Tkinter controller:

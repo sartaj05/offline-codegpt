@@ -366,6 +366,15 @@ previewed content has not changed, and returns the original content needed for
 an explicit undo. All paths are resolved beneath the connector workspace;
 there is no arbitrary filesystem access.
 
+### Hosted workspace backup and restore
+
+Backup format v3 also includes Hybrid connector metadata and task history.
+Connector tokens are never exported. Restored connectors are deliberately
+`pending` and must be paired again; queued or running historical tasks are
+restored as rejected history so a backup cannot execute work automatically.
+The restore response reports `connectors` and `connector_tasks` counts in
+addition to project files and chats.
+
 ## Configure Ollama
 
 Start Ollama before using the AI features:
