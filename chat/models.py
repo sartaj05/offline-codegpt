@@ -967,6 +967,55 @@ class PatchRevision(models.Model):
         ordering = ["-updated_at", "-id"]
 
 
+class LocalConnector(models.Model):
+    STATUS_CHOICES = (
+        ("pending", "Pending pairing"),
+        ("connected", "Connected"),
+        ("revoked", "Revoked"),
+    )
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="local_connectors")
+    name = models.CharField(max_length=120)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    token_hash = models.CharField(max_length=64, blank=True, default="")
+    pairing_code_hash = models.CharField(max_length=64, blank=True, default="")
+    pairing_expires_at = models.DateTimeField(null=True, blank=True)
+    capabilities = models.JSONField(default=list, blank=True)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+
+    def __str__(self):
+        return f"{self.name} ({self.status})"
+
+
+class LocalConnectorCommand(models.Model):
+    STATUS_CHOICES = (
+        ("awaiting_approval", "Awaiting approval"),
+        ("queued", "Queued"),
+        ("running", "Running"),
+        ("completed", "Completed"),
+        ("failed", "Failed"),
+        ("rejected", "Rejected"),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    connector = models.ForeignKey(LocalConnector, on_delete=models.CASCADE, related_name="commands")
+    operation = models.CharField(max_length=40)
+    payload = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=24, choices=STATUS_CHOICES, default="awaiting_approval")
+    result = models.JSONField(default=dict, blank=True)
+    error = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+
 class EvaluationReplay(models.Model):
     STATUS_CHOICES = (("running", "Running"), ("completed", "Completed"), ("failed", "Failed"))
 

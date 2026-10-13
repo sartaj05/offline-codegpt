@@ -5,6 +5,7 @@ import difflib
 import hashlib
 import io
 import json
+import hmac
 import os
 import platform
 import re
@@ -103,6 +104,8 @@ from .models import (
     EvaluationReplay,
     CodingWorkflowArtifact,
     PatchRevision,
+    LocalConnector,
+    LocalConnectorCommand,
     ProjectWorkspace,
     SecretVaultItem,
     ExtensionPackage,
@@ -1894,6 +1897,304 @@ def health_check(request):
 def deployment_mode_api(request):
     """Return the immutable server deployment mode and its capabilities."""
     return JsonResponse({"success": True, "mode": mode_payload()})
+
+
+CONNECTOR_OPERATIONS = {"ollama.health", "ollama.generate", "workspace.list", "file.read", "git.status"}
+
+
+def _hybrid_mode_error():
+    if settings.DEPLOYMENT_MODE == "hybrid":
+        return None
+    return JsonResponse({
+        "success": False,
+        "error": "Local connectors are available only in Hybrid Mode.",
+        "deployment_mode": settings.DEPLOYMENT_MODE,
+    }, status=409)
+
+
+def _connector_hash(value):
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _connector_bearer(request):
+    header = request.headers.get("Authorization", "")
+    if not header.lower().startswith("bearer "):
+        return None
+    token = header[7:].strip()
+    if not token:
+        return None
+    token_hash = _connector_hash(token)
+    for connector in LocalConnector.objects.filter(token_hash=token_hash, status="connected"):
+        if hmac.compare_digest(connector.token_hash, token_hash):
+            return connector
+    return None
+
+
+def _connector_payload(connector):
+    return {
+        "id": connector.id,
+        "name": connector.name,
+        "status": connector.status,
+        "capabilities": connector.capabilities,
+        "last_seen_at": connector.last_seen_at.isoformat() if connector.last_seen_at else None,
+        "created_at": connector.created_at.isoformat(),
+    }
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def local_connector_api(request):
+    mode_error = _hybrid_mode_error()
+    if mode_error:
+        return mode_error
+    if request.method == "POST":
+        name = request.POST.get("name", "Local connector").strip()[:120] or "Local connector"
+        pairing_code = secrets.token_urlsafe(9)
+        connector = LocalConnector.objects.create(
+            owner=request.user,
+            name=name,
+            pairing_code_hash=_connector_hash(pairing_code),
+            pairing_expires_at=timezone.now() + timedelta(minutes=10),
+            capabilities=[],
+        )
+        return JsonResponse({
+            "success": True,
+            "connector": _connector_payload(connector),
+            "pairing_code": pairing_code,
+            "pairing_expires_at": connector.pairing_expires_at.isoformat(),
+            "message": "Use this one-time code with scripts/local_connector.py. It is shown only once.",
+        })
+    connectors = LocalConnector.objects.filter(owner=request.user)
+    return JsonResponse({
+        "success": True,
+        "connectors": [{
+            **_connector_payload(item),
+            "commands": [{
+                "id": str(command.id),
+                "operation": command.operation,
+                "status": command.status,
+                "result": command.result,
+                "error": command.error,
+            } for command in item.commands.all()[:20]],
+        } for item in connectors],
+    })
+
+
+def _connector_json(request):
+    if request.body:
+        try:
+            value = json.loads(request.body.decode("utf-8"))
+            if isinstance(value, dict):
+                return value
+        except (UnicodeDecodeError, TypeError, ValueError, json.JSONDecodeError):
+            pass
+    return request.POST
+
+
+@csrf_exempt
+@require_POST
+def local_connector_register(request):
+    mode_error = _hybrid_mode_error()
+    if mode_error:
+        return mode_error
+    payload = _connector_json(request)
+    pairing_code = str(payload.get("pairing_code", "")).strip()
+    if not pairing_code:
+        return JsonResponse({"success": False, "error": "A pairing code is required."}, status=400)
+    code_hash = _connector_hash(pairing_code)
+    connector = None
+    for candidate in LocalConnector.objects.filter(status="pending", pairing_expires_at__gt=timezone.now()):
+        if hmac.compare_digest(candidate.pairing_code_hash, code_hash):
+            connector = candidate
+            break
+    if connector is None:
+        return JsonResponse({"success": False, "error": "Pairing code is invalid or expired."}, status=403)
+    token = secrets.token_urlsafe(32)
+    capabilities = payload.get("capabilities", [])
+    if not isinstance(capabilities, list):
+        capabilities = []
+    connector.name = str(payload.get("name", connector.name)).strip()[:120] or connector.name
+    connector.status = "connected"
+    connector.token_hash = _connector_hash(token)
+    connector.pairing_code_hash = ""
+    connector.pairing_expires_at = None
+    connector.capabilities = [str(item)[:80] for item in capabilities[:30]]
+    connector.last_seen_at = timezone.now()
+    connector.save()
+    return JsonResponse({
+        "success": True,
+        "token": token,
+        "connector": _connector_payload(connector),
+        "message": "Store this token locally. It will not be shown again.",
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def local_connector_heartbeat(request):
+    connector = _connector_bearer(request)
+    if connector is None:
+        return JsonResponse({"success": False, "error": "Valid connector token required."}, status=401)
+    connector.last_seen_at = timezone.now()
+    connector.save(update_fields=["last_seen_at", "updated_at"])
+    return JsonResponse({"success": True, "connector": _connector_payload(connector)})
+
+
+@csrf_exempt
+@require_GET
+def local_connector_poll(request):
+    connector = _connector_bearer(request)
+    if connector is None:
+        return JsonResponse({"success": False, "error": "Valid connector token required."}, status=401)
+    connector.last_seen_at = timezone.now()
+    connector.save(update_fields=["last_seen_at", "updated_at"])
+    commands = list(connector.commands.filter(status="queued")[:10])
+    for command in commands:
+        command.status = "running"
+        command.save(update_fields=["status", "updated_at"])
+    return JsonResponse({
+        "success": True,
+        "commands": [{
+            "id": str(command.id),
+            "operation": command.operation,
+            "payload": command.payload,
+        } for command in commands],
+    })
+
+
+@csrf_exempt
+@require_POST
+def local_connector_result(request, command_id):
+    connector = _connector_bearer(request)
+    if connector is None:
+        return JsonResponse({"success": False, "error": "Valid connector token required."}, status=401)
+    command = get_object_or_404(LocalConnectorCommand, id=command_id, connector=connector)
+    payload = _connector_json(request)
+    status = str(payload.get("status", "completed")).strip().lower()
+    if status not in {"completed", "failed"}:
+        return JsonResponse({"success": False, "error": "Result status must be completed or failed."}, status=400)
+    result = payload.get("result", {})
+    command.status = status
+    command.result = result if isinstance(result, dict) else {"value": str(result)[:10000]}
+    command.error = str(payload.get("error", ""))[:2000]
+    command.save(update_fields=["status", "result", "error", "updated_at"])
+    connector.last_seen_at = timezone.now()
+    connector.save(update_fields=["last_seen_at", "updated_at"])
+    return JsonResponse({"success": True, "command_id": str(command.id), "status": command.status})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def local_connector_command(request, connector_id):
+    mode_error = _hybrid_mode_error()
+    if mode_error:
+        return mode_error
+    connector = get_object_or_404(LocalConnector, id=connector_id, owner=request.user, status="connected")
+    operation = request.POST.get("operation", "").strip().lower()
+    if operation not in CONNECTOR_OPERATIONS:
+        return JsonResponse({"success": False, "error": "Unsupported connector operation."}, status=400)
+    payload = request.POST.get("payload", "{}")
+    try:
+        payload = json.loads(payload)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "Command payload must be valid JSON."}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({"success": False, "error": "Command payload must be a JSON object."}, status=400)
+    command = LocalConnectorCommand.objects.create(connector=connector, operation=operation, payload=payload)
+    return JsonResponse({
+        "success": True,
+        "command": {"id": str(command.id), "operation": command.operation, "status": command.status},
+        "message": "Command is waiting for explicit approval.",
+    })
+
+
+@login_required(login_url="/login/")
+@require_POST
+def local_connector_command_approval(request, command_id):
+    mode_error = _hybrid_mode_error()
+    if mode_error:
+        return mode_error
+    command = get_object_or_404(LocalConnectorCommand, id=command_id, connector__owner=request.user)
+    action = request.POST.get("action", "").strip().lower()
+    if command.status != "awaiting_approval":
+        return JsonResponse({"success": False, "error": "Only pending commands can be approved or rejected."}, status=409)
+    if action == "approve":
+        command.status = "queued"
+    elif action == "reject":
+        command.status = "rejected"
+    else:
+        return JsonResponse({"success": False, "error": "Use approve or reject."}, status=400)
+    command.save(update_fields=["status", "updated_at"])
+    return JsonResponse({"success": True, "command_id": str(command.id), "status": command.status})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def local_connector_revoke(request, connector_id):
+    mode_error = _hybrid_mode_error()
+    if mode_error:
+        return mode_error
+    connector = get_object_or_404(LocalConnector, id=connector_id, owner=request.user)
+    connector.status = "revoked"
+    connector.token_hash = ""
+    connector.pairing_code_hash = ""
+    connector.pairing_expires_at = None
+    connector.save(update_fields=["status", "token_hash", "pairing_code_hash", "pairing_expires_at", "updated_at"])
+    return JsonResponse({"success": True, "connector": _connector_payload(connector)})
+
+
+def _hybrid_ask_code(request, prompt, code, requested_model):
+    if not request.user.is_authenticated:
+        return JsonResponse({"success": False, "error": "Hybrid Mode requires sign-in before local generation.", "authentication_required": True}, status=401)
+    if request.FILES.getlist("files") or request.FILES.getlist("images"):
+        return JsonResponse({"success": False, "error": "Hybrid chat currently accepts prompt and code. Use the Connector panel for approved local file reads."}, status=400)
+    if not prompt and not code:
+        return JsonResponse({"success": False, "error": "Please enter a prompt or paste code."}, status=400)
+    connector = LocalConnector.objects.filter(owner=request.user, status="connected").first()
+    if connector is None:
+        return JsonResponse({"success": False, "error": "Pair a Hybrid local connector before asking the local model."}, status=409)
+    user_settings = _user_ollama_settings(request.user)
+    model = requested_model or user_settings.default_model
+    session = None
+    try:
+        session_id = int(request.POST.get("session_id", "0"))
+        session = ChatSession.objects.filter(id=session_id, owner=request.user).first() if session_id else None
+    except (TypeError, ValueError):
+        session = None
+    if session is None:
+        title = (prompt or code).replace("\n", " ").strip()[:60] or "Hybrid local chat"
+        session = ChatSession.objects.create(owner=request.user, title=title, model_name=model)
+    user_message = ChatMessage.objects.create(session=session, role="user", content=prompt or code, model_name=model)
+    command = LocalConnectorCommand.objects.create(
+        connector=connector,
+        operation="ollama.generate",
+        payload={"prompt": prompt, "code": code, "model": model, "language": request.POST.get("language", "auto")[:40]},
+        status="queued",
+    )
+
+    def stream_hybrid_answer():
+        deadline = time.time() + max(30, int(os.environ.get("HYBRID_CONNECTOR_TIMEOUT", "180")))
+        while time.time() < deadline:
+            command.refresh_from_db()
+            if command.status == "completed":
+                answer = str((command.result or {}).get("response", "")).strip()
+                if not answer:
+                    yield _event({"type": "error", "error": "The local connector returned an empty response."})
+                    return
+                ChatMessage.objects.create(session=session, role="assistant", content=answer, model_name=model)
+                session.save(update_fields=["updated_at"])
+                yield _event({"type": "token", "token": answer})
+                yield _event({"type": "complete", "session_id": session.id, "title": session.title, "model": model, "user_message_id": user_message.id, "sources": [], "answer": answer})
+                return
+            if command.status in {"failed", "rejected"}:
+                yield _event({"type": "error", "error": command.error or "The local connector could not complete the request."})
+                return
+            time.sleep(1)
+        yield _event({"type": "error", "error": "The local connector timed out. Check that it is running and paired."})
+
+    response = StreamingHttpResponse(stream_hybrid_answer(), content_type="application/x-ndjson")
+    response["Cache-Control"] = "no-cache"
+    return response
 
 
 def model_list(request):
@@ -6188,6 +6489,8 @@ def ask_code(request):
     session_id = request.POST.get("session_id", "").strip()
     edit_message_id = request.POST.get("edit_message_id", "").strip()
     requested_model = request.POST.get("model", "").strip()
+    if settings.DEPLOYMENT_MODE == "hybrid":
+        return _hybrid_ask_code(request, prompt, code, requested_model)
     auto_route = request.POST.get("auto_route", "true").lower() in {"1", "true", "yes", "on"}
     output_format = request.POST.get("output_format", "text").strip().lower()
     output_schema_raw = request.POST.get("output_schema", "").strip()

@@ -292,6 +292,8 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .deployment-mode-badge.mode-offline { color: #b8f7cb; border-color: rgba(90,214,135,.45); }
 .deployment-mode-badge.mode-hosted { color: #ffd28a; border-color: rgba(255,190,74,.45); }
 .deployment-mode-badge.mode-hybrid { color: #b9d8ff; }
+.connector-card { margin-top: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; }
+.connector-command { margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--border); }
 
 /* Main column */
 .main {

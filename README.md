@@ -258,6 +258,37 @@ gunicorn offline_codegpt.wsgi:application --bind 0.0.0.0:$PORT
   runtime.
 - Never commit `.env`, database URLs, passwords, or generated secret keys.
 
+## Hybrid local connector
+
+Set `DEPLOYMENT_MODE=hybrid` when the Django UI and database are hosted but
+Ollama and a project workspace stay on a trusted local machine. The connector
+uses outbound HTTPS polling, so the hosted service never opens an inbound
+port on the local computer.
+
+1. Set `DEPLOYMENT_MODE=hybrid` on the hosted app and sign in.
+2. Open **Workspace tools -> Connector**, choose **Generate pairing code**.
+3. On the local computer, install the project requirements and run:
+
+~~~powershell
+python scripts/local_connector.py --server-url https://YOUR-SERVICE.onrender.com --pairing-code ONE_TIME_CODE --workspace C:\path\to\project
+~~~
+
+The command prints a connector token once. Store it locally and use it for
+future runs:
+
+~~~powershell
+python scripts/local_connector.py --server-url https://YOUR-SERVICE.onrender.com --token SAVED_TOKEN --workspace C:\path\to\project
+~~~
+
+The connector supports Ollama health/generation, workspace listing, file
+reads, and Git status. Direct chat generation is queued from the signed-in
+user's explicit chat action; Connector-panel tool commands are queued as
+`awaiting_approval`. Approve or reject those commands before the local process
+can poll and run them.
+Tokens are hashed in the database, pairing codes expire after ten minutes,
+and the Connector panel can revoke a token at any time. Use HTTPS
+for the hosted URL and never paste the token into source control.
+
 ## Configure Ollama
 
 Start Ollama before using the AI features:

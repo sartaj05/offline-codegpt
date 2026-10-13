@@ -11,7 +11,7 @@ from django.core.management import call_command
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import AgentJob, AgentTask, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, ExtensionInstall, ExtensionPackage, KnowledgeChunk, KnowledgeDocument, PatchRevision, ProjectWorkspace, SandboxPolicy, SecretVaultItem, Workspace, WorkspaceFileState, WorkspaceMembership, WorkspacePolicy
+from .models import AgentJob, AgentTask, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, ExtensionInstall, ExtensionPackage, KnowledgeChunk, KnowledgeDocument, LocalConnector, LocalConnectorCommand, PatchRevision, ProjectWorkspace, SandboxPolicy, SecretVaultItem, Workspace, WorkspaceFileState, WorkspaceMembership, WorkspacePolicy
 from .views import _search_knowledge
 
 
@@ -52,6 +52,59 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(workspace.json()["deployment_mode"], "hosted")
         mode = self.client.get("/api/deployment/mode/").json()["mode"]
         self.assertFalse(mode["capabilities"]["local_tools"])
+
+    @override_settings(DEPLOYMENT_MODE="hybrid")
+    def test_hybrid_connector_pairing_requires_approval_before_polling(self):
+        created = self.client.post("/api/connector/", {"name": "Test laptop"})
+        self.assertEqual(created.status_code, 200)
+        pairing = created.json()
+        connector_id = pairing["connector"]["id"]
+        registered = self.client.post(
+            "/api/connector/register/",
+            data=json.dumps({"pairing_code": pairing["pairing_code"], "name": "Test laptop", "capabilities": ["git.status"]}),
+            content_type="application/json",
+        )
+        self.assertEqual(registered.status_code, 200)
+        token = registered.json()["token"]
+        command = self.client.post(
+            f"/api/connector/{connector_id}/command/",
+            {"operation": "git.status", "payload": "{}"},
+        )
+        self.assertEqual(command.status_code, 200)
+        command_id = command.json()["command"]["id"]
+        poll_before = self.client.get("/api/connector/poll/", HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.assertEqual(poll_before.status_code, 200)
+        self.assertEqual(poll_before.json()["commands"], [])
+        approved = self.client.post(f"/api/connector/command/{command_id}/approval/", {"action": "approve"})
+        self.assertEqual(approved.status_code, 200)
+        poll_after = self.client.get("/api/connector/poll/", HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.assertEqual(poll_after.status_code, 200)
+        self.assertEqual(poll_after.json()["commands"][0]["id"], command_id)
+        result = self.client.post(
+            f"/api/connector/result/{command_id}/",
+            data=json.dumps({"status": "completed", "result": {"returncode": 0}}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(LocalConnector.objects.get(id=connector_id).status, "connected")
+        revoked = self.client.post(f"/api/connector/{connector_id}/revoke/")
+        self.assertEqual(revoked.status_code, 200)
+        self.assertEqual(self.client.get("/api/connector/poll/", HTTP_AUTHORIZATION=f"Bearer {token}").status_code, 401)
+
+    @override_settings(DEPLOYMENT_MODE="hybrid")
+    def test_hybrid_chat_queues_generation_on_local_connector(self):
+        LocalConnector.objects.create(owner=self.user, name="Test connector", status="connected", token_hash="stored-token")
+        response = self.client.post("/api/ask-code/", {"prompt": "Explain this", "model": "test-model"})
+        self.assertEqual(response.status_code, 200)
+        command = LocalConnectorCommand.objects.get(operation="ollama.generate")
+        self.assertEqual(command.status, "queued")
+        command.status = "completed"
+        command.result = {"response": "Local answer"}
+        command.save(update_fields=["status", "result", "updated_at"])
+        body = b"".join(response.streaming_content).decode("utf-8")
+        self.assertIn('"type": "token"', body)
+        self.assertIn("Local answer", body)
 
     def test_responsive_ui_contract_covers_required_viewports(self):
         project_root = Path(__file__).resolve().parents[1]

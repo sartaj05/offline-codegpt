@@ -116,6 +116,7 @@
                             <button type="button" onclick="toggleBackupPanel()">Backup</button>
                             <button type="button" onclick="toggleOllamaSettings()">Ollama</button>
                             <button type="button" onclick="togglePrivacyPanel()">Privacy</button>
+                            <button type="button" onclick="toggleConnectorPanel()">Connector</button>
                             <button type="button" onclick="toggleMemoryPanel()">Memory</button>
                             <button type="button" onclick="toggleRemoteIntegration()">Remote</button>
                             <button type="button" onclick="toggleMcpPanel()">Tools</button>
@@ -281,6 +282,31 @@
             </div>
             <pre id="privacyProofOutput" class="privacy-proof-output">No local network events loaded.</pre>
             <div id="privacyStatus" class="settings-status"></div>
+        </section>
+        <section id="connectorPanel" class="setup-panel" hidden>
+            <div class="settings-heading">
+                <div><strong>Hybrid local connector</strong><span>Pair a local machine and approve every local command.</span></div>
+                <button type="button" onclick="toggleConnectorPanel()">Close</button>
+            </div>
+            <div class="setup-row">
+                <input id="connectorName" type="text" value="My local connector" placeholder="Connector name">
+                <button type="button" onclick="pairLocalConnector()">Generate pairing code</button>
+                <button type="button" onclick="loadLocalConnectors()">Refresh</button>
+            </div>
+            <div id="connectorPairingStatus" class="setup-status" role="status" aria-live="polite">Hybrid Mode is required for local connector pairing.</div>
+            <div class="setup-row">
+                <select id="connectorSelect" aria-label="Local connector"></select>
+                <select id="connectorOperation" aria-label="Connector operation">
+                    <option value="ollama.health">Ollama health</option>
+                    <option value="ollama.generate">Generate with Ollama</option>
+                    <option value="workspace.list">List workspace files</option>
+                    <option value="file.read">Read a file</option>
+                    <option value="git.status">Git status</option>
+                </select>
+                <input id="connectorPayload" type="text" value="{}" placeholder='Payload JSON, e.g. {"path":"README.md"}'>
+                <button type="button" onclick="queueConnectorCommand()">Queue for approval</button>
+            </div>
+            <div id="connectorList" class="setup-status">No connectors loaded.</div>
         </section>
         <section id="setupPanel" class="setup-panel" role="dialog" aria-labelledby="setupPanelTitle" aria-describedby="setupPanelDescription" hidden>
             <div class="settings-heading">

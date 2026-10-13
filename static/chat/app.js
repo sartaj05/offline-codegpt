@@ -20,6 +20,13 @@ const privacyStoreHistory = document.getElementById("privacyStoreHistory");
 const privacyRedactSecrets = document.getElementById("privacyRedactSecrets");
 const privacyStatus = document.getElementById("privacyStatus");
 const privacyProofOutput = document.getElementById("privacyProofOutput");
+const connectorPanel = document.getElementById("connectorPanel");
+const connectorName = document.getElementById("connectorName");
+const connectorPairingStatus = document.getElementById("connectorPairingStatus");
+const connectorSelect = document.getElementById("connectorSelect");
+const connectorOperation = document.getElementById("connectorOperation");
+const connectorPayload = document.getElementById("connectorPayload");
+const connectorList = document.getElementById("connectorList");
 const ollamaRuntime = document.getElementById("ollamaRuntime");
 const ollamaServerUrl = document.getElementById("ollamaServerUrl");
 const ollamaDefaultModel = document.getElementById("ollamaDefaultModel");
@@ -603,6 +610,111 @@ function togglePrivacyPanel() {
     if (privacyPanel && !privacyPanel.hidden) {
         loadPrivacySettings();
         loadPrivacyProof();
+    }
+}
+
+function toggleConnectorPanel() {
+    if (connectorPanel) connectorPanel.hidden = !connectorPanel.hidden;
+    if (connectorPanel && !connectorPanel.hidden) loadLocalConnectors();
+}
+
+function renderLocalConnectors(connectors) {
+    if (!connectorSelect || !connectorList) return;
+    connectorSelect.innerHTML = "";
+    if (!connectors.length) {
+        connectorList.innerText = "No paired connectors. Generate a pairing code, then run scripts/local_connector.py.";
+        return;
+    }
+    connectors.forEach(connector => {
+        const option = document.createElement("option");
+        option.value = connector.id;
+        option.innerText = connector.name + " · " + connector.status;
+        connectorSelect.appendChild(option);
+    });
+    connectorList.innerHTML = connectors.map(connector => {
+        const commands = (connector.commands || []).map(command => `<div class="connector-command"><code>${escapeHtml(command.id)}</code> · ${escapeHtml(command.operation)} · ${escapeHtml(command.status)}${command.status === "awaiting_approval" ? ` <button type="button" onclick="approveConnectorCommand('${escapeHtml(command.id)}', 'approve')">Approve</button><button type="button" onclick="approveConnectorCommand('${escapeHtml(command.id)}', 'reject')">Reject</button>` : ""}</div>`).join("");
+        const revoke = connector.status === "revoked" ? "" : ` <button type="button" onclick="revokeLocalConnector(${connector.id})">Revoke token</button>`;
+        return `<div class="connector-card"><strong>${escapeHtml(connector.name)}</strong> · ${escapeHtml(connector.status)}${revoke}<br><small>Last seen: ${escapeHtml(connector.last_seen_at || "never")} · Capabilities: ${escapeHtml((connector.capabilities || []).join(", ") || "not registered")}</small>${commands || "<div>No commands.</div>"}</div>`;
+    }).join("");
+}
+
+async function loadLocalConnectors() {
+    if (!connectorList) return;
+    connectorList.innerText = "Loading connector status...";
+    try {
+        const response = await fetch("/api/connector/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Hybrid Mode is not enabled.");
+        renderLocalConnectors(data.connectors || []);
+    } catch (error) {
+        connectorList.innerText = "Connector status: " + error.message;
+    }
+}
+
+async function pairLocalConnector() {
+    if (!connectorPairingStatus) return;
+    connectorPairingStatus.innerText = "Generating one-time pairing code...";
+    try {
+        const response = await fetch("/api/connector/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ name: connectorName ? connectorName.value.trim() : "Local connector" }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to generate pairing code.");
+        connectorPairingStatus.innerText = "One-time pairing code: " + data.pairing_code + "\nRun: python scripts/local_connector.py --server-url YOUR_URL --pairing-code " + data.pairing_code + " --workspace C:\\path\\to\\project\nThis code expires in 10 minutes and is not shown again.";
+        await loadLocalConnectors();
+    } catch (error) {
+        connectorPairingStatus.innerText = "Pairing error: " + error.message;
+    }
+}
+
+async function queueConnectorCommand() {
+    if (!connectorSelect || !connectorSelect.value) {
+        if (connectorPairingStatus) connectorPairingStatus.innerText = "Pair and select a connector first.";
+        return;
+    }
+    try {
+        JSON.parse(connectorPayload ? connectorPayload.value : "{}");
+        const response = await fetch("/api/connector/" + connectorSelect.value + "/command/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ operation: connectorOperation.value, payload: connectorPayload.value }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to queue connector command.");
+        if (connectorPairingStatus) connectorPairingStatus.innerText = "Command " + data.command.id + " is awaiting explicit approval.";
+        await loadLocalConnectors();
+    } catch (error) {
+        if (connectorPairingStatus) connectorPairingStatus.innerText = "Command error: " + error.message;
+    }
+}
+
+async function approveConnectorCommand(commandId, action) {
+    try {
+        const response = await fetch("/api/connector/command/" + commandId + "/approval/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ action }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to update connector command.");
+        if (connectorPairingStatus) connectorPairingStatus.innerText = "Command " + commandId + " is " + data.status + ".";
+        await loadLocalConnectors();
+    } catch (error) {
+        if (connectorPairingStatus) connectorPairingStatus.innerText = "Approval error: " + error.message;
+    }
+}
+
+async function revokeLocalConnector(connectorId) {
+    if (!confirm("Revoke this connector token? The local connector will stop working.")) return;
+    try {
+        const response = await fetch("/api/connector/" + connectorId + "/revoke/", { method: "POST", headers: { "X-CSRFToken": csrfToken } });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to revoke connector.");
+        await loadLocalConnectors();
+    } catch (error) {
+        if (connectorPairingStatus) connectorPairingStatus.innerText = "Revoke error: " + error.message;
     }
 }
 

@@ -74,6 +74,24 @@ filesystem is temporary, so do not treat it as durable storage for uploaded
 files, model files, indexes, backups, or SQLite. Ollama remains local; a
 cloud Render service cannot access Ollama on a private home computer.
 
+Hybrid local connector
+----------------------
+Use DEPLOYMENT_MODE=hybrid when Render/Neon host the UI and database but the
+user keeps Ollama and a project folder locally.
+
+1. Sign in to the hosted app and open Workspace tools -> Connector.
+2. Generate a one-time pairing code.
+3. On the local computer run:
+   python scripts/local_connector.py --server-url https://YOUR-SERVICE.onrender.com --pairing-code ONE_TIME_CODE --workspace C:\path\to\project
+4. Save the printed token and use it for later runs:
+   python scripts/local_connector.py --server-url https://YOUR-SERVICE.onrender.com --token SAVED_TOKEN --workspace C:\path\to\project
+
+The connector uses outbound HTTPS polling and supports Ollama health and
+generation, workspace listing, file reads, and Git status. Direct chat
+generation comes from the signed-in user's explicit chat action; other
+Connector panel commands wait for approval. Pairing codes expire after ten
+minutes; never commit the token.
+
 The app is then available at http://127.0.0.1:8000/.
 
 Portable setup script
