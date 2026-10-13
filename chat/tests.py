@@ -132,6 +132,45 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(result.json()["status"], "completed")
         self.assertTrue(KnowledgeDocument.objects.filter(owner=self.user, filename="src/app.py").exists())
 
+    @override_settings(DEPLOYMENT_MODE="hybrid")
+    def test_remote_task_queue_supports_progress_cancel_and_retry(self):
+        token = "task-queue-token"
+        connector = LocalConnector.objects.create(
+            owner=self.user,
+            name="Task connector",
+            status="connected",
+            token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(),
+        )
+        created = self.client.post(
+            f"/api/connector/{connector.id}/tasks/",
+            data=json.dumps({"operation": "git.status", "task_name": "Check repository", "payload": {}}),
+            content_type="application/json",
+        )
+        self.assertEqual(created.status_code, 200)
+        task_id = created.json()["task"]["id"]
+        self.assertEqual(created.json()["task"]["status"], "awaiting_approval")
+        approved = self.client.post(f"/api/connector/task/{task_id}/control/", {"action": "approve"})
+        self.assertEqual(approved.status_code, 200)
+        progress = self.client.post(
+            f"/api/connector/progress/{task_id}/",
+            data=json.dumps({"progress": 45, "checkpoint": {"phase": "scanning"}}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        self.assertEqual(progress.status_code, 200)
+        self.assertEqual(progress.json()["task"]["progress"], 45)
+        self.assertEqual(progress.json()["task"]["checkpoint"]["phase"], "scanning")
+        canceled = self.client.post(f"/api/connector/task/{task_id}/control/", {"action": "cancel"})
+        self.assertEqual(canceled.status_code, 200)
+        self.assertEqual(canceled.json()["task"]["status"], "rejected")
+        retried = self.client.post(f"/api/connector/task/{task_id}/control/", {"action": "retry"})
+        self.assertEqual(retried.status_code, 200)
+        self.assertEqual(retried.json()["task"]["status"], "queued")
+        self.assertEqual(retried.json()["task"]["retry_count"], 1)
+        listing = self.client.get("/api/connector/tasks/")
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(listing.json()["tasks"][0]["id"], task_id)
+
     def test_responsive_ui_contract_covers_required_viewports(self):
         project_root = Path(__file__).resolve().parents[1]
         stylesheet = (project_root / "static" / "chat" / "app.css").read_text(encoding="utf-8")

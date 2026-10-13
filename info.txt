@@ -94,6 +94,22 @@ generation comes from the signed-in user's explicit chat action; other
 Connector panel commands wait for approval. Pairing codes expire after ten
 minutes; never commit the token.
 
+Remote task queue
+-----------------
+Connector work is persisted as a task instead of being held only in a browser
+request. Tasks expose status, progress, retry count, checkpoints, result, and
+error details. The hosted UI/API can approve, reject, cancel, or retry tasks:
+   GET  /api/connector/tasks/
+   POST /api/connector/<connector-id>/tasks/
+   POST /api/connector/task/<task-id>/control/  (action=approve|reject|cancel|retry)
+   POST /api/connector/progress/<task-id>/     (Bearer connector token)
+
+The connector reports progress checkpoints while it works. A cancellation is
+recorded immediately; a running local operation must honor it before future
+work units or any future write-capable operation. This queue does not make the
+hosted service able to execute local commands by itself: the paired connector
+must be online and explicitly approved work is still required.
+
 Desktop connector controller
 ----------------------------
 Run the dependency-free Tkinter controller:

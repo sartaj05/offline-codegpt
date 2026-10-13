@@ -1941,6 +1941,24 @@ def _connector_payload(connector):
     }
 
 
+def _connector_task_payload(command):
+    return {
+        "id": str(command.id),
+        "connector_id": command.connector_id,
+        "task_name": command.task_name or command.operation,
+        "operation": command.operation,
+        "status": command.status,
+        "progress": command.progress,
+        "checkpoint": command.checkpoint,
+        "retry_count": command.retry_count,
+        "cancel_requested": command.cancel_requested,
+        "result": command.result,
+        "error": command.error,
+        "created_at": command.created_at.isoformat(),
+        "updated_at": command.updated_at.isoformat(),
+    }
+
+
 @login_required(login_url="/login/")
 @require_http_methods(["GET", "POST"])
 def local_connector_api(request):
@@ -1970,11 +1988,7 @@ def local_connector_api(request):
         "connectors": [{
             **_connector_payload(item),
             "commands": [{
-                "id": str(command.id),
-                "operation": command.operation,
-                "status": command.status,
-                "result": command.result,
-                "error": command.error,
+                **_connector_task_payload(command),
             } for command in item.commands.all()[:20]],
         } for item in connectors],
     })
@@ -2048,15 +2062,14 @@ def local_connector_poll(request):
         return JsonResponse({"success": False, "error": "Valid connector token required."}, status=401)
     connector.last_seen_at = timezone.now()
     connector.save(update_fields=["last_seen_at", "updated_at"])
-    commands = list(connector.commands.filter(status="queued")[:10])
+    commands = list(connector.commands.filter(status="queued", cancel_requested=False)[:10])
     for command in commands:
         command.status = "running"
         command.save(update_fields=["status", "updated_at"])
     return JsonResponse({
         "success": True,
         "commands": [{
-            "id": str(command.id),
-            "operation": command.operation,
+            **_connector_task_payload(command),
             "payload": command.payload,
         } for command in commands],
     })
@@ -2075,6 +2088,7 @@ def local_connector_result(request, command_id):
         return JsonResponse({"success": False, "error": "Result status must be completed or failed."}, status=400)
     result = payload.get("result", {})
     command.status = status
+    command.progress = 100 if status == "completed" else command.progress
     command.result = result if isinstance(result, dict) else {"value": str(result)[:10000]}
     command.error = str(payload.get("error", ""))[:2000]
     if command.operation == "workspace.snapshot" and status == "completed":
@@ -2089,7 +2103,7 @@ def local_connector_result(request, command_id):
                 continue
         if isinstance(command.result, dict):
             command.result["synced_documents"] = synced
-    command.save(update_fields=["status", "result", "error", "updated_at"])
+    command.save(update_fields=["status", "progress", "result", "error", "updated_at"])
     connector.last_seen_at = timezone.now()
     connector.save(update_fields=["last_seen_at", "updated_at"])
     return JsonResponse({"success": True, "command_id": str(command.id), "status": command.status})
@@ -2112,10 +2126,11 @@ def local_connector_command(request, connector_id):
         return JsonResponse({"success": False, "error": "Command payload must be valid JSON."}, status=400)
     if not isinstance(payload, dict):
         return JsonResponse({"success": False, "error": "Command payload must be a JSON object."}, status=400)
-    command = LocalConnectorCommand.objects.create(connector=connector, operation=operation, payload=payload)
+    task_name = request.POST.get("task_name", "").strip()[:160]
+    command = LocalConnectorCommand.objects.create(connector=connector, operation=operation, task_name=task_name, payload=payload)
     return JsonResponse({
         "success": True,
-        "command": {"id": str(command.id), "operation": command.operation, "status": command.status},
+        "command": _connector_task_payload(command),
         "message": "Command is waiting for explicit approval.",
     })
 
@@ -2138,6 +2153,92 @@ def local_connector_command_approval(request, command_id):
         return JsonResponse({"success": False, "error": "Use approve or reject."}, status=400)
     command.save(update_fields=["status", "updated_at"])
     return JsonResponse({"success": True, "command_id": str(command.id), "status": command.status})
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def local_connector_tasks(request, connector_id=None):
+    mode_error = _hybrid_mode_error()
+    if mode_error:
+        return mode_error
+    if request.method == "GET":
+        tasks = LocalConnectorCommand.objects.filter(connector__owner=request.user)
+        if connector_id is not None:
+            tasks = tasks.filter(connector_id=connector_id)
+        return JsonResponse({"success": True, "tasks": [_connector_task_payload(task) for task in tasks[:100]]})
+    if connector_id is None:
+        return JsonResponse({"success": False, "error": "A connector is required to create a task."}, status=400)
+    connector = get_object_or_404(LocalConnector, id=connector_id, owner=request.user, status="connected")
+    payload = _connector_json(request)
+    operation = str(payload.get("operation", "")).strip().lower()
+    if operation not in CONNECTOR_OPERATIONS:
+        return JsonResponse({"success": False, "error": "Unsupported connector operation."}, status=400)
+    task_payload = payload.get("payload", {})
+    if not isinstance(task_payload, dict):
+        return JsonResponse({"success": False, "error": "Task payload must be a JSON object."}, status=400)
+    task = LocalConnectorCommand.objects.create(
+        connector=connector,
+        operation=operation,
+        task_name=str(payload.get("task_name", ""))[:160],
+        payload=task_payload,
+    )
+    return JsonResponse({"success": True, "task": _connector_task_payload(task)})
+
+
+@login_required(login_url="/login/")
+@require_POST
+def local_connector_task_control(request, command_id):
+    mode_error = _hybrid_mode_error()
+    if mode_error:
+        return mode_error
+    task = get_object_or_404(LocalConnectorCommand, id=command_id, connector__owner=request.user)
+    action = request.POST.get("action", "").strip().lower()
+    if action == "approve" and task.status == "awaiting_approval":
+        task.status = "queued"
+        task.cancel_requested = False
+    elif action == "reject" and task.status == "awaiting_approval":
+        task.status = "rejected"
+    elif action == "cancel" and task.status in {"awaiting_approval", "queued", "running"}:
+        task.cancel_requested = True
+        if task.status != "running":
+            task.status = "rejected"
+            task.error = "Canceled by the user."
+    elif action == "retry" and task.status in {"failed", "rejected"}:
+        task.status = "queued"
+        task.progress = 0
+        task.checkpoint = {}
+        task.error = ""
+        task.cancel_requested = False
+        task.retry_count += 1
+    else:
+        return JsonResponse({"success": False, "error": "Action is not valid for the current task state."}, status=409)
+    task.save(update_fields=["status", "progress", "checkpoint", "error", "cancel_requested", "retry_count", "updated_at"])
+    return JsonResponse({"success": True, "task": _connector_task_payload(task)})
+
+
+@csrf_exempt
+@require_POST
+def local_connector_progress(request, command_id):
+    connector = _connector_bearer(request)
+    if connector is None:
+        return JsonResponse({"success": False, "error": "Valid connector token required."}, status=401)
+    task = get_object_or_404(LocalConnectorCommand, id=command_id, connector=connector)
+    payload = _connector_json(request)
+    try:
+        progress = max(0, min(99, int(payload.get("progress", task.progress))))
+    except (TypeError, ValueError):
+        return JsonResponse({"success": False, "error": "Progress must be an integer from 0 to 99."}, status=400)
+    checkpoint = payload.get("checkpoint", task.checkpoint)
+    if not isinstance(checkpoint, dict):
+        return JsonResponse({"success": False, "error": "Checkpoint must be a JSON object."}, status=400)
+    if task.cancel_requested:
+        return JsonResponse({"success": False, "error": "Task cancellation was requested."}, status=409)
+    task.progress = progress
+    task.checkpoint = checkpoint
+    task.save(update_fields=["progress", "checkpoint", "updated_at"])
+    connector.last_seen_at = timezone.now()
+    connector.save(update_fields=["last_seen_at", "updated_at"])
+    return JsonResponse({"success": True, "task": _connector_task_payload(task)})
 
 
 @login_required(login_url="/login/")

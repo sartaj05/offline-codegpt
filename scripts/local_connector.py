@@ -115,6 +115,15 @@ def register(session, server_url, pairing_code, name):
     return payload["token"]
 
 
+def report_progress(session, server_url, command_id, progress, checkpoint=None):
+    response = session.post(
+        api_url(server_url, f"/api/connector/progress/{command_id}/"),
+        json={"progress": progress, "checkpoint": checkpoint or {}},
+        timeout=20,
+    )
+    response.raise_for_status()
+
+
 def run(args):
     server_url = args.server_url.rstrip("/")
     workspace = safe_workspace(args.workspace)
@@ -132,7 +141,9 @@ def run(args):
         commands = response.json().get("commands", [])
         for command in commands:
             try:
+                report_progress(session, server_url, command["id"], 5, {"phase": "started", "operation": command["operation"]})
                 result = execute_command(command, workspace, args.ollama_url)
+                report_progress(session, server_url, command["id"], 95, {"phase": "result_ready"})
                 body = {"status": "completed", "result": result}
             except Exception as exc:  # The error is returned to the approving user.
                 body = {"status": "failed", "error": str(exc)[:2_000], "result": {}}

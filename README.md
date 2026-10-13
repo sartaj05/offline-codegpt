@@ -287,6 +287,22 @@ user's explicit chat action; Connector-panel tool commands are queued as
 `awaiting_approval`. Approve or reject those commands before the local process
 can poll and run them.
 
+Connector tasks are durable records with `awaiting_approval`, `queued`,
+`running`, `completed`, `failed`, and `rejected` states. The task API supports
+progress/checkpoint updates, cancel requests, retry, and task history:
+
+~~~text
+GET  /api/connector/tasks/
+POST /api/connector/<connector-id>/tasks/
+POST /api/connector/task/<task-id>/control/   # approve, reject, cancel, retry
+POST /api/connector/progress/<task-id>/       # connector progress/checkpoint
+~~~
+
+The local connector reports 5% start progress and 95% result-ready progress;
+the server records 100% only after a completed result is accepted. A running
+connector must check cancellation between work units before applying any
+future write-capable task.
+
 ### Desktop controller and auto-start
 
 Windows users can keep the connector process manageable from a small Tkinter
