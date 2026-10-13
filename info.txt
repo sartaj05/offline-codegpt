@@ -136,6 +136,23 @@ approval enabled; write/test/shell permissions default to disabled. Direct
 chat generation is also blocked when the connector policy disables Ollama or
 removes `ollama.generate` from the allowlist.
 
+VS Code Hybrid integration
+--------------------------
+The VS Code extension adds commands to configure Hybrid credentials, view
+connector status, queue a coding task, and refresh task progress. The token is
+stored with VS Code SecretStorage, not in `settings.json`:
+   Syntax Local AI: Configure Hybrid Connector
+   Syntax Local AI: Show Hybrid Connector Status
+   Syntax Local AI: Queue Hybrid Coding Task
+   Syntax Local AI: Refresh Hybrid Tasks
+
+The extension uses:
+   GET  /api/connector/token/status/
+   POST /api/connector/token/tasks/
+The server still enforces connector policies and approval requirements. If the
+hosted service is unavailable, VS Code reports the error and the local
+connector's offline result queue remains the recovery path.
+
 Desktop connector controller
 ----------------------------
 Run the dependency-free Tkinter controller:

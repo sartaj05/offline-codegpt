@@ -28,6 +28,17 @@ function firstCodeBlock(text) {
     return match ? match[1].trimEnd() : String(text || "").trim();
 }
 
+async function hybridRequest(context, serverUrl, path, options = {}) {
+    const token = await context.secrets.get("hybridConnectorToken");
+    if (!token) throw new Error("Configure the Hybrid Connector token first.");
+    const headers = { Authorization: `Bearer ${token}`, ...(options.body ? { "Content-Type": "application/json" } : {}) };
+    const response = await fetch(serverUrl.replace(/\/$/, "") + path, { ...options, headers: { ...headers, ...(options.headers || {}) } });
+    let body = {};
+    try { body = await response.json(); } catch (error) { body = {}; }
+    if (!response.ok) throw new Error(body.error || `Hybrid connector request failed (${response.status}).`);
+    return body;
+}
+
 function addReviewDiagnostics(collection, document, answer) {
     const diagnostics = [];
     String(answer || "").split("\n").forEach((line) => {
@@ -123,6 +134,63 @@ function activate(context) {
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand("syntaxLocalAI.clearDiagnostics", () => diagnostics.clear()));
+
+    context.subscriptions.push(vscode.commands.registerCommand("syntaxLocalAI.configureHybrid", async () => {
+        const configuredUrl = serverUrl();
+        const url = await vscode.window.showInputBox({ prompt: "Hosted Syntax Local AI URL", value: configuredUrl, ignoreFocusOut: true });
+        if (!url) return;
+        const token = await vscode.window.showInputBox({ prompt: "Hybrid connector token", password: true, ignoreFocusOut: true });
+        if (!token) return;
+        await vscode.workspace.getConfiguration("syntaxLocalAI").update("serverUrl", url.trim().replace(/\/$/, ""), vscode.ConfigurationTarget.Global);
+        await context.secrets.store("hybridConnectorToken", token.trim());
+        vscode.window.showInformationMessage("Hybrid connector credentials saved in VS Code SecretStorage.");
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand("syntaxLocalAI.hybridStatus", async () => {
+        try {
+            const body = await hybridRequest(context, serverUrl(), "/api/connector/token/status/");
+            const connector = body.connector || {};
+            output.show(true);
+            output.appendLine(`\n--- Hybrid connector ---\n${connector.name || "Connector"}: ${connector.status || "unknown"}`);
+            output.appendLine(`Tasks: ${(body.tasks || []).length}`);
+            vscode.window.showInformationMessage(`${connector.name || "Hybrid connector"}: ${connector.status || "unknown"}`);
+        } catch (error) {
+            vscode.window.showErrorMessage(error.message);
+        }
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand("syntaxLocalAI.queueHybridTask", async () => {
+        const prompt = await vscode.window.showInputBox({ prompt: "Coding task for the approved Hybrid connector", ignoreFocusOut: true });
+        if (!prompt) return;
+        const editor = vscode.window.activeTextEditor;
+        const code = editor ? (editor.document.getText(editor.selection) || editor.document.getText()) : "";
+        try {
+            const body = await hybridRequest(context, serverUrl(), "/api/connector/token/tasks/", {
+                method: "POST",
+                body: JSON.stringify({
+                    operation: "ollama.generate",
+                    task_name: "VS Code: " + prompt.slice(0, 120),
+                    payload: { prompt, code, language: editor ? editor.document.languageId : "auto" },
+                }),
+            });
+            const task = body.task || {};
+            output.show(true);
+            output.appendLine(`\n--- Hybrid task queued ---\n${JSON.stringify(task, null, 2)}`);
+            vscode.window.showInformationMessage(task.status === "awaiting_approval" ? "Hybrid task queued for approval." : "Hybrid task queued.");
+        } catch (error) {
+            vscode.window.showErrorMessage(error.message);
+        }
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand("syntaxLocalAI.refreshHybridTasks", async () => {
+        try {
+            const body = await hybridRequest(context, serverUrl(), "/api/connector/token/status/");
+            output.show(true);
+            output.appendLine(`\n--- Hybrid tasks ---\n${(body.tasks || []).map(task => `${task.task_name}: ${task.status} (${task.progress}%)`).join("\n") || "No tasks."}`);
+        } catch (error) {
+            vscode.window.showErrorMessage(error.message);
+        }
+    }));
 
     context.subscriptions.push(vscode.commands.registerCommand("syntaxLocalAI.runProjectTests", async () => {
         const command = vscode.workspace.getConfiguration("syntaxLocalAI").get("testCommand");

@@ -342,6 +342,21 @@ file reads, file writes, Git, Ollama, workspace sync, tests, and shell actions.
 New connectors default to the current read-oriented operations with approval
 required; write, test, and shell permissions remain disabled.
 
+### VS Code Hybrid integration
+
+The extension can connect to a hosted Hybrid workspace without placing the
+connector token in settings. Run **Syntax Local AI: Configure Hybrid Connector**
+and store the token in VS Code SecretStorage. The new commands show connector
+health, queue an approved `ollama.generate` task with the current editor
+context, and refresh task progress. Token-based endpoints are:
+
+~~~text
+GET  /api/connector/token/status/
+POST /api/connector/token/tasks/
+~~~
+
+Tasks still follow the server-side connector policy and approval workflow.
+
 ## Configure Ollama
 
 Start Ollama before using the AI features:

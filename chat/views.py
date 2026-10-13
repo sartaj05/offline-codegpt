@@ -1931,6 +1931,52 @@ def _connector_bearer(request):
     return None
 
 
+@csrf_exempt
+@require_GET
+def local_connector_token_status(request):
+    mode_error = _hybrid_mode_error()
+    if mode_error:
+        return mode_error
+    connector = _connector_bearer(request)
+    if connector is None:
+        return JsonResponse({"success": False, "error": "Valid connector token required."}, status=401)
+    tasks = connector.commands.all()[:50]
+    return JsonResponse({
+        "success": True,
+        "connector": _connector_payload(connector),
+        "tasks": [_connector_task_payload(task) for task in tasks],
+    })
+
+
+@csrf_exempt
+@require_POST
+def local_connector_token_task(request):
+    mode_error = _hybrid_mode_error()
+    if mode_error:
+        return mode_error
+    connector = _connector_bearer(request)
+    if connector is None:
+        return JsonResponse({"success": False, "error": "Valid connector token required."}, status=401)
+    payload = _connector_json(request)
+    operation = str(payload.get("operation", "")).strip().lower()
+    if operation not in CONNECTOR_OPERATIONS:
+        return JsonResponse({"success": False, "error": "Unsupported connector operation."}, status=400)
+    if not _connector_operation_allowed(connector, operation):
+        return JsonResponse({"success": False, "error": "Connector policy does not allow this operation."}, status=403)
+    task_payload = payload.get("payload", {})
+    if not isinstance(task_payload, dict):
+        return JsonResponse({"success": False, "error": "Task payload must be a JSON object."}, status=400)
+    policy = _connector_policy(connector)
+    task = LocalConnectorCommand.objects.create(
+        connector=connector,
+        operation=operation,
+        task_name=str(payload.get("task_name", "VS Code task"))[:160],
+        payload=task_payload,
+        status="queued" if not policy.require_approval else "awaiting_approval",
+    )
+    return JsonResponse({"success": True, "task": _connector_task_payload(task)})
+
+
 def _connector_payload(connector):
     return {
         "id": connector.id,

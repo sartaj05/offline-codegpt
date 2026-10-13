@@ -11,6 +11,10 @@ for (const command of [
   "syntaxLocalAI.applyLastSuggestion",
   "syntaxLocalAI.runProjectTests",
   "syntaxLocalAI.previewLastSuggestion",
+  "syntaxLocalAI.configureHybrid",
+  "syntaxLocalAI.hybridStatus",
+  "syntaxLocalAI.queueHybridTask",
+  "syntaxLocalAI.refreshHybridTasks",
 ]) {
   assert(commands.includes(command), `missing command ${command}`);
 }
@@ -19,4 +23,6 @@ assert(extension.includes("Authorization"), "extension must support local author
 assert(extension.includes("vscode.diff"), "extension must provide patch preview");
 assert(extension.includes("registerInlineCompletionItemProvider"), "extension must provide inline completion");
 assert(extension.includes("cp.exec"), "extension must expose confirmed local test execution");
+assert(extension.includes("context.secrets.store"), "extension must store hybrid credentials securely");
+assert(extension.includes("/api/connector/token/tasks/"), "extension must support hybrid task submission");
 console.log("VS Code extension integration contract passed");

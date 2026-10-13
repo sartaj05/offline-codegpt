@@ -18,6 +18,10 @@
     ,"onCommand:syntaxLocalAI.runProjectTests"
     ,"onCommand:syntaxLocalAI.previewLastSuggestion"
     ,"onCommand:syntaxLocalAI.clearDiagnostics"
+    ,"onCommand:syntaxLocalAI.configureHybrid"
+    ,"onCommand:syntaxLocalAI.hybridStatus"
+    ,"onCommand:syntaxLocalAI.queueHybridTask"
+    ,"onCommand:syntaxLocalAI.refreshHybridTasks"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -57,6 +61,22 @@
       {
         "command": "syntaxLocalAI.clearDiagnostics",
         "title": "Syntax Local AI: Clear Diagnostics"
+      },
+      {
+        "command": "syntaxLocalAI.configureHybrid",
+        "title": "Syntax Local AI: Configure Hybrid Connector"
+      },
+      {
+        "command": "syntaxLocalAI.hybridStatus",
+        "title": "Syntax Local AI: Show Hybrid Connector Status"
+      },
+      {
+        "command": "syntaxLocalAI.queueHybridTask",
+        "title": "Syntax Local AI: Queue Hybrid Coding Task"
+      },
+      {
+        "command": "syntaxLocalAI.refreshHybridTasks",
+        "title": "Syntax Local AI: Refresh Hybrid Tasks"
       }
     ],
     "configuration": {
