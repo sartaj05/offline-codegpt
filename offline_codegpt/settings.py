@@ -27,6 +27,12 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "true").strip().lower() in {
     "on",
 }
 
+DEPLOYMENT_MODE = os.environ.get("DEPLOYMENT_MODE", "offline").strip().lower()
+if DEPLOYMENT_MODE in {"local", "local-only"}:
+    DEPLOYMENT_MODE = "offline"
+if DEPLOYMENT_MODE not in {"offline", "hosted", "hybrid"}:
+    raise ValueError("DEPLOYMENT_MODE must be offline, hosted, or hybrid")
+
 
 def _csv_env(name, default=""):
     """Return a comma-separated environment variable as a clean list."""

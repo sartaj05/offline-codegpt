@@ -3,6 +3,7 @@ from . import views
 
 urlpatterns = [
     path("health/", views.health_check, name="health_check"),
+    path("api/deployment/mode/", views.deployment_mode_api, name="deployment_mode_api"),
     path("login/", views.login_view, name="login"),
     path("signup/", views.signup, name="signup"),
     path("logout/", views.logout_view, name="logout"),

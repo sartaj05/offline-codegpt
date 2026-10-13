@@ -95,7 +95,7 @@
 
         <div class="sidebar-footer">
             <div class="model-name">Model <span id="activeModel">{{ default_model }}</span></div>
-            <div class="status-row"><span class="status-dot"></span> Local and private</div>
+            <div class="status-row"><span class="status-dot"></span> <span class="deployment-mode-badge mode-{{ deployment_mode.key }}">{{ deployment_mode.label }}</span></div>
         </div>
     </aside>
 
@@ -104,7 +104,7 @@
             <div>
                 <div class="eyebrow">{% if request.user.is_authenticated %}PRIVATE WORKSPACE{% else %}FREE PREVIEW{% endif %}</div>
                 <h1>Build better code, locally.</h1>
-                <p>Ask, inspect, and improve code with your local Ollama model.</p>
+                <p>{{ deployment_mode.description }}</p>
             </div>
             <div class="topbar-actions">
                 {% if request.user.is_authenticated %}

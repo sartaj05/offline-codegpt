@@ -32,6 +32,15 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok", "service": "syntax-local-ai"})
 
+    def test_offline_deployment_mode_is_visible_and_local_first(self):
+        response = self.client.get("/api/deployment/mode/")
+        self.assertEqual(response.status_code, 200)
+        mode = response.json()["mode"]
+        self.assertEqual(mode["key"], "offline")
+        self.assertTrue(mode["capabilities"]["local_runtime"])
+        self.assertTrue(mode["capabilities"]["local_files"])
+        self.assertFalse(mode["capabilities"]["network_required"])
+
     def test_responsive_ui_contract_covers_required_viewports(self):
         project_root = Path(__file__).resolve().parents[1]
         stylesheet = (project_root / "static" / "chat" / "app.css").read_text(encoding="utf-8")

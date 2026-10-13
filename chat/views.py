@@ -118,6 +118,7 @@ from .browser_testing import analyze_browser_report, generate_playwright_test
 from .ocr import ocr_scanned_pdf
 from .model_router import route_model
 from .devcontainer import generate_devcontainer
+from .deployment_mode import mode_payload
 from .data_workspace import analyze_data_file
 from .deployment import generate_deployment_kit, validate_deployment_environment
 from .incident import analyze_incident
@@ -1879,6 +1880,7 @@ def index(request):
         "models": _available_models(server_url, user_settings.runtime if user_settings else "ollama"),
         "default_model": default_model,
         "ollama_settings": user_settings,
+        "deployment_mode": mode_payload(),
     })
 
 
@@ -1886,6 +1888,12 @@ def index(request):
 def health_check(request):
     """Small unauthenticated endpoint for Render health checks."""
     return JsonResponse({"status": "ok", "service": "syntax-local-ai"})
+
+
+@require_GET
+def deployment_mode_api(request):
+    """Return the immutable server deployment mode and its capabilities."""
+    return JsonResponse({"success": True, "mode": mode_payload()})
 
 
 def model_list(request):

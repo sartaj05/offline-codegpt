@@ -76,6 +76,10 @@ The project uses:
 - 'requests' for local/provider and optional remote integrations
 - 'cryptography' for encrypted workspace secrets
 
+The deployment mode is controlled by `DEPLOYMENT_MODE`. It defaults to
+`offline`, which keeps SQLite, local Ollama, local files, and Git enabled. The
+mode is displayed in the UI and available from `/api/deployment/mode/`.
+
 ## Installation
 
 For a guided Windows setup, run:

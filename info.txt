@@ -33,6 +33,12 @@ Quick setup
    .\venv\Scripts\Activate.ps1
    python manage.py runserver
 
+Deployment mode
+---------------
+DEPLOYMENT_MODE=offline is the default and enables SQLite, local Ollama,
+local files, and Git without requiring a network connection. Hosted and
+hybrid modes are configured explicitly for cloud deployments.
+
 Free cloud deployment: Render + Neon
 -------------------------------------
 The repository includes render.yaml for a free Render web service and Neon
