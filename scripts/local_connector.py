@@ -42,10 +42,11 @@ def execute_command(command, workspace, ollama_url):
     operation = command["operation"]
     payload = command.get("payload") or {}
     if operation == "ollama.health":
+        started = time.perf_counter()
         response = requests.get(api_url(ollama_url, "/api/tags"), timeout=10)
         response.raise_for_status()
         models = [item.get("name") for item in response.json().get("models", []) if item.get("name")]
-        return {"runtime": "ollama", "models": models}
+        return {"runtime": "ollama", "models": models, "latency_ms": round((time.perf_counter() - started) * 1000)}
     if operation == "ollama.generate":
         prompt = str(payload.get("prompt", "")).strip()
         code = str(payload.get("code", "")).strip()
@@ -53,10 +54,11 @@ def execute_command(command, workspace, ollama_url):
         combined = prompt + ("\n\nCode:\n" + code if code else "")
         if not combined:
             raise ValueError("The local generation request is empty")
+        started = time.perf_counter()
         response = requests.post(api_url(ollama_url, "/api/generate"), json={"model": model, "prompt": combined[:100_000], "stream": False}, timeout=300)
         response.raise_for_status()
         body = response.json()
-        return {"model": model, "response": str(body.get("response", ""))[:100_000]}
+        return {"model": model, "response": str(body.get("response", ""))[:100_000], "latency_ms": round((time.perf_counter() - started) * 1000)}
     if operation == "workspace.list":
         root = workspace
         files = []

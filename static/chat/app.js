@@ -27,6 +27,7 @@ const connectorSelect = document.getElementById("connectorSelect");
 const connectorOperation = document.getElementById("connectorOperation");
 const connectorPayload = document.getElementById("connectorPayload");
 const connectorList = document.getElementById("connectorList");
+const connectorMetrics = document.getElementById("connectorMetrics");
 const ollamaRuntime = document.getElementById("ollamaRuntime");
 const ollamaServerUrl = document.getElementById("ollamaServerUrl");
 const ollamaDefaultModel = document.getElementById("ollamaDefaultModel");
@@ -632,7 +633,7 @@ function renderLocalConnectors(connectors) {
         connectorSelect.appendChild(option);
     });
     connectorList.innerHTML = connectors.map(connector => {
-        const commands = (connector.commands || []).map(command => `<div class="connector-command"><code>${escapeHtml(command.id)}</code> · ${escapeHtml(command.operation)} · ${escapeHtml(command.status)}${command.status === "awaiting_approval" ? ` <button type="button" onclick="approveConnectorCommand('${escapeHtml(command.id)}', 'approve')">Approve</button><button type="button" onclick="approveConnectorCommand('${escapeHtml(command.id)}', 'reject')">Reject</button>` : ""}</div>`).join("");
+        const commands = (connector.commands || []).map(command => `<div class="connector-command"><code>${escapeHtml(command.id)}</code> · ${escapeHtml(command.task_name || command.operation)} · ${escapeHtml(command.status)} · ${Number(command.progress || 0)}%${command.status === "awaiting_approval" ? ` <button type="button" onclick="approveConnectorCommand('${escapeHtml(command.id)}', 'approve')">Approve</button><button type="button" onclick="approveConnectorCommand('${escapeHtml(command.id)}', 'reject')">Reject</button>` : ""}</div>`).join("");
         const revoke = connector.status === "revoked" ? "" : ` <button type="button" onclick="revokeLocalConnector(${connector.id})">Revoke token</button>`;
         return `<div class="connector-card"><strong>${escapeHtml(connector.name)}</strong> · ${escapeHtml(connector.status)}${revoke}<br><small>Last seen: ${escapeHtml(connector.last_seen_at || "never")} · Capabilities: ${escapeHtml((connector.capabilities || []).join(", ") || "not registered")}</small>${commands || "<div>No commands.</div>"}</div>`;
     }).join("");
@@ -646,8 +647,27 @@ async function loadLocalConnectors() {
         const data = await response.json();
         if (!data.success) throw new Error(data.error || "Hybrid Mode is not enabled.");
         renderLocalConnectors(data.connectors || []);
+        loadConnectorMetrics();
     } catch (error) {
         connectorList.innerText = "Connector status: " + error.message;
+    }
+}
+
+async function loadConnectorMetrics() {
+    if (!connectorMetrics) return;
+    connectorMetrics.innerText = "Loading reliability metrics...";
+    try {
+        const response = await fetch("/api/connector/metrics/");
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || "Unable to load connector metrics.");
+        const metrics = data.metrics || {};
+        const cards = (metrics.connectors || []).map(item => {
+            const runtime = item.runtime || {};
+            return `${escapeHtml(item.name)}: ${item.online ? "online" : "offline"}, runtime ${escapeHtml(runtime.status || "unknown")}, latency ${runtime.latency_ms == null ? "—" : runtime.latency_ms + " ms"}, failed ${item.commands?.failed || 0}`;
+        });
+        connectorMetrics.innerText = `Commands ${metrics.total_commands || 0} · Failures ${metrics.failed_commands || 0} · Failure rate ${Math.round((metrics.failure_rate || 0) * 100)}% · Queue avg ${metrics.queue_average_ms == null ? "—" : metrics.queue_average_ms + " ms"} · Ollama avg ${metrics.ollama_average_latency_ms == null ? "—" : metrics.ollama_average_latency_ms + " ms"}\n${cards.join("\n") || "No connector metrics yet."}`;
+    } catch (error) {
+        connectorMetrics.innerText = "Reliability error: " + error.message;
     }
 }
 

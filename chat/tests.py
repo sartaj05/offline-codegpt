@@ -9,6 +9,7 @@ from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.core.management import call_command
+from django.utils import timezone
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
@@ -214,6 +215,24 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(queued.status_code, 200)
         self.assertEqual(queued.json()["task"]["status"], "awaiting_approval")
         self.assertEqual(status.json()["tasks"], [])
+
+    @override_settings(DEPLOYMENT_MODE="hybrid")
+    def test_connector_reliability_metrics_report_runtime_and_failures(self):
+        connector = LocalConnector.objects.create(owner=self.user, name="Metrics connector", status="connected", last_seen_at=timezone.now())
+        LocalConnectorCommand.objects.create(connector=connector, operation="ollama.health", status="completed", result={"latency_ms": 42, "models": ["coder"]})
+        LocalConnectorCommand.objects.create(connector=connector, operation="git.status", status="failed", error="offline")
+        connector.last_runtime_status = "completed"
+        connector.last_runtime_latency_ms = 42
+        connector.last_runtime_models = ["coder"]
+        connector.last_runtime_checked_at = timezone.now()
+        connector.save(update_fields=["last_runtime_status", "last_runtime_latency_ms", "last_runtime_models", "last_runtime_checked_at"])
+        response = self.client.get("/api/connector/metrics/")
+        self.assertEqual(response.status_code, 200)
+        metrics = response.json()["metrics"]
+        self.assertEqual(metrics["total_commands"], 2)
+        self.assertEqual(metrics["failed_commands"], 1)
+        self.assertEqual(metrics["ollama_average_latency_ms"], 42)
+        self.assertEqual(metrics["connectors"][0]["runtime"]["models"], ["coder"])
 
     def test_responsive_ui_contract_covers_required_viewports(self):
         project_root = Path(__file__).resolve().parents[1]

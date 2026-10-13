@@ -982,6 +982,10 @@ class LocalConnector(models.Model):
     pairing_expires_at = models.DateTimeField(null=True, blank=True)
     capabilities = models.JSONField(default=list, blank=True)
     last_seen_at = models.DateTimeField(null=True, blank=True)
+    last_runtime_status = models.CharField(max_length=20, blank=True, default="")
+    last_runtime_latency_ms = models.PositiveIntegerField(null=True, blank=True)
+    last_runtime_models = models.JSONField(default=list, blank=True)
+    last_runtime_checked_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

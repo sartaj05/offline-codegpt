@@ -292,8 +292,10 @@
                 <input id="connectorName" type="text" value="My local connector" placeholder="Connector name">
                 <button type="button" onclick="pairLocalConnector()">Generate pairing code</button>
                 <button type="button" onclick="loadLocalConnectors()">Refresh</button>
+                <button type="button" onclick="loadConnectorMetrics()">Reliability</button>
             </div>
             <div id="connectorPairingStatus" class="setup-status" role="status" aria-live="polite">Hybrid Mode is required for local connector pairing.</div>
+            <div id="connectorMetrics" class="setup-status" role="status" aria-live="polite">Reliability metrics are not loaded.</div>
             <div class="setup-row">
                 <select id="connectorSelect" aria-label="Local connector"></select>
                 <select id="connectorOperation" aria-label="Connector operation">

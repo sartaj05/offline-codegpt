@@ -2210,7 +2210,19 @@ def local_connector_result(request, command_id):
             command.result["synced_documents"] = synced
     command.save(update_fields=["status", "progress", "result", "error", "updated_at"])
     connector.last_seen_at = timezone.now()
-    connector.save(update_fields=["last_seen_at", "updated_at"])
+    connector_update_fields = ["last_seen_at", "updated_at"]
+    if command.operation.startswith("ollama."):
+        connector.last_runtime_status = status
+        connector.last_runtime_checked_at = connector.last_seen_at
+        latency = command.result.get("latency_ms") if isinstance(command.result, dict) else None
+        try:
+            connector.last_runtime_latency_ms = max(0, min(86_400_000, int(latency))) if latency is not None else None
+        except (TypeError, ValueError):
+            connector.last_runtime_latency_ms = None
+        models = command.result.get("models", []) if isinstance(command.result, dict) else []
+        connector.last_runtime_models = models[:100] if isinstance(models, list) else []
+        connector_update_fields += ["last_runtime_status", "last_runtime_latency_ms", "last_runtime_models", "last_runtime_checked_at"]
+    connector.save(update_fields=connector_update_fields)
     return JsonResponse({"success": True, "command_id": str(command.id), "status": command.status})
 
 
@@ -2335,6 +2347,62 @@ def local_connector_policy(request, connector_id):
             return JsonResponse({"success": False, "error": "max_file_bytes must be an integer."}, status=400)
     policy.save()
     return JsonResponse({"success": True, "policy": _connector_policy_payload(policy)})
+
+
+@login_required(login_url="/login/")
+@require_GET
+def local_connector_metrics(request):
+    mode_error = _hybrid_mode_error()
+    if mode_error:
+        return mode_error
+    now = timezone.now()
+    connector_metrics = []
+    total_commands = 0
+    total_failures = 0
+    queue_durations = []
+    generation_latencies = []
+    for connector in LocalConnector.objects.filter(owner=request.user):
+        commands = list(connector.commands.all())
+        counts = {status: sum(1 for command in commands if command.status == status) for status, _ in LocalConnectorCommand.STATUS_CHOICES}
+        completed = [command for command in commands if command.status in {"completed", "failed", "rejected"}]
+        queue_durations.extend(max(0, (command.updated_at - command.created_at).total_seconds() * 1000) for command in completed)
+        for command in commands:
+            if command.operation.startswith("ollama.") and isinstance(command.result, dict) and command.result.get("latency_ms") is not None:
+                try:
+                    generation_latencies.append(float(command.result["latency_ms"]))
+                except (TypeError, ValueError):
+                    continue
+        total_commands += len(commands)
+        total_failures += counts.get("failed", 0)
+        age_seconds = (now - connector.last_seen_at).total_seconds() if connector.last_seen_at else None
+        connector_metrics.append({
+            "id": connector.id,
+            "name": connector.name,
+            "status": connector.status,
+            "online": connector.status == "connected" and age_seconds is not None and age_seconds <= 45,
+            "last_seen_at": connector.last_seen_at.isoformat() if connector.last_seen_at else None,
+            "last_seen_age_seconds": round(age_seconds, 1) if age_seconds is not None else None,
+            "runtime": {
+                "status": connector.last_runtime_status or "unknown",
+                "latency_ms": connector.last_runtime_latency_ms,
+                "models": connector.last_runtime_models,
+                "checked_at": connector.last_runtime_checked_at.isoformat() if connector.last_runtime_checked_at else None,
+            },
+            "commands": counts,
+            "queue_average_ms": round(sum(max(0, (command.updated_at - command.created_at).total_seconds() * 1000) for command in completed) / len(completed)) if completed else None,
+        })
+    return JsonResponse({
+        "success": True,
+        "metrics": {
+            "connectors": connector_metrics,
+            "total_commands": total_commands,
+            "failed_commands": total_failures,
+            "failure_rate": round(total_failures / total_commands, 4) if total_commands else 0,
+            "queue_average_ms": round(sum(queue_durations) / len(queue_durations)) if queue_durations else None,
+            "ollama_average_latency_ms": round(sum(generation_latencies) / len(generation_latencies)) if generation_latencies else None,
+            "generated_at": now.isoformat(),
+        },
+    })
 
 
 @login_required(login_url="/login/")

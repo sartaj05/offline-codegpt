@@ -375,6 +375,14 @@ restored as rejected history so a backup cannot execute work automatically.
 The restore response reports `connectors` and `connector_tasks` counts in
 addition to project files and chats.
 
+### Connector reliability dashboard
+
+Use **Reliability** in the Hybrid Connector panel or call
+`GET /api/connector/metrics/` to see connector online age, runtime status,
+Ollama latency, model inventory, task counts, failures, and queue timing.
+Health and generation results carry local latency measurements; the hosted
+dashboard stores only the metrics needed for the signed-in owner's view.
+
 ## Configure Ollama
 
 Start Ollama before using the AI features:
