@@ -2,6 +2,8 @@
 
 Syntax Local AI is a private, local-first coding workspace built with Django and Ollama. It lets developers ask questions about code, upload project files, run guarded checks, plan agent tasks, review changes, manage workspace access, and generate deployment assets without sending coding context to a hosted AI provider by default.
 
+Deployment documentation: [DEPLOYMENT.md](DEPLOYMENT.md)
+
 ## What the project includes
 
 ### Local coding workspace
