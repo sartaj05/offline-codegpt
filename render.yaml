@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: syntax-local-ai
+    runtime: python
+    plan: free
+    buildCommand: python -m pip install -r requirements.txt && python manage.py migrate --noinput && python manage.py collectstatic --noinput
+    startCommand: gunicorn offline_codegpt.wsgi:application --bind 0.0.0.0:$PORT
+    healthCheckPath: /health/
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: ALLOWED_HOSTS
+        sync: false
+      - key: CSRF_TRUSTED_ORIGINS
+        sync: false
+      - key: DATABASE_SSLMODE
+        value: require
+      - key: DATABASE_CONN_MAX_AGE
+        value: "60"

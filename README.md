@@ -71,7 +71,7 @@ Syntax Local AI is a private, local-first coding workspace built with Django and
 The project uses:
 
 - Django 5.2
-- SQLite for local development
+- SQLite for local/offline development, with optional PostgreSQL through `DATABASE_URL`
 - Ollama for local model inference
 - 'requests' for local/provider and optional remote integrations
 - 'cryptography' for encrypted workspace secrets
@@ -161,6 +161,96 @@ cp .env.example .env
 python manage.py migrate
 python manage.py check
 ~~~
+
+## Free Render + Neon deployment
+
+The included `render.yaml` deploys the Django web service on Render's free
+Web Service plan. Neon supplies the PostgreSQL database. This is a hosted
+demo deployment, not a fully offline deployment: the database and web app are
+in the cloud, while Ollama remains local unless you separately provide a
+reachable hosted model runtime.
+
+### 1. Create the Neon database
+
+1. Create a project at [Neon](https://console.neon.tech/).
+2. Open **Connect** and copy the PostgreSQL connection string. Use the pooled
+   connection string when Neon offers one for the project.
+3. Keep the complete URL, including `sslmode=require`, private. It looks like:
+
+~~~text
+postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require
+~~~
+
+For a local PostgreSQL smoke test, set it only in the current PowerShell
+session and run migrations:
+
+~~~powershell
+$env:DATABASE_URL = "postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require"
+$env:DJANGO_DEBUG = "false"
+$env:ALLOWED_HOSTS = "127.0.0.1,localhost"
+$env:CSRF_TRUSTED_ORIGINS = ""
+python manage.py migrate
+python manage.py check --deploy
+~~~
+
+Remove the variables or open a new PowerShell window to return to local
+SQLite/offline development.
+
+### 2. Deploy Django on Render
+
+1. Push this repository to GitHub.
+2. In [Render](https://dashboard.render.com/), choose **New -> Blueprint** and
+   select the repository. Render detects `render.yaml`.
+3. When Render asks for values marked `sync: false`, enter:
+   - `DATABASE_URL`: the Neon connection string.
+   - `ALLOWED_HOSTS`: the exact Render hostname, for example
+     `syntax-local-ai.onrender.com`.
+   - `CSRF_TRUSTED_ORIGINS`: the full HTTPS origin, for example
+     `https://syntax-local-ai.onrender.com`.
+4. Keep `DJANGO_DEBUG=false`. Render generates `DJANGO_SECRET_KEY` from the
+   Blueprint configuration.
+5. Create the service. Its build command automatically installs dependencies,
+   runs migrations, and collects static files. Its start command runs:
+
+~~~text
+gunicorn offline_codegpt.wsgi:application --bind 0.0.0.0:$PORT
+~~~
+
+6. Open `https://YOUR-SERVICE.onrender.com/health/`. A successful deployment
+   returns JSON with `"status": "ok"`.
+
+### 3. Commands after deployment
+
+Run these locally before pushing future changes:
+
+~~~powershell
+python manage.py check --deploy
+python manage.py makemigrations --check --dry-run
+python manage.py migrate --plan
+.\scripts\test-all.ps1
+~~~
+
+Render runs the production commands from `render.yaml` on every deployment:
+
+~~~text
+python -m pip install -r requirements.txt
+python manage.py migrate --noinput
+python manage.py collectstatic --noinput
+gunicorn offline_codegpt.wsgi:application --bind 0.0.0.0:$PORT
+~~~
+
+### Free-tier limitations
+
+- Render's free web service sleeps after inactivity, so the first request can
+  be slow.
+- Render's local filesystem is temporary. Do not rely on it for uploaded
+  documents, model files, RAG indexes, backups, or SQLite data.
+- Use Neon for durable application metadata. Add object storage or a paid
+  persistent disk before making user uploads and indexes production data.
+- Do not run Ollama or download large models in the free Render web service.
+  Keep local AI features on the user's machine or use a separate paid GPU
+  runtime.
+- Never commit `.env`, database URLs, passwords, or generated secret keys.
 
 ## Configure Ollama
 

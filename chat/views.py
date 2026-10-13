@@ -1882,6 +1882,12 @@ def index(request):
     })
 
 
+@require_GET
+def health_check(request):
+    """Small unauthenticated endpoint for Render health checks."""
+    return JsonResponse({"status": "ok", "service": "syntax-local-ai"})
+
+
 def model_list(request):
     user_settings = _user_ollama_settings(request.user) if request.user.is_authenticated else None
     server_url = user_settings.server_url if user_settings else OLLAMA_BASE_URL

@@ -26,6 +26,12 @@ class ChatFeatureTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "FREE PREVIEW")
 
+    def test_render_health_endpoint_is_public(self):
+        self.client.logout()
+        response = self.client.get("/health/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok", "service": "syntax-local-ai"})
+
     def test_responsive_ui_contract_covers_required_viewports(self):
         project_root = Path(__file__).resolve().parents[1]
         stylesheet = (project_root / "static" / "chat" / "app.css").read_text(encoding="utf-8")

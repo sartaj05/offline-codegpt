@@ -33,6 +33,39 @@ Quick setup
    .\venv\Scripts\Activate.ps1
    python manage.py runserver
 
+Free cloud deployment: Render + Neon
+-------------------------------------
+The repository includes render.yaml for a free Render web service and Neon
+PostgreSQL. This is a hosted demo mode, not a fully offline deployment.
+
+1. Create a project at https://console.neon.tech/.
+2. In Neon, open Connect and copy the PostgreSQL URL. Keep sslmode=require
+   in the URL and never commit it.
+3. Push the repository to GitHub.
+4. In https://dashboard.render.com/ choose New -> Blueprint and select the
+   repository. Render reads render.yaml.
+5. Enter these values when Render asks for sync:false variables:
+   - DATABASE_URL: the complete Neon PostgreSQL URL.
+   - ALLOWED_HOSTS: the exact Render hostname, such as
+     syntax-local-ai.onrender.com.
+   - CSRF_TRUSTED_ORIGINS: the HTTPS origin, such as
+     https://syntax-local-ai.onrender.com.
+6. Keep DJANGO_DEBUG=false. Render generates DJANGO_SECRET_KEY.
+7. The Blueprint installs requirements, runs migrations, collects static
+   files, and starts Gunicorn. Check https://YOUR-SERVICE.onrender.com/health/.
+
+Commands to run before pushing:
+   python manage.py check --deploy
+   python manage.py makemigrations --check --dry-run
+   python manage.py migrate --plan
+   .\scripts\test-all.ps1
+
+Local database behavior is unchanged: leave DATABASE_URL empty to use
+SQLite. Set DATABASE_URL only when testing Neon or deploying. Render's free
+filesystem is temporary, so do not treat it as durable storage for uploaded
+files, model files, indexes, backups, or SQLite. Ollama remains local; a
+cloud Render service cannot access Ollama on a private home computer.
+
 The app is then available at http://127.0.0.1:8000/.
 
 Portable setup script
