@@ -153,6 +153,18 @@ The server still enforces connector policies and approval requirements. If the
 hosted service is unavailable, VS Code reports the error and the local
 connector's offline result queue remains the recovery path.
 
+AI patch synchronization
+------------------------
+Connector tasks support:
+   patch.preview  (read-only unified diff)
+   patch.apply    (requires file-write permission and approval)
+   patch.undo     (requires file-write permission and expected-content match)
+
+Patch paths are restricted to the configured workspace and file contents are
+limited to 1 MB. Apply refuses stale previews; its result includes the prior
+content so the user can queue an explicit undo. The default connector policy
+allows preview only and keeps file writes disabled.
+
 Desktop connector controller
 ----------------------------
 Run the dependency-free Tkinter controller:

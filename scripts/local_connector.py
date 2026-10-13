@@ -7,6 +7,7 @@ read-oriented operations.
 """
 
 import argparse
+import difflib
 import json
 import subprocess
 import time
@@ -96,6 +97,48 @@ def execute_command(command, workspace, ollama_url):
             check=False,
         )
         return {"returncode": result.returncode, "stdout": result.stdout[:20_000], "stderr": result.stderr[:2_000]}
+    if operation == "patch.preview":
+        path = safe_path(workspace, payload.get("path", ""))
+        if not path.is_file():
+            raise ValueError("Patch target does not exist")
+        original = path.read_text(encoding="utf-8", errors="replace")
+        updated = str(payload.get("new_content", ""))
+        if len(updated.encode("utf-8")) > 1_000_000:
+            raise ValueError("Patch content is limited to 1 MB")
+        diff = "".join(difflib.unified_diff(
+            original.splitlines(keepends=True),
+            updated.splitlines(keepends=True),
+            fromfile=str(payload.get("path", "file")) + " (current)",
+            tofile=str(payload.get("path", "file")) + " (proposed)",
+            n=3,
+        ))
+        return {"path": path.relative_to(workspace).as_posix(), "changed": original != updated, "original": original, "updated": updated, "diff": diff}
+    if operation == "patch.apply":
+        path = safe_path(workspace, payload.get("path", ""))
+        if not path.is_file():
+            raise ValueError("Patch target does not exist")
+        original = path.read_text(encoding="utf-8", errors="replace")
+        expected = payload.get("expected_content")
+        if expected is not None and original != str(expected):
+            raise ValueError("Patch target changed since it was previewed")
+        updated = str(payload.get("new_content", ""))
+        if len(updated.encode("utf-8")) > 1_000_000:
+            raise ValueError("Patch content is limited to 1 MB")
+        path.write_text(updated, encoding="utf-8")
+        return {"path": path.relative_to(workspace).as_posix(), "original": original, "updated": updated, "changed": original != updated}
+    if operation == "patch.undo":
+        path = safe_path(workspace, payload.get("path", ""))
+        if not path.is_file():
+            raise ValueError("Patch target does not exist")
+        current = path.read_text(encoding="utf-8", errors="replace")
+        expected = str(payload.get("expected_content", ""))
+        if expected and current != expected:
+            raise ValueError("Patch target changed after it was applied")
+        original = str(payload.get("original_content", ""))
+        if len(original.encode("utf-8")) > 1_000_000:
+            raise ValueError("Patch content is limited to 1 MB")
+        path.write_text(original, encoding="utf-8")
+        return {"path": path.relative_to(workspace).as_posix(), "restored": True, "content": original}
     raise ValueError("Unsupported operation")
 
 
@@ -105,7 +148,7 @@ def register(session, server_url, pairing_code, name):
         json={
             "pairing_code": pairing_code,
             "name": name,
-            "capabilities": ["ollama.health", "workspace.list", "file.read", "git.status"],
+            "capabilities": ["ollama.health", "workspace.list", "file.read", "git.status", "patch.preview", "patch.apply", "patch.undo"],
         },
         timeout=20,
     )

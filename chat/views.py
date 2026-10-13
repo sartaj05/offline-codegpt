@@ -1900,7 +1900,10 @@ def deployment_mode_api(request):
     return JsonResponse({"success": True, "mode": mode_payload()})
 
 
-CONNECTOR_OPERATIONS = {"ollama.health", "ollama.generate", "workspace.list", "workspace.snapshot", "file.read", "git.status"}
+CONNECTOR_OPERATIONS = {
+    "ollama.health", "ollama.generate", "workspace.list", "workspace.snapshot",
+    "file.read", "git.status", "patch.preview", "patch.apply", "patch.undo",
+}
 
 
 def _hybrid_mode_error():
@@ -2023,6 +2026,10 @@ def _connector_operation_allowed(connector, operation):
     if operation == "file.read" and not policy.allow_file_read:
         return False
     if operation == "file.write" and not policy.allow_file_write:
+        return False
+    if operation == "patch.preview" and not policy.allow_file_read:
+        return False
+    if operation in {"patch.apply", "patch.undo"} and not policy.allow_file_write:
         return False
     if operation.startswith("git.") and not policy.allow_git:
         return False

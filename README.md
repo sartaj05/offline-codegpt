@@ -357,6 +357,15 @@ POST /api/connector/token/tasks/
 
 Tasks still follow the server-side connector policy and approval workflow.
 
+### Hybrid AI patch synchronization
+
+The Connector panel and task APIs support `patch.preview`, `patch.apply`, and
+`patch.undo`. Preview returns a unified diff and the current file content.
+Apply requires the connector policy's file-write permission, checks the
+previewed content has not changed, and returns the original content needed for
+an explicit undo. All paths are resolved beneath the connector workspace;
+there is no arbitrary filesystem access.
+
 ## Configure Ollama
 
 Start Ollama before using the AI features:

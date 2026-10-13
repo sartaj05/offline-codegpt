@@ -303,6 +303,9 @@
                     <option value="workspace.snapshot">Sync workspace and RAG</option>
                     <option value="file.read">Read a file</option>
                     <option value="git.status">Git status</option>
+                    <option value="patch.preview">Preview file patch</option>
+                    <option value="patch.apply">Apply approved file patch</option>
+                    <option value="patch.undo">Undo applied file patch</option>
                 </select>
                 <input id="connectorPayload" type="text" value="{}" placeholder='Payload JSON, e.g. {"path":"README.md"}'>
                 <button type="button" onclick="queueConnectorCommand()">Queue for approval</button>
