@@ -12,6 +12,7 @@ urlpatterns = [
     path("api/connector/<int:connector_id>/command/", views.local_connector_command, name="local_connector_command"),
     path("api/connector/tasks/", views.local_connector_tasks, name="local_connector_tasks"),
     path("api/connector/<int:connector_id>/tasks/", views.local_connector_tasks, name="local_connector_tasks_for_connector"),
+    path("api/connector/<int:connector_id>/policy/", views.local_connector_policy, name="local_connector_policy"),
     path("api/connector/task/<uuid:command_id>/control/", views.local_connector_task_control, name="local_connector_task_control"),
     path("api/connector/progress/<uuid:command_id>/", views.local_connector_progress, name="local_connector_progress"),
     path("api/connector/<int:connector_id>/revoke/", views.local_connector_revoke, name="local_connector_revoke"),

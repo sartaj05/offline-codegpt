@@ -123,6 +123,19 @@ be protected like a local log because results can contain project information.
 It only queues connection timeouts/errors; server authorization errors are not
 silently treated as successful delivery.
 
+Connector capability permissions
+---------------------------------
+Each paired connector has an owner-controlled policy:
+   GET  /api/connector/<connector-id>/policy/
+   POST /api/connector/<connector-id>/policy/
+
+The policy supports an operation allowlist, approval requirement, file read,
+file write, Git, Ollama, workspace sync, test, and shell permissions. New
+connectors allow the current read-oriented operations but keep explicit
+approval enabled; write/test/shell permissions default to disabled. Direct
+chat generation is also blocked when the connector policy disables Ollama or
+removes `ollama.generate` from the allowlist.
+
 Desktop connector controller
 ----------------------------
 Run the dependency-free Tkinter controller:

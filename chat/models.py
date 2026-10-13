@@ -992,6 +992,25 @@ class LocalConnector(models.Model):
         return f"{self.name} ({self.status})"
 
 
+class LocalConnectorPolicy(models.Model):
+    connector = models.OneToOneField(LocalConnector, on_delete=models.CASCADE, related_name="policy")
+    allowed_operations = models.JSONField(default=list, blank=True)
+    require_approval = models.BooleanField(default=True)
+    allow_file_read = models.BooleanField(default=True)
+    allow_file_write = models.BooleanField(default=False)
+    allow_git = models.BooleanField(default=True)
+    allow_ollama = models.BooleanField(default=True)
+    allow_workspace_sync = models.BooleanField(default=True)
+    allow_tests = models.BooleanField(default=False)
+    allow_shell = models.BooleanField(default=False)
+    max_file_bytes = models.PositiveIntegerField(default=1_000_000)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+
+
 class LocalConnectorCommand(models.Model):
     STATUS_CHOICES = (
         ("awaiting_approval", "Awaiting approval"),

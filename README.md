@@ -334,6 +334,14 @@ Tokens are hashed in the database, pairing codes expire after ten minutes,
 and the Connector panel can revoke a token at any time. Use HTTPS
 for the hosted URL and never paste the token into source control.
 
+### Connector permission policies
+
+Each connector has a separate policy at `GET/POST /api/connector/<id>/policy/`.
+Policies can allowlist operations, require approval, and independently enable
+file reads, file writes, Git, Ollama, workspace sync, tests, and shell actions.
+New connectors default to the current read-oriented operations with approval
+required; write, test, and shell permissions remain disabled.
+
 ## Configure Ollama
 
 Start Ollama before using the AI features:

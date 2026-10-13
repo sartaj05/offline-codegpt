@@ -12,7 +12,7 @@ from django.core.management import call_command
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from unittest.mock import patch
 
-from .models import AgentJob, AgentTask, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, ExtensionInstall, ExtensionPackage, KnowledgeChunk, KnowledgeDocument, LocalConnector, LocalConnectorCommand, PatchRevision, ProjectWorkspace, SandboxPolicy, SecretVaultItem, Workspace, WorkspaceFileState, WorkspaceMembership, WorkspacePolicy
+from .models import AgentJob, AgentTask, AgentTeam, AiEvent, AuditEvent, ChatMessage, ChatSession, EnterpriseIdentityConfig, EvaluationRun, EvaluationScore, EvaluationTask, ExtensionInstall, ExtensionPackage, KnowledgeChunk, KnowledgeDocument, LocalConnector, LocalConnectorCommand, LocalConnectorPolicy, PatchRevision, ProjectWorkspace, SandboxPolicy, SecretVaultItem, Workspace, WorkspaceFileState, WorkspaceMembership, WorkspacePolicy
 from .views import _search_knowledge
 
 
@@ -170,6 +170,28 @@ class ChatFeatureTests(TestCase):
         listing = self.client.get("/api/connector/tasks/")
         self.assertEqual(listing.status_code, 200)
         self.assertEqual(listing.json()["tasks"][0]["id"], task_id)
+
+    @override_settings(DEPLOYMENT_MODE="hybrid")
+    def test_connector_policy_restricts_operations_and_approval(self):
+        connector = LocalConnector.objects.create(owner=self.user, name="Policy connector", status="connected")
+        policy = self.client.get(f"/api/connector/{connector.id}/policy/")
+        self.assertEqual(policy.status_code, 200)
+        self.assertIn("file.read", policy.json()["policy"]["allowed_operations"])
+        updated = self.client.post(
+            f"/api/connector/{connector.id}/policy/",
+            data=json.dumps({"allowed_operations": ["git.status"], "require_approval": False}),
+            content_type="application/json",
+        )
+        self.assertEqual(updated.status_code, 200)
+        denied = self.client.post(f"/api/connector/{connector.id}/command/", {"operation": "file.read", "payload": "{}"})
+        self.assertEqual(denied.status_code, 403)
+        task = self.client.post(
+            f"/api/connector/{connector.id}/tasks/",
+            data=json.dumps({"operation": "git.status", "payload": {}}),
+            content_type="application/json",
+        )
+        self.assertEqual(task.status_code, 200)
+        self.assertEqual(task.json()["task"]["status"], "queued")
 
     def test_responsive_ui_contract_covers_required_viewports(self):
         project_root = Path(__file__).resolve().parents[1]

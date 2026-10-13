@@ -105,6 +105,7 @@ from .models import (
     CodingWorkflowArtifact,
     PatchRevision,
     LocalConnector,
+    LocalConnectorPolicy,
     LocalConnectorCommand,
     ProjectWorkspace,
     SecretVaultItem,
@@ -1941,6 +1942,55 @@ def _connector_payload(connector):
     }
 
 
+def _connector_policy(connector):
+    policy, created = LocalConnectorPolicy.objects.get_or_create(
+        connector=connector,
+        defaults={"allowed_operations": sorted(CONNECTOR_OPERATIONS)},
+    )
+    if created:
+        return policy
+    return policy
+
+
+def _connector_policy_payload(policy):
+    return {
+        "connector_id": policy.connector_id,
+        "allowed_operations": policy.allowed_operations,
+        "require_approval": policy.require_approval,
+        "allow_file_read": policy.allow_file_read,
+        "allow_file_write": policy.allow_file_write,
+        "allow_git": policy.allow_git,
+        "allow_ollama": policy.allow_ollama,
+        "allow_workspace_sync": policy.allow_workspace_sync,
+        "allow_tests": policy.allow_tests,
+        "allow_shell": policy.allow_shell,
+        "max_file_bytes": policy.max_file_bytes,
+        "updated_at": policy.updated_at.isoformat(),
+    }
+
+
+def _connector_operation_allowed(connector, operation):
+    policy = _connector_policy(connector)
+    allowed = policy.allowed_operations
+    if isinstance(allowed, list) and operation not in allowed:
+        return False
+    if operation == "file.read" and not policy.allow_file_read:
+        return False
+    if operation == "file.write" and not policy.allow_file_write:
+        return False
+    if operation.startswith("git.") and not policy.allow_git:
+        return False
+    if operation.startswith("ollama.") and not policy.allow_ollama:
+        return False
+    if operation.startswith("workspace.") and not policy.allow_workspace_sync:
+        return False
+    if operation.startswith("test.") and not policy.allow_tests:
+        return False
+    if operation.startswith("shell.") and not policy.allow_shell:
+        return False
+    return True
+
+
 def _connector_task_payload(command):
     return {
         "id": str(command.id),
@@ -1975,6 +2025,7 @@ def local_connector_api(request):
             pairing_expires_at=timezone.now() + timedelta(minutes=10),
             capabilities=[],
         )
+        _connector_policy(connector)
         return JsonResponse({
             "success": True,
             "connector": _connector_payload(connector),
@@ -2035,6 +2086,7 @@ def local_connector_register(request):
     connector.capabilities = [str(item)[:80] for item in capabilities[:30]]
     connector.last_seen_at = timezone.now()
     connector.save()
+    _connector_policy(connector)
     return JsonResponse({
         "success": True,
         "token": token,
@@ -2119,6 +2171,8 @@ def local_connector_command(request, connector_id):
     operation = request.POST.get("operation", "").strip().lower()
     if operation not in CONNECTOR_OPERATIONS:
         return JsonResponse({"success": False, "error": "Unsupported connector operation."}, status=400)
+    if not _connector_operation_allowed(connector, operation):
+        return JsonResponse({"success": False, "error": "Connector policy does not allow this operation."}, status=403)
     payload = request.POST.get("payload", "{}")
     try:
         payload = json.loads(payload)
@@ -2127,11 +2181,18 @@ def local_connector_command(request, connector_id):
     if not isinstance(payload, dict):
         return JsonResponse({"success": False, "error": "Command payload must be a JSON object."}, status=400)
     task_name = request.POST.get("task_name", "").strip()[:160]
-    command = LocalConnectorCommand.objects.create(connector=connector, operation=operation, task_name=task_name, payload=payload)
+    policy = _connector_policy(connector)
+    command = LocalConnectorCommand.objects.create(
+        connector=connector,
+        operation=operation,
+        task_name=task_name,
+        payload=payload,
+        status="queued" if not policy.require_approval else "awaiting_approval",
+    )
     return JsonResponse({
         "success": True,
         "command": _connector_task_payload(command),
-        "message": "Command is waiting for explicit approval.",
+        "message": "Command is queued by policy." if command.status == "queued" else "Command is waiting for explicit approval.",
     })
 
 
@@ -2173,6 +2234,8 @@ def local_connector_tasks(request, connector_id=None):
     operation = str(payload.get("operation", "")).strip().lower()
     if operation not in CONNECTOR_OPERATIONS:
         return JsonResponse({"success": False, "error": "Unsupported connector operation."}, status=400)
+    if not _connector_operation_allowed(connector, operation):
+        return JsonResponse({"success": False, "error": "Connector policy does not allow this operation."}, status=403)
     task_payload = payload.get("payload", {})
     if not isinstance(task_payload, dict):
         return JsonResponse({"success": False, "error": "Task payload must be a JSON object."}, status=400)
@@ -2181,8 +2244,44 @@ def local_connector_tasks(request, connector_id=None):
         operation=operation,
         task_name=str(payload.get("task_name", ""))[:160],
         payload=task_payload,
+        status="queued" if not _connector_policy(connector).require_approval else "awaiting_approval",
     )
     return JsonResponse({"success": True, "task": _connector_task_payload(task)})
+
+
+@login_required(login_url="/login/")
+@require_http_methods(["GET", "POST"])
+def local_connector_policy(request, connector_id):
+    mode_error = _hybrid_mode_error()
+    if mode_error:
+        return mode_error
+    connector = get_object_or_404(LocalConnector, id=connector_id, owner=request.user)
+    policy = _connector_policy(connector)
+    if request.method == "GET":
+        return JsonResponse({"success": True, "policy": _connector_policy_payload(policy)})
+    payload = _connector_json(request)
+    allowed = payload.get("allowed_operations", policy.allowed_operations)
+    if isinstance(allowed, str):
+        try:
+            allowed = json.loads(allowed)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            allowed = [item.strip() for item in allowed.split(",") if item.strip()]
+    if not isinstance(allowed, list) or any(str(item) not in CONNECTOR_OPERATIONS for item in allowed):
+        return JsonResponse({"success": False, "error": "allowed_operations must contain only supported connector operations."}, status=400)
+    policy.allowed_operations = sorted({str(item) for item in allowed})
+    for field in ("require_approval", "allow_file_read", "allow_file_write", "allow_git", "allow_ollama", "allow_workspace_sync", "allow_tests", "allow_shell"):
+        if field in payload:
+            value = payload[field]
+            if isinstance(value, str):
+                value = value.strip().lower() in {"1", "true", "yes", "on"}
+            setattr(policy, field, bool(value))
+    if "max_file_bytes" in payload:
+        try:
+            policy.max_file_bytes = max(1_024, min(10_000_000, int(payload["max_file_bytes"])))
+        except (TypeError, ValueError):
+            return JsonResponse({"success": False, "error": "max_file_bytes must be an integer."}, status=400)
+    policy.save()
+    return JsonResponse({"success": True, "policy": _connector_policy_payload(policy)})
 
 
 @login_required(login_url="/login/")
@@ -2266,6 +2365,8 @@ def _hybrid_ask_code(request, prompt, code, requested_model):
     connector = LocalConnector.objects.filter(owner=request.user, status="connected").first()
     if connector is None:
         return JsonResponse({"success": False, "error": "Pair a Hybrid local connector before asking the local model."}, status=409)
+    if not _connector_operation_allowed(connector, "ollama.generate"):
+        return JsonResponse({"success": False, "error": "Connector policy does not allow local model generation."}, status=403)
     user_settings = _user_ollama_settings(request.user)
     model = requested_model or user_settings.default_model
     session = None
