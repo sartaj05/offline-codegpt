@@ -92,6 +92,15 @@ generation comes from the signed-in user's explicit chat action; other
 Connector panel commands wait for approval. Pairing codes expire after ten
 minutes; never commit the token.
 
+Desktop connector controller
+----------------------------
+Run the dependency-free Tkinter controller:
+   python scripts/local_connector_tray.py --server-url https://YOUR-SERVICE.onrender.com --token SAVED_TOKEN --workspace C:\path\to\project
+
+Register or remove Windows logon startup:
+   .\scripts\register-connector-startup.ps1 -Register -ServerUrl https://YOUR-SERVICE.onrender.com -Token SAVED_TOKEN -Workspace C:\path\to\project
+   .\scripts\register-connector-startup.ps1 -Unregister
+
 The app is then available at http://127.0.0.1:8000/.
 
 Portable setup script

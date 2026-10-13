@@ -285,6 +285,25 @@ reads, and Git status. Direct chat generation is queued from the signed-in
 user's explicit chat action; Connector-panel tool commands are queued as
 `awaiting_approval`. Approve or reject those commands before the local process
 can poll and run them.
+
+### Desktop controller and auto-start
+
+Windows users can keep the connector process manageable from a small Tkinter
+controller:
+
+~~~powershell
+python scripts/local_connector_tray.py --server-url https://YOUR-SERVICE.onrender.com --token SAVED_TOKEN --workspace C:\path\to\project
+~~~
+
+Register or remove logon auto-start explicitly:
+
+~~~powershell
+.\scripts\register-connector-startup.ps1 -Register -ServerUrl https://YOUR-SERVICE.onrender.com -Token SAVED_TOKEN -Workspace C:\path\to\project
+.\scripts\register-connector-startup.ps1 -Unregister
+~~~
+
+The controller only starts or stops the outbound connector; it does not open
+an inbound port or grant additional permissions.
 Tokens are hashed in the database, pairing codes expire after ten minutes,
 and the Connector panel can revoke a token at any time. Use HTTPS
 for the hosted URL and never paste the token into source control.
